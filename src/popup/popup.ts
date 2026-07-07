@@ -88,17 +88,21 @@ async function renderSiteSection() {
 }
 
 async function renderBlockerState() {
+  const textEl = $('blocker-note-text')
+  const reloadBtn = $('blocker-reload')
   try {
     const state: { enabled: boolean; active: boolean; error?: string } =
       await chrome.runtime.sendMessage({ type: 'skipSensei:getBlockerState' })
     if (state.error) {
-      blockerNoteEl.textContent = `Couldn't enable ad blocking: ${state.error}`
+      textEl.textContent = `Couldn't enable ad blocking: ${state.error}`
       blockerNoteEl.className = 'blocker-note warn'
       blockerNoteEl.hidden = false
+      reloadBtn.hidden = true
     } else if (state.enabled && state.active) {
-      blockerNoteEl.textContent = 'Blocking ads across the web. Reload open tabs to apply.'
+      textEl.textContent = 'Blocking ads across the web. Reload to apply.'
       blockerNoteEl.className = 'blocker-note'
       blockerNoteEl.hidden = false
+      reloadBtn.hidden = false
     } else {
       blockerNoteEl.hidden = true
     }
@@ -256,6 +260,14 @@ async function main() {
     if (!currentHost) return
     await setSiteAllowlisted(currentHost, pauseSiteToggle.checked)
     void renderSiteSection()
+  })
+
+  $('blocker-reload').addEventListener('click', async () => {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+    if (tab?.id) {
+      await chrome.tabs.reload(tab.id)
+      window.close()
+    }
   })
 
   $('open-options').addEventListener('click', (event) => {
