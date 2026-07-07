@@ -1,0 +1,28 @@
+<!-- @dsCard group="Components" name="Info tooltip" -->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <style>
+      :root { --accent: #7c3aed; }
+      body {
+        margin: 0; font-family: Roboto, Arial, sans-serif; background: #212121;
+        color: #f1f1f1; padding: 40px 32px; -webkit-font-smoothing: antialiased;
+      }
+      .row { position: relative; display: flex; align-items: center;
+        justify-content: space-between; max-width: 300px; font-size: 14px; }
+      .info { margin-left: 6px; font-size: 12px; color: var(--accent); cursor: help; }
+      .bubble { position: absolute; left: 0; right: 0; top: 130%;
+        background: #f1f1f1; color: #0f0f0f; padding: 7px 10px; border-radius: 8px;
+        font-size: 11px; line-height: 1.35; box-shadow: 0 4px 14px rgba(0,0,0,0.4); }
+      .cap { color: #aaa; font-size: 12px; margin-top: 60px; }
+    </style>
+  </head>
+  <body>
+    <div class="row">
+      <span>Block all ads<span class="info">ⓘ</span></span>
+      <div class="bubble">Blocks ads (and optionally trackers) across all websites using filter lists.</div>
+    </div>
+    <div class="cap">Labels stay short — detail lives in the hover tooltip.</div>
+  </body>
+</html>

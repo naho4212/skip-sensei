@@ -1,0 +1,31 @@
+<!-- @dsCard group="Components" name="Stat table" -->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <style>
+      body {
+        margin: 0; font-family: Roboto, Arial, sans-serif; background: #212121;
+        color: #f1f1f1; padding: 24px 32px; -webkit-font-smoothing: antialiased;
+      }
+      .eyebrow { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em;
+        color: #aaa; font-weight: 500; margin-bottom: 8px; }
+      table { width: 320px; border-collapse: collapse; }
+      th, td { padding: 4px 8px; text-align: right; font-variant-numeric: tabular-nums; }
+      th { font-size: 11px; font-weight: 400; color: #aaa; }
+      td:first-child, th:first-child { text-align: left; }
+      td:not(:first-child) { font-weight: 700; }
+    </style>
+  </head>
+  <body>
+    <div class="eyebrow">Skipped</div>
+    <table>
+      <thead><tr><th></th><th>Session</th><th>All time</th></tr></thead>
+      <tbody>
+        <tr><td>YouTube ads</td><td>6</td><td>22</td></tr>
+        <tr><td>Sponsor segments</td><td>0</td><td>18</td></tr>
+        <tr><td>Web ads blocked</td><td>16</td><td>1,395</td></tr>
+      </tbody>
+    </table>
+  </body>
+</html>

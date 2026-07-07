@@ -1,0 +1,39 @@
+<!-- @dsCard group="Brand" name="Logo & voice" -->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <style>
+      :root { color-scheme: light dark; --accent: #7c3aed; }
+      body {
+        margin: 0; font-family: Roboto, Arial, sans-serif;
+        background: #16121f; color: #f1f1f1;
+        display: flex; gap: 28px; align-items: center;
+        padding: 40px 48px; -webkit-font-smoothing: antialiased;
+      }
+      .mark {
+        width: 96px; height: 96px; border-radius: 50%; flex-shrink: 0;
+        display: grid; place-items: center;
+        box-shadow: 0 0 60px rgba(124, 58, 237, 0.55);
+        border: 3px solid var(--accent);
+      }
+      .mark svg { width: 46px; height: 46px; fill: var(--accent); }
+      h1 { margin: 0 0 6px; font-size: 30px; font-weight: 700; letter-spacing: -0.5px; }
+      p { margin: 0; font-size: 15px; color: #aaa; max-width: 420px; line-height: 1.5; }
+      .tag { color: var(--accent); font-weight: 500; }
+    </style>
+  </head>
+  <body>
+    <div class="mark">
+      <svg viewBox="0 0 24 24"><path d="M4 5l7 7-7 7V5zm7 0l7 7-7 7V5zm9 0h2v14h-2V5z"/></svg>
+    </div>
+    <div>
+      <h1>Ad Sensei</h1>
+      <p>
+        Skip YouTube ads and creator sponsor segments, and block ads &amp;
+        trackers across the web. <span class="tag">Calm, capable, quietly
+        powerful — it handles the interruptions so you don't have to.</span>
+      </p>
+    </div>
+  </body>
+</html>

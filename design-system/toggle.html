@@ -1,0 +1,33 @@
+<!-- @dsCard group="Components" name="Toggle switch" -->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <style>
+      :root { --accent: #7c3aed; }
+      body {
+        margin: 0; font-family: Roboto, Arial, sans-serif; background: #212121;
+        color: #f1f1f1; padding: 32px; display: flex; gap: 40px;
+        -webkit-font-smoothing: antialiased;
+      }
+      .demo { display: flex; flex-direction: column; gap: 18px; }
+      .pair { display: flex; align-items: center; gap: 14px; font-size: 14px; }
+      .switch { position: relative; width: 34px; height: 20px; flex-shrink: 0; }
+      .slider { position: absolute; inset: 0; top: 3px; height: 14px;
+        border-radius: 7px; background: rgba(255,255,255,0.3); }
+      .slider::before { content: ""; position: absolute; width: 20px; height: 20px;
+        left: -2px; top: -3px; border-radius: 50%; background: #ccc;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.4); }
+      .on .slider { background: color-mix(in srgb, var(--accent) 50%, transparent); }
+      .on .slider::before { transform: translateX(18px); background: var(--accent); }
+      .cap { color: #aaa; font-size: 12px; }
+    </style>
+  </head>
+  <body>
+    <div class="demo">
+      <div class="pair"><span class="switch on"><span class="slider"></span></span> On</div>
+      <div class="pair"><span class="switch"><span class="slider"></span></span> Off</div>
+      <div class="cap">34×20 · track 14px · knob 20px overlap · accent when on</div>
+    </div>
+  </body>
+</html>

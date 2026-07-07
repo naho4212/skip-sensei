@@ -1,0 +1,30 @@
+<!-- @dsCard group="Components" name="Feature card" -->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <style>
+      :root { --accent: #7c3aed; }
+      body {
+        margin: 0; font-family: Roboto, Arial, sans-serif; background: #212121;
+        color: #f1f1f1; padding: 28px 32px; display: flex; gap: 14px;
+        flex-wrap: wrap; -webkit-font-smoothing: antialiased;
+      }
+      .card { position: relative; width: 240px; padding: 16px 16px 16px 52px;
+        border: 1px solid rgba(255,255,255,0.12); border-radius: 12px; }
+      .badge { position: absolute; left: 16px; top: 16px; width: 26px; height: 26px;
+        border-radius: 50%; background: var(--accent); color: #fff; font-weight: 700;
+        display: grid; place-items: center; font-size: 14px; }
+      .card h3 { margin: 0 0 4px; font-size: 15px; font-weight: 500; }
+      .card p { margin: 0; font-size: 13px; color: #aaa; line-height: 1.4; }
+    </style>
+  </head>
+  <body>
+    <div class="card"><span class="badge">1</span>
+      <h3>Skip YouTube ads</h3>
+      <p>Clicks Skip the instant it appears and fast-forwards the rest.</p></div>
+    <div class="card"><span class="badge">2</span>
+      <h3>Skip sponsor segments</h3>
+      <p>AI reads the transcript and skips creator sponsor reads.</p></div>
+  </body>
+</html>
