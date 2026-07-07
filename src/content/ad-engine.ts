@@ -12,6 +12,9 @@ import {
 } from '../selectors'
 import type { AdSkipMethod } from '../types'
 
+/** Playback rate for burning through un-skippable ads. */
+const AD_FAST_RATE = 16
+
 /**
  * Ad Engine: detects YouTube-served ads on the current watch page and
  * neutralizes them. One instance per watch page; SPA navigation tears it
@@ -89,15 +92,23 @@ export class AdEngine {
       this.player!.classList.contains(cls),
     )
     if (!adShowing) {
-      this.fastForwarding = false
+      this.endFastForward()
       return
     }
 
     if (this.clickSkipButton()) {
-      this.fastForwarding = false
+      this.endFastForward()
       return
     }
     this.fastForwardAd()
+  }
+
+  /** Restore normal playback speed once the ad is gone. */
+  private endFastForward() {
+    if (!this.fastForwarding) return
+    const video = document.querySelector<HTMLVideoElement>(VIDEO)
+    if (video && video.playbackRate !== 1) video.playbackRate = 1
+    this.fastForwarding = false
   }
 
   private clickSkipButton(): boolean {
@@ -117,16 +128,27 @@ export class AdEngine {
   }
 
   /**
-   * No skip button (yet): jump the ad video to its end. Guarded so a single
-   * multi-second ad counts as one skip even though check() fires repeatedly.
+   * No skip button (yet): burn through the un-skippable portion.
+   *
+   * We deliberately do NOT seek to video.duration. Jumping an ad to its exact
+   * end leaves YouTube's player parked in an "ended" state that never loads the
+   * main content — a black screen only a reload clears. Instead we seek to just
+   * before the end and let the final moment play out at high speed, so the
+   * player's own natural 'ended' event fires and content resumes cleanly.
+   *
+   * Guarded so one multi-second ad counts as a single skip even though check()
+   * fires repeatedly.
    */
   private fastForwardAd() {
     const video = document.querySelector<HTMLVideoElement>(VIDEO)
     if (!video || !Number.isFinite(video.duration) || video.duration <= 0)
       return
-    if (video.currentTime >= video.duration - 0.2) return
 
-    video.currentTime = video.duration
+    const target = video.duration - 0.35
+    if (target > video.currentTime + 0.5) video.currentTime = target
+    video.playbackRate = AD_FAST_RATE
+    if (video.paused) void video.play().catch(() => {})
+
     if (!this.fastForwarding) {
       this.fastForwarding = true
       this.onSkip('fast-forward')
