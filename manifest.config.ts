@@ -20,6 +20,7 @@ export default defineManifest({
     '*://*.youtube.com/*',
     // Cloud LLM providers for sponsor detection (only contacted when the user
     // configures an API key; default is Chrome's on-device AI).
+    'https://generativelanguage.googleapis.com/*',
     'https://api.anthropic.com/*',
     'https://api.openai.com/*',
   ],

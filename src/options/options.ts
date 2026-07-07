@@ -26,6 +26,8 @@ function flashSaved() {
 const PROVIDER_INFO: Record<LlmProvider, string> = {
   builtin:
     'Analysis time: runs on your device — roughly 30–60 seconds per 20 minutes of video, so an hour-long podcast can take ~5 minutes on first watch. Each video is analyzed once, then cached; re-watches are instant. Free and fully private.',
+  gemini:
+    'Recommended free option. Fast and accurate, and its huge context analyzes even a 3-hour video in one pass — no chunking. Free tier needs no credit card (1,500 videos/day). Get a free key at aistudio.google.com/apikey. Each video is analyzed once, then cached.',
   anthropic:
     'Analysis time: a few seconds, regardless of video length. Uses your Anthropic API key (default model claude-haiku-4-5); typical cost is well under 1¢ per video. Each video is analyzed once, then cached.',
   openai:

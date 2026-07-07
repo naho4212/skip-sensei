@@ -20,6 +20,7 @@ import type {
  */
 
 const DEFAULT_MODELS: Record<Exclude<LlmProvider, 'builtin'>, string> = {
+  gemini: 'gemini-2.5-flash',
   anthropic: 'claude-haiku-4-5',
   openai: 'gpt-5-mini',
 }
@@ -29,6 +30,9 @@ const MAX_INPUT_CHARS: Record<LlmProvider, number> = {
   // Smaller chunks for Nano = faster per-call = far less timeout risk, at the
   // cost of more chunks. Constrained decoding over a big input is what stalls.
   builtin: 7_000,
+  // Gemini's 1M-token context fits even a 3-hour transcript in one call —
+  // no chunking, no per-chunk timeout risk.
+  gemini: 400_000,
   anthropic: 60_000,
   openai: 60_000,
 }
@@ -43,6 +47,7 @@ const CHUNK_OVERLAP_LINES = 5
  */
 const CHUNK_TIMEOUT_MS: Record<LlmProvider, number> = {
   builtin: 120_000,
+  gemini: 90_000, // large single-call inputs take a bit longer
   anthropic: 60_000,
   openai: 60_000,
 }
@@ -366,7 +371,21 @@ function complete(
     case 'anthropic':
       return completeAnthropic(prompt, settings, signal)
     case 'openai':
-      return completeOpenAi(prompt, settings, signal)
+      return completeOpenAiCompatible(
+        'https://api.openai.com/v1/chat/completions',
+        'openai',
+        prompt,
+        settings,
+        signal,
+      )
+    case 'gemini':
+      return completeOpenAiCompatible(
+        'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
+        'gemini',
+        prompt,
+        settings,
+        signal,
+      )
     case 'builtin':
       return completeBuiltin(prompt, signal)
   }
@@ -453,12 +472,16 @@ async function completeAnthropic(
   return text
 }
 
-async function completeOpenAi(
+/** OpenAI-compatible chat-completions call. Used by OpenAI and Gemini (whose
+ * `/v1beta/openai/` endpoint speaks the same protocol). */
+async function completeOpenAiCompatible(
+  url: string,
+  provider: 'openai' | 'gemini',
   prompt: string,
   settings: Settings,
   signal: AbortSignal,
 ): Promise<string> {
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+  const response = await fetch(url, {
     method: 'POST',
     signal,
     headers: {
@@ -466,7 +489,7 @@ async function completeOpenAi(
       authorization: `Bearer ${settings.apiKey.trim()}`,
     },
     body: JSON.stringify({
-      model: settings.model.trim() || DEFAULT_MODELS.openai,
+      model: settings.model.trim() || DEFAULT_MODELS[provider],
       response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
@@ -475,11 +498,12 @@ async function completeOpenAi(
     }),
   })
   if (!response.ok) {
-    throw new LlmError(`OpenAI API ${response.status}: ${await safeText(response)}`)
+    const label = provider === 'gemini' ? 'Gemini' : 'OpenAI'
+    throw new LlmError(`${label} API ${response.status}: ${await safeText(response)}`)
   }
   const data = await response.json()
   const text = data?.choices?.[0]?.message?.content
-  if (typeof text !== 'string') throw new LlmError('Empty OpenAI response')
+  if (typeof text !== 'string') throw new LlmError('Empty API response')
   return text
 }
 

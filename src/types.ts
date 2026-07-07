@@ -1,6 +1,6 @@
 /** Shared message + settings contracts. All keys are skipSensei-namespaced. */
 
-export type LlmProvider = 'builtin' | 'anthropic' | 'openai'
+export type LlmProvider = 'builtin' | 'gemini' | 'anthropic' | 'openai'
 
 export interface Settings {
   masterEnabled: boolean
