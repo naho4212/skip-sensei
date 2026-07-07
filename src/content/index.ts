@@ -93,6 +93,12 @@ async function main() {
     syncEngines()
   })
 
+  // We're live on this YouTube tab — clear any "needs reload" badge that a
+  // recent extension update left on it.
+  chrome.runtime
+    .sendMessage({ type: 'skipSensei:tabNeedsReload', needsReload: false })
+    .catch(() => {})
+
   // YouTube fires this on every SPA navigation, including autoplay/next.
   document.addEventListener('yt-navigate-finish', onNavigate)
 

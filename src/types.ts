@@ -127,6 +127,7 @@ export type Message =
     }
   | { type: 'skipSensei:checkBuiltinAI' } // → { availability: string }
   | { type: 'skipSensei:getBlockerState' } // → BlockerState
+  | { type: 'skipSensei:tabNeedsReload'; needsReload: boolean } // badges the icon for the sender tab
 
 export interface SessionStats {
   sessionAdSkips: number

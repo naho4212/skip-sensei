@@ -248,11 +248,40 @@ chrome.runtime.onMessage.addListener(
       case 'skipSensei:getBlockerState':
         void getBlockerState().then(sendResponse)
         return true
+      case 'skipSensei:tabNeedsReload':
+        if (sender.tab?.id !== undefined) {
+          setReloadBadge(sender.tab.id, message.needsReload)
+        }
+        return false
       default:
         return false
     }
   },
 )
+
+// Per-tab icon badge signalling "this page would benefit from a reload"
+// (leftover ads that loaded before blocking, or a YouTube tab that needs
+// re-activation after an extension update). Surfaces the state without the
+// popup being open.
+function setReloadBadge(tabId: number, show: boolean) {
+  chrome.action.setBadgeText({ tabId, text: show ? '↻' : '' }).catch(() => {})
+  if (show) {
+    chrome.action
+      .setBadgeBackgroundColor({ tabId, color: '#7c3aed' })
+      .catch(() => {})
+  }
+}
+
+// After install/update, existing YouTube tabs run stale (or no) content
+// scripts until reloaded — badge them so the user knows to refresh.
+chrome.runtime.onInstalled.addListener(async () => {
+  try {
+    const tabs = await chrome.tabs.query({ url: '*://*.youtube.com/*' })
+    for (const tab of tabs) if (tab.id) setReloadBadge(tab.id, true)
+  } catch {
+    // youtube host permission missing or query failed — non-fatal
+  }
+})
 
 // "Block all ads" engine: enforce DNR ruleset state from settings; count blocks.
 initNetBlocker((n) => void recordWebBlocks(n))

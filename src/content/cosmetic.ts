@@ -117,3 +117,29 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     sendResponse(pageHasLoadedAds())
   }
 })
+
+/**
+ * Tell the service worker whether this tab has leftover ads (so it can badge
+ * the icon). Runs after the page settles and on settings changes; ads load
+ * asynchronously, so we sample a couple of times.
+ */
+async function reportReloadState() {
+  const settings = await getSettings()
+  const blocking =
+    settings.masterEnabled &&
+    settings.blockAllAds &&
+    !isAllowlisted(settings.allowlist)
+  const needsReload = blocking && pageHasLoadedAds()
+  chrome.runtime
+    .sendMessage({ type: 'skipSensei:tabNeedsReload', needsReload })
+    .catch(() => {})
+}
+
+function scheduleReloadChecks() {
+  setTimeout(() => void reportReloadState(), 1500)
+  setTimeout(() => void reportReloadState(), 4000)
+}
+
+if (document.readyState === 'complete') scheduleReloadChecks()
+else window.addEventListener('load', scheduleReloadChecks)
+onSettingsChanged(() => void reportReloadState())
