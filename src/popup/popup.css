@@ -52,31 +52,61 @@ body.disabled main {
 }
 
 .stats {
-  display: flex;
-  gap: 8px;
   margin-top: 14px;
 }
 
-.stat {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  padding: 10px 4px;
+.stats-table {
+  width: 100%;
+  border-collapse: collapse;
   border: 1px solid var(--border);
   border-radius: 8px;
+  overflow: hidden;
 }
 
-.stat-value {
-  font-size: 20px;
+.stats-table th,
+.stats-table td {
+  padding: 6px 10px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.stats-table th {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.6;
+}
+
+.stats-table td:first-child {
+  text-align: left;
+  opacity: 0.85;
+}
+
+.stats-table tbody td:not(:first-child) {
   font-weight: 700;
 }
 
-.stat-label {
-  font-size: 10px;
-  opacity: 0.65;
-  text-align: center;
+.stats-table tbody tr {
+  border-top: 1px solid var(--border);
+}
+
+.segments {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  font-size: 12px;
+}
+
+.segments li {
+  display: flex;
+  justify-content: space-between;
+  padding: 3px 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.segments .segment-type {
+  opacity: 0.6;
 }
 
 .status {

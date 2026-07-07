@@ -143,4 +143,6 @@ export interface PageStatus {
   sponsorStatus: SponsorEngineStatus
   sponsorReason?: string
   segmentCount: number
+  /** Segments that will actually be skipped (above threshold, not dismissed). */
+  segments: SponsorSegment[]
 }

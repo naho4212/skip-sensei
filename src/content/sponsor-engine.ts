@@ -50,6 +50,14 @@ export class SponsorEngine {
     return this.segments.length
   }
 
+  /** Segments the watcher will actually skip, for the popup's timestamp list. */
+  get activeSegments(): SponsorSegment[] {
+    const threshold = this.getSettings().confidenceThreshold
+    return this.segments.filter(
+      (s) => !s.dismissed && s.confidence >= threshold,
+    )
+  }
+
   /** Chunk progress from the service worker, surfaced in the popup status. */
   noteProgress(videoId: string, done: number, total: number) {
     if (videoId !== this.videoId || this.status !== 'analyzing') return

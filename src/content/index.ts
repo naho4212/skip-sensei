@@ -79,6 +79,7 @@ function getPageStatus(): PageStatus {
     sponsorStatus: sponsorEngine?.status ?? 'off',
     sponsorReason: sponsorEngine?.reason,
     segmentCount: sponsorEngine?.segmentCount ?? 0,
+    segments: sponsorEngine?.activeSegments ?? [],
   }
 }
 

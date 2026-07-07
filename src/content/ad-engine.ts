@@ -25,6 +25,8 @@ export class AdEngine {
   /** True while we're burning through the current un-skippable ad. */
   private fastForwarding = false
   private attachRetryTimer: number | null = null
+  /** check() re-fires while the skip button lingers; count one skip per ad, not per click. */
+  private lastSkipButtonCountAt = 0
 
   constructor(private onSkip: (method: AdSkipMethod) => void) {}
 
@@ -99,7 +101,11 @@ export class AdEngine {
       const button = this.player!.querySelector<HTMLElement>(selector)
       if (button && button.offsetParent !== null) {
         button.click()
-        this.onSkip('skip-button')
+        const now = Date.now()
+        if (now - this.lastSkipButtonCountAt > 3000) {
+          this.lastSkipButtonCountAt = now
+          this.onSkip('skip-button')
+        }
         return true
       }
     }

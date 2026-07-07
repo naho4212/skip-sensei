@@ -36,17 +36,31 @@
       </section>
 
       <section class="stats">
-        <div class="stat">
-          <span class="stat-value" id="session-skips">0</span>
-          <span class="stat-label">skipped this session</span>
-        </div>
-        <div class="stat">
-          <span class="stat-value" id="alltime-skips">0</span>
-          <span class="stat-label">skipped all time</span>
-        </div>
+        <table class="stats-table">
+          <thead>
+            <tr>
+              <th></th>
+              <th>Session</th>
+              <th>All time</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>YouTube ads</td>
+              <td id="session-ad-skips">0</td>
+              <td id="alltime-ad-skips">0</td>
+            </tr>
+            <tr>
+              <td>Sponsor segments</td>
+              <td id="session-sponsor-skips">0</td>
+              <td id="alltime-sponsor-skips">0</td>
+            </tr>
+          </tbody>
+        </table>
       </section>
 
       <p class="status" id="video-status"></p>
+      <ul class="segments" id="segment-list"></ul>
     </main>
 
     <script type="module" src="./popup.ts"></script>

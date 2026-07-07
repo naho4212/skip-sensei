@@ -14,9 +14,8 @@ const $ = <T extends HTMLElement>(id: string) =>
 const masterToggle = $<HTMLInputElement>('master-toggle')
 const adToggle = $<HTMLInputElement>('ad-engine-toggle')
 const sponsorToggle = $<HTMLInputElement>('sponsor-engine-toggle')
-const sessionSkipsEl = $('session-skips')
-const allTimeSkipsEl = $('alltime-skips')
 const videoStatusEl = $('video-status')
+const segmentListEl = $<HTMLUListElement>('segment-list')
 
 function renderSettings(settings: Settings) {
   masterToggle.checked = settings.masterEnabled
@@ -26,14 +25,41 @@ function renderSettings(settings: Settings) {
 }
 
 function renderStats(stats: Stats, session: SessionStats | null) {
-  allTimeSkipsEl.textContent = String(
-    stats.allTimeAdSkips + stats.allTimeSponsorSkips,
-  )
+  $('alltime-ad-skips').textContent = String(stats.allTimeAdSkips)
+  $('alltime-sponsor-skips').textContent = String(stats.allTimeSponsorSkips)
   if (session) {
-    sessionSkipsEl.textContent = String(
-      session.sessionAdSkips + session.sessionSponsorSkips,
-    )
+    $('session-ad-skips').textContent = String(session.sessionAdSkips)
+    $('session-sponsor-skips').textContent = String(session.sessionSponsorSkips)
   }
+}
+
+function formatTime(seconds: number): string {
+  const s = Math.max(0, Math.round(seconds))
+  const h = Math.floor(s / 3600)
+  const m = Math.floor((s % 3600) / 60)
+  const rest = `${String(m).padStart(h > 0 ? 2 : 1, '0')}:${String(s % 60).padStart(2, '0')}`
+  return h > 0 ? `${h}:${rest}` : rest
+}
+
+const TYPE_LABELS: Record<string, string> = {
+  sponsor: 'sponsor',
+  'self-promo': 'self-promo',
+  'ad-read': 'ad read',
+}
+
+function renderSegments(status: PageStatus) {
+  segmentListEl.replaceChildren(
+    ...status.segments.map((segment) => {
+      const li = document.createElement('li')
+      const range = document.createElement('span')
+      range.textContent = `${formatTime(segment.start)} → ${formatTime(segment.end)}`
+      const type = document.createElement('span')
+      type.className = 'segment-type'
+      type.textContent = TYPE_LABELS[segment.type] ?? segment.type
+      li.append(range, type)
+      return li
+    }),
+  )
 }
 
 async function fetchSessionStats(): Promise<SessionStats | null> {
@@ -76,14 +102,17 @@ async function renderVideoStatus() {
     const status: PageStatus = await chrome.tabs.sendMessage(tab.id, message)
     if (!status.isWatchPage) {
       videoStatusEl.textContent = 'Not watching a video.'
+      segmentListEl.replaceChildren()
       return
     }
     const adText = status.adEngineActive
       ? 'Watching for ads.'
       : 'Ad skipping is off.'
     videoStatusEl.textContent = `${adText} ${sponsorStatusText(status)}`
+    renderSegments(status)
   } catch {
     videoStatusEl.textContent = 'Reload the YouTube tab to activate.'
+    segmentListEl.replaceChildren()
   }
 }
 
