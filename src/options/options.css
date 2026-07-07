@@ -104,7 +104,7 @@ section {
 
 .field.checkbox {
   flex-direction: row;
-  align-items: center;
+  align-items: flex-start;
   gap: 10px;
   font-weight: 400;
   cursor: pointer;
@@ -143,6 +143,8 @@ input[type='range'] {
 input[type='checkbox'] {
   width: 18px;
   height: 18px;
+  flex-shrink: 0; /* never let a wrapped label squeeze the checkbox */
+  margin-top: 1px; /* align with the first line of the label */
   cursor: pointer;
 }
 
