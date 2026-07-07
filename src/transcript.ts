@@ -4,19 +4,20 @@ import type { TranscriptLine } from './types'
  * Transcript fetch + parse. Runs in the content script so requests carry the
  * user's youtube.com cookies/consent state.
  *
- * Primary path: re-fetch the watch page HTML, extract ytInitialPlayerResponse,
- * pick a caption track, fetch its timedtext as json3. (Reading the live page's
- * inline scripts only works for the first real page load — after SPA
- * navigation the DOM still holds the previous video's player response, so the
- * re-fetch approach is used for both cases.)
+ * Primary path: the InnerTube `get_panel` endpoint with
+ * panelId "PAmodern_transcript_view" — the same call YouTube's own transcript
+ * panel makes. Its `params` is a small protobuf wrapping the videoId, so it
+ * needs no signed URLs. (The classic timedtext API now returns empty 200s
+ * unless the request carries the player's proof-of-origin token, so it can no
+ * longer be the primary — verified live 2026-07.)
  *
- * Fallback: timedtext XML when json3 returns nothing.
+ * Fallback: watch-page player response → timedtext (json3, then XML), kept in
+ * case get_panel changes shape.
  */
 
 export interface TranscriptResult {
-  status: 'ok' | 'no-transcript' | 'live' | 'error'
+  status: 'ok' | 'no-transcript' | 'error'
   lines: TranscriptLine[]
-  durationSeconds: number
 }
 
 interface CaptionTrack {
@@ -29,33 +30,141 @@ interface CaptionTrack {
 const LINE_MAX_SECONDS = 10
 const LINE_MAX_CHARS = 200
 
+/** Used when the live page doesn't expose INNERTUBE_CLIENT_VERSION; YouTube accepts slightly stale versions. */
+const FALLBACK_CLIENT_VERSION = '2.20260706.00.00'
+
 export async function fetchTranscript(
   videoId: string,
 ): Promise<TranscriptResult> {
   try {
-    const playerResponse = await fetchPlayerResponse(videoId)
-    if (!playerResponse) return { status: 'error', lines: [], durationSeconds: 0 }
-
-    const details = playerResponse.videoDetails ?? {}
-    const durationSeconds = Number(details.lengthSeconds ?? 0)
-    if (details.isLive || details.isLiveContent) {
-      return { status: 'live', lines: [], durationSeconds }
+    const panelLines = await fetchViaPanel(videoId)
+    if (panelLines.length > 0) {
+      return { status: 'ok', lines: mergeLines(panelLines) }
     }
-
-    const tracks: CaptionTrack[] =
-      playerResponse.captions?.playerCaptionsTracklistRenderer?.captionTracks ??
-      []
-    const track = pickTrack(tracks)
-    if (!track) return { status: 'no-transcript', lines: [], durationSeconds }
-
-    const lines = await fetchTimedText(track.baseUrl)
-    if (lines.length === 0) {
-      return { status: 'no-transcript', lines: [], durationSeconds }
+    const timedTextLines = await fetchViaTimedText(videoId)
+    if (timedTextLines.length > 0) {
+      return { status: 'ok', lines: mergeLines(timedTextLines) }
     }
-    return { status: 'ok', lines: mergeLines(lines), durationSeconds }
+    return { status: 'no-transcript', lines: [] }
   } catch {
-    return { status: 'error', lines: [], durationSeconds: 0 }
+    return { status: 'error', lines: [] }
   }
+}
+
+// ---------------------------------------------------------------------------
+// Primary: InnerTube get_panel
+// ---------------------------------------------------------------------------
+
+async function fetchViaPanel(videoId: string): Promise<TranscriptLine[]> {
+  const response = await fetch(
+    'https://www.youtube.com/youtubei/v1/get_panel?prettyPrint=false',
+    {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        context: {
+          client: {
+            clientName: 'WEB',
+            clientVersion: getClientVersion(),
+            hl: 'en',
+          },
+        },
+        panelId: 'PAmodern_transcript_view',
+        params: buildPanelParams(videoId),
+      }),
+    },
+  )
+  if (!response.ok) return []
+  const data = await response.json()
+
+  // Segments appear as transcriptSegmentViewModel ({timestamp: "34:35",
+  // simpleText}) in the current UI, or transcriptSegmentRenderer ({startMs,
+  // snippet.runs}) in the older shape. Walk the whole response for both.
+  const raw: { start: number; text: string }[] = []
+  collectSegments(data, raw)
+  raw.sort((a, b) => a.start - b.start)
+
+  return raw.map((seg, i) => ({
+    start: seg.start,
+    // The panel provides no end times; the next segment's start is the best proxy.
+    end: i + 1 < raw.length ? raw[i + 1].start : seg.start + 8,
+    text: seg.text,
+  }))
+}
+
+/**
+ * get_panel params: base64 protobuf
+ *   field 165 { field 1: videoId, field 3: 1 }
+ * Verified byte-for-byte against YouTube's own transcript-panel request.
+ */
+function buildPanelParams(videoId: string): string {
+  const idBytes = new TextEncoder().encode(videoId)
+  const inner = [0x0a, idBytes.length, ...idBytes, 0x18, 0x01]
+  const bytes = [0xaa, 0x09, inner.length, ...inner]
+  return btoa(String.fromCharCode(...bytes))
+}
+
+function getClientVersion(): string {
+  for (const script of document.querySelectorAll('script')) {
+    const match = script.textContent?.match(
+      /"INNERTUBE_CLIENT_VERSION":"([^"]+)"/,
+    )
+    if (match) return match[1]
+  }
+  return FALLBACK_CLIENT_VERSION
+}
+
+function collectSegments(
+  node: unknown,
+  out: { start: number; text: string }[],
+) {
+  if (!node || typeof node !== 'object') return
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const obj = node as any
+
+  const viewModel = obj.transcriptSegmentViewModel
+  if (viewModel?.timestamp && typeof viewModel.simpleText === 'string') {
+    const text = viewModel.simpleText.replace(/\s+/g, ' ').trim()
+    if (text) out.push({ start: parseTimestamp(viewModel.timestamp), text })
+  }
+
+  const renderer = obj.transcriptSegmentRenderer
+  if (renderer?.startMs !== undefined) {
+    const text = (renderer.snippet?.runs ?? [])
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .map((run: any) => run.text ?? '')
+      .join('')
+      .replace(/\s+/g, ' ')
+      .trim()
+    if (text) out.push({ start: Number(renderer.startMs) / 1000, text })
+  }
+
+  for (const value of Object.values(obj)) collectSegments(value, out)
+}
+
+/** "34:35" or "1:02:11" → seconds. */
+function parseTimestamp(timestamp: string): number {
+  return timestamp
+    .trim()
+    .split(':')
+    .reduce((total, part) => total * 60 + Number(part), 0)
+}
+
+// ---------------------------------------------------------------------------
+// Fallback: watch-page player response → timedtext
+// ---------------------------------------------------------------------------
+
+async function fetchViaTimedText(videoId: string): Promise<TranscriptLine[]> {
+  const playerResponse = await fetchPlayerResponse(videoId)
+  const tracks: CaptionTrack[] =
+    playerResponse?.captions?.playerCaptionsTracklistRenderer?.captionTracks ??
+    []
+  const track = pickTrack(tracks)
+  if (!track) return []
+  const json3 = await fetchJson3(track.baseUrl)
+  if (json3.length > 0) return json3
+  return fetchXml(track.baseUrl)
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -110,12 +219,6 @@ function pickTrack(tracks: CaptionTrack[]): CaptionTrack | null {
     tracks.find((t) => t.kind !== 'asr') ??
     tracks[0]
   )
-}
-
-async function fetchTimedText(baseUrl: string): Promise<TranscriptLine[]> {
-  const json3 = await fetchJson3(baseUrl)
-  if (json3.length > 0) return json3
-  return fetchXml(baseUrl)
 }
 
 async function fetchJson3(baseUrl: string): Promise<TranscriptLine[]> {

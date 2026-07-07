@@ -51,12 +51,32 @@ interface InflightAnalysis {
 
 const inflight = new Map<string, InflightAnalysis>()
 
+/**
+ * Cached analysis, unless it's a zero-segment result from the weaker built-in
+ * model and the user has since configured a cloud provider — then re-analyze.
+ */
+async function usableCachedAnalysis(
+  videoId: string,
+): Promise<VideoAnalysis | null> {
+  const cached = await getCachedAnalysis(videoId)
+  if (!cached) return null
+  if (
+    cached.status === 'ok' &&
+    cached.segments.length === 0 &&
+    cached.provider === 'builtin' &&
+    resolveProvider(await getSettings()) !== 'builtin'
+  ) {
+    return null
+  }
+  return cached
+}
+
 async function analyzeVideo(
   videoId: string,
   lines: TranscriptLine[],
   durationSeconds: number,
 ): Promise<VideoAnalysis> {
-  const cached = await getCachedAnalysis(videoId)
+  const cached = await usableCachedAnalysis(videoId)
   if (cached) return cached
 
   const existing = inflight.get(videoId)
@@ -143,7 +163,7 @@ chrome.runtime.onMessage.addListener(
         void getSessionStats().then(sendResponse)
         return true
       case 'skipSensei:getAnalysis':
-        void getCachedAnalysis(message.videoId).then(sendResponse)
+        void usableCachedAnalysis(message.videoId).then(sendResponse)
         return true
       case 'skipSensei:analyzeVideo':
         void analyzeVideo(

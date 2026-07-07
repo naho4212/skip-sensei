@@ -1,4 +1,4 @@
-import { VIDEO } from '../selectors'
+import { LIVE_BADGE, VIDEO } from '../selectors'
 import { fetchTranscript } from '../transcript'
 import type {
   Message,
@@ -11,6 +11,8 @@ import { removeToast, showSkipToast } from './toast'
 
 /** Videos shorter than this skip the LLM call — sponsor reads are rare and cost isn't worth it. */
 const MIN_VIDEO_SECONDS = 120
+
+const log = (...args: unknown[]) => console.log('[skipSensei]', ...args)
 
 /**
  * Sponsor Engine: obtains sponsor segments for the current video (cache → LLM
@@ -26,7 +28,6 @@ export class SponsorEngine {
   /** Segment starts already skipped/dismissed this page — prevents skip loops. */
   private handled = new Set<number>()
   private onTimeUpdate = () => this.checkPlayback()
-  private videoAttachTimer: number | null = null
 
   constructor(
     private videoId: string,
@@ -38,21 +39,31 @@ export class SponsorEngine {
   }
 
   start() {
-    void this.analyze()
-    this.attachWhenVideoExists()
+    void this.run()
   }
 
   stop() {
     this.stopped = true
     this.video?.removeEventListener('timeupdate', this.onTimeUpdate)
     this.video = null
-    if (this.videoAttachTimer !== null) clearTimeout(this.videoAttachTimer)
     removeToast()
     // Let the service worker abort the LLM call if no other tab wants it.
     this.send({ type: 'skipSensei:abandonAnalysis', videoId: this.videoId })
   }
 
-  private async analyze() {
+  private async run() {
+    const video = await this.waitForVideo()
+    if (this.stopped) return
+    if (!video) {
+      this.setStatus('error', 'Video player not found')
+      return
+    }
+    this.video = video
+    video.addEventListener('timeupdate', this.onTimeUpdate)
+    await this.analyze(video)
+  }
+
+  private async analyze(video: HTMLVideoElement) {
     // Cache first: no transcript fetch, no LLM call on a re-watch.
     const cached = await this.send<VideoAnalysis | null>({
       type: 'skipSensei:getAnalysis',
@@ -60,17 +71,25 @@ export class SponsorEngine {
     })
     if (this.stopped) return
     if (cached) {
+      log('using cached analysis', cached.status, cached.segments)
       this.applyAnalysis(cached)
+      return
+    }
+
+    if (document.querySelector(LIVE_BADGE) || !Number.isFinite(video.duration)) {
+      this.setStatus('unavailable', 'Live stream — no complete transcript')
+      return
+    }
+    const durationSeconds = video.duration
+    if (durationSeconds < MIN_VIDEO_SECONDS) {
+      this.setStatus('unavailable', 'Video too short to analyze')
       return
     }
 
     const transcript = await fetchTranscript(this.videoId)
     if (this.stopped) return
+    log('transcript fetch:', transcript.status, `${transcript.lines.length} lines`)
 
-    if (transcript.status === 'live') {
-      this.setStatus('unavailable', 'Live stream — no complete transcript')
-      return
-    }
     if (transcript.status === 'no-transcript') {
       this.setStatus('no-transcript')
       return
@@ -79,21 +98,19 @@ export class SponsorEngine {
       this.setStatus('error', 'Could not load transcript')
       return
     }
-    if (
-      transcript.durationSeconds > 0 &&
-      transcript.durationSeconds < MIN_VIDEO_SECONDS
-    ) {
-      this.setStatus('unavailable', 'Video too short to analyze')
-      return
-    }
 
     const analysis = await this.send<VideoAnalysis | null>({
       type: 'skipSensei:analyzeVideo',
       videoId: this.videoId,
       lines: transcript.lines,
-      durationSeconds: transcript.durationSeconds,
+      durationSeconds,
     })
-    if (this.stopped || !analysis) return
+    if (this.stopped) return
+    if (!analysis) {
+      this.setStatus('error', 'Analysis did not complete')
+      return
+    }
+    log('analysis:', analysis.status, analysis.reason ?? '', analysis.segments)
     this.applyAnalysis(analysis)
   }
 
@@ -112,26 +129,27 @@ export class SponsorEngine {
   private setStatus(status: SponsorEngineStatus, reason?: string) {
     this.status = status
     this.reason = reason
+    if (reason) log('status:', status, '—', reason)
   }
 
   // -------------------------------------------------------------------------
   // Playback watcher
   // -------------------------------------------------------------------------
 
-  private attachWhenVideoExists(attempt = 0) {
-    if (this.stopped) return
-    const video = document.querySelector<HTMLVideoElement>(VIDEO)
-    if (!video) {
-      if (attempt < 40) {
-        this.videoAttachTimer = window.setTimeout(
-          () => this.attachWhenVideoExists(attempt + 1),
-          250,
-        )
+  /** The player and its metadata render asynchronously after SPA navigation. */
+  private waitForVideo(): Promise<HTMLVideoElement | null> {
+    return new Promise((resolve) => {
+      let attempts = 0
+      const poll = () => {
+        if (this.stopped) return resolve(null)
+        const video = document.querySelector<HTMLVideoElement>(VIDEO)
+        // readyState ≥ 1 = metadata (duration) is known.
+        if (video && video.readyState >= 1) return resolve(video)
+        if (++attempts > 80) return resolve(video)
+        setTimeout(poll, 250)
       }
-      return
-    }
-    this.video = video
-    video.addEventListener('timeupdate', this.onTimeUpdate)
+      poll()
+    })
   }
 
   private checkPlayback() {
@@ -148,6 +166,7 @@ export class SponsorEngine {
 
       this.handled.add(segment.start)
       this.video.currentTime = segment.end
+      log(`skipped sponsor segment ${segment.start}s → ${segment.end}s`)
       this.send({ type: 'skipSensei:sponsorSkipped', videoId: this.videoId })
       if (settings.showSkipToast) {
         showSkipToast(segment.end - segment.start, () => this.unskip(segment))

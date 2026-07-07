@@ -33,6 +33,9 @@ export const OVERLAY_CLOSE_BUTTONS = [
 /** Pause-screen ("Continue watching?" / promoted content) ad surfaces. */
 export const PAUSE_OVERLAY_ADS = ['.ytp-pause-overlay-container']
 
+/** Present in the player controls during live playback. */
+export const LIVE_BADGE = `${PLAYER} .ytp-live`
+
 /** Badge shown while an ad plays — secondary ad-detection signal. */
 export const AD_BADGES = [
   '.ytp-ad-simple-ad-badge',
