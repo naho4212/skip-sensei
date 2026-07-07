@@ -7,7 +7,14 @@
   </head>
   <body>
     <header>
-      <h1>Ad Sensei</h1>
+      <div class="brand">
+        <span class="brand-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24">
+            <path d="M5 6.2v11.6L14 12 5 6.2zM15.5 6.2h3v11.6h-3z" />
+          </svg>
+        </span>
+        <h1>Ad Sensei</h1>
+      </div>
       <label class="switch" title="Master toggle">
         <input type="checkbox" id="master-toggle" />
         <span class="slider"></span>
@@ -30,11 +37,13 @@
             <span class="slider"></span>
           </span>
         </label>
-        <p class="hint">
-          <a href="#" id="open-options">AI &amp; skipping settings…</a>
-        </p>
+        <a href="#" id="open-options" class="row link-row">
+          <span>AI &amp; skipping settings</span>
+          <span class="chevron" aria-hidden="true">›</span>
+        </a>
       </section>
 
+      <div class="section-title">Skipped</div>
       <section class="stats">
         <table class="stats-table">
           <thead>
@@ -59,11 +68,14 @@
         </table>
       </section>
 
-      <p class="status">
-        <span id="video-status"></span>
-        <button id="reload-tab" hidden>Reload page</button>
-      </p>
-      <ul class="segments" id="segment-list"></ul>
+      <div class="section-title">This video</div>
+      <section class="current">
+        <p class="status">
+          <span id="video-status"></span>
+          <button id="reload-tab" hidden>Reload page</button>
+        </p>
+        <ul class="segments" id="segment-list"></ul>
+      </section>
 
       <footer>
         <a
