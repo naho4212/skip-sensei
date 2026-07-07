@@ -44,8 +44,11 @@ Three "what to block" capabilities, each independently useful:
   known skip-button selector matches during an ad, the AI is sent the player
   controls and re-finds the button; validated (must match a visible element),
   cached, and added to the runtime selector list so the fix persists. Behind
-  the `aiEnhancements` toggle (default on; free on built-in AI). AI gap-filler
-  for missed web ads is still open.
+  the `aiEnhancements` toggle (default on; free on built-in AI).
+  AI gap-filler ✅: cosmetic.ts collects ad-suspect regions the filter lists
+  missed (ad-network iframes, sponsored/promo blocks) after the page settles,
+  asks the LLM which are ads, hides them, and caches the selectors per domain
+  (one LLM call per new site; cached selectors applied instantly on return).
 - **Phase 9 — Unify + harden** ✅ (personal-use scope): first-run onboarding
   page (3 engines + built-in-vs-Gemini), unified stats (web-ads-blocked row),
   console noise gated behind a debugLogging setting (off by default, toggle in

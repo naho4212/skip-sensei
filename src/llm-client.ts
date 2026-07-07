@@ -270,6 +270,42 @@ export async function findElementSelector(
   }
 }
 
+const GAPFILL_SYSTEM_PROMPT = `You find advertisement elements in an HTML fragment from a web page. Ads include banner/display ads, sponsored promo blocks, ad iframes, and native "advertisement"/"sponsored" units — NOT the page's real content, navigation, or its own product listings on a shopping site. Return ONLY JSON: {"selectors":["<css>", ...]} — CSS selectors (valid for querySelectorAll) that match ONLY ad containers, preferring stable attributes (class, id, aria-label, data-*). Be conservative: if unsure whether something is an ad, leave it out. If there are no ads, return {"selectors":[]}. No prose, no markdown.`
+
+/**
+ * AI gap-filler: ask the LLM which elements in `html` are ads the filter lists
+ * missed. Returns CSS selectors to hide. Conservative by construction.
+ */
+export async function findAdSelectors(
+  html: string,
+  settings: Settings,
+  signal: AbortSignal,
+): Promise<string[]> {
+  const provider = resolveProvider(settings)
+  const prompt = `Page ad-like fragment:\n${html.slice(0, 9000)}`
+  const raw = await withTimeout(
+    complete(provider, GAPFILL_SYSTEM_PROMPT, prompt, settings, signal),
+    CHUNK_TIMEOUT_MS[provider],
+  )
+  const cleaned = raw
+    .trim()
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/```\s*$/, '')
+  const first = cleaned.indexOf('{')
+  const last = cleaned.lastIndexOf('}')
+  if (first === -1 || last <= first) return []
+  try {
+    const parsed = JSON.parse(cleaned.slice(first, last + 1))
+    if (!Array.isArray(parsed.selectors)) return []
+    return parsed.selectors
+      .filter((s: unknown): s is string => typeof s === 'string' && !!s.trim())
+      .map((s: string) => s.trim())
+      .slice(0, 12)
+  } catch {
+    return []
+  }
+}
+
 export function resolveProvider(settings: Settings): LlmProvider {
   const provider = settings.llmProvider
   if (provider !== 'builtin' && settings.apiKeys[provider]?.trim()) {

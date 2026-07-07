@@ -121,6 +121,41 @@ export async function addHealedSelector(target: string, selector: string) {
   await chrome.storage.local.set({ [HEALED_KEY]: all })
 }
 
+// ---------------------------------------------------------------------------
+// AI gap-filler (Phase 8b) — per-domain CSS selectors the AI found for ads
+// the filter lists missed. Applied as cosmetic hiding on future visits.
+// ---------------------------------------------------------------------------
+
+const GAPFILL_KEY = 'skipSensei.gapfillSelectors'
+const GAPFILL_MAX_DOMAINS = 300
+const GAPFILL_MAX_PER_DOMAIN = 12
+
+export async function getGapfillSelectors(
+  domain: string,
+): Promise<string[]> {
+  const result = await chrome.storage.local.get(GAPFILL_KEY)
+  const all: Record<string, string[]> = result[GAPFILL_KEY] ?? {}
+  return all[domain] ?? []
+}
+
+export async function addGapfillSelectors(domain: string, selectors: string[]) {
+  if (selectors.length === 0) return
+  const result = await chrome.storage.local.get(GAPFILL_KEY)
+  const all: Record<string, string[]> = result[GAPFILL_KEY] ?? {}
+  const existing = new Set(all[domain] ?? [])
+  for (const s of selectors) existing.add(s)
+  all[domain] = [...existing].slice(0, GAPFILL_MAX_PER_DOMAIN)
+
+  // Evict oldest domains if the map grows too large (insertion order).
+  const domains = Object.keys(all)
+  if (domains.length > GAPFILL_MAX_DOMAINS) {
+    for (const d of domains.slice(0, domains.length - GAPFILL_MAX_DOMAINS)) {
+      delete all[d]
+    }
+  }
+  await chrome.storage.local.set({ [GAPFILL_KEY]: all })
+}
+
 /** Drop every cached analysis (settings, stats, and corrections survive). */
 export async function clearAnalysisCache(): Promise<number> {
   const all = await chrome.storage.local.get(null)

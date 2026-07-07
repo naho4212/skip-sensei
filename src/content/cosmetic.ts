@@ -1,4 +1,9 @@
-import { getSettings, onSettingsChanged } from '../storage'
+import { log } from '../log'
+import {
+  getGapfillSelectors,
+  getSettings,
+  onSettingsChanged,
+} from '../storage'
 
 /**
  * Cosmetic filtering (Phase 6): hides ad *containers* by CSS selector, which
@@ -56,8 +61,21 @@ const SELECTORS = [
   '[aria-label="Advertisement" i]',
 ]
 
-function buildCss(): string {
-  return `${SELECTORS.join(',')}{display:none!important}`
+const GAPFILL_STYLE_ID = 'skip-sensei-gapfill'
+
+function isValidSelectorList(list: string[]): string[] {
+  return list.filter((s) => {
+    try {
+      document.querySelector(s)
+      return true
+    } catch {
+      return false
+    }
+  })
+}
+
+function buildCss(selectors: string[]): string {
+  return `${selectors.join(',')}{display:none!important}`
 }
 
 function isAllowlisted(allowlist: string[]): boolean {
@@ -66,22 +84,46 @@ function isAllowlisted(allowlist: string[]): boolean {
   return allowlist.includes(host) || allowlist.includes(bare)
 }
 
-async function apply() {
+function bareDomain(): string {
+  return location.hostname.replace(/^www\./, '')
+}
+
+async function blockingActive(): Promise<boolean> {
   const settings = await getSettings()
-  const on =
+  return (
     settings.masterEnabled &&
     settings.blockAllAds &&
     !isAllowlisted(settings.allowlist)
+  )
+}
+
+async function apply() {
+  const on = await blockingActive()
 
   const existing = document.getElementById(STYLE_ID)
   if (on && !existing) {
     const style = document.createElement('style')
     style.id = STYLE_ID
-    style.textContent = buildCss()
+    style.textContent = buildCss(SELECTORS)
     ;(document.head ?? document.documentElement).appendChild(style)
+    void applyGapfill() // hide anything the AI found on prior visits
   } else if (!on && existing) {
     existing.remove()
+    document.getElementById(GAPFILL_STYLE_ID)?.remove()
   }
+}
+
+/** Apply this domain's AI-discovered ad selectors (from prior visits). */
+async function applyGapfill() {
+  const cached = isValidSelectorList(await getGapfillSelectors(bareDomain()))
+  if (cached.length === 0) return
+  let style = document.getElementById(GAPFILL_STYLE_ID) as HTMLStyleElement | null
+  if (!style) {
+    style = document.createElement('style')
+    style.id = GAPFILL_STYLE_ID
+    ;(document.head ?? document.documentElement).appendChild(style)
+  }
+  style.textContent = buildCss(cached)
 }
 
 void apply()
@@ -140,6 +182,75 @@ function scheduleReloadChecks() {
   setTimeout(() => void reportReloadState(), 4000)
 }
 
-if (document.readyState === 'complete') scheduleReloadChecks()
-else window.addEventListener('load', scheduleReloadChecks)
+/**
+ * AI gap-filler: after the page settles, look for ad content the filter lists
+ * missed (ad-network iframes, "advertisement"/"sponsored"-labelled blocks) and
+ * ask the AI which elements to hide. Cached per domain so it's a one-time cost
+ * per site, and only runs when aiEnhancements is on. Conservative: only sends
+ * a compact fragment of ad-suspect regions, never the whole page.
+ */
+const AD_SUSPECT_HINTS = [
+  'doubleclick',
+  'googlesyndication',
+  'adnxs',
+  'amazon-adsystem',
+  'adservice',
+  '/ads/',
+  '/adserver',
+]
+
+function collectAdSuspects(): string {
+  const parts: string[] = []
+  const seen = new Set<Element>()
+  const add = (el: Element | null) => {
+    if (!el || seen.has(el)) return
+    seen.add(el)
+    // Send a shallow outline (tag + attributes + a little context), not deep subtrees.
+    parts.push(el.outerHTML.slice(0, 600))
+  }
+  // Ad-network iframes and their containers.
+  for (const frame of document.querySelectorAll<HTMLIFrameElement>('iframe[src]')) {
+    const src = frame.src.toLowerCase()
+    if (AD_SUSPECT_HINTS.some((h) => src.includes(h))) add(frame.parentElement ?? frame)
+  }
+  // Elements self-labelled as ads/sponsored that our static selectors missed.
+  for (const el of document.querySelectorAll(
+    '[class*="sponsor" i],[class*="promo" i],[aria-label*="advert" i],[data-testid*="ad" i]',
+  )) {
+    if (parts.length > 20) break
+    if (el instanceof HTMLElement && el.offsetHeight > 30) add(el)
+  }
+  return parts.join('\n')
+}
+
+async function runGapfill() {
+  if (!(await blockingActive())) return
+  const settings = await getSettings()
+  if (!settings.aiEnhancements) return
+  // Already learned this domain — the cached selectors were applied on load;
+  // don't spend another LLM call.
+  if ((await getGapfillSelectors(bareDomain())).length > 0) return
+  const html = collectAdSuspects()
+  if (!html.trim()) return
+  const selectors: string[] | null = await chrome.runtime
+    .sendMessage({
+      type: 'skipSensei:findAdSelectors',
+      html,
+      domain: bareDomain(),
+    })
+    .catch(() => null)
+  if (selectors && selectors.length > 0) {
+    log('gap-filler hid', selectors.length, 'ad element(s):', selectors)
+    void applyGapfill()
+  }
+}
+
+function onPageReady() {
+  scheduleReloadChecks()
+  // Give ads time to load, then scan once for anything the lists missed.
+  setTimeout(() => void runGapfill(), 3500)
+}
+
+if (document.readyState === 'complete') onPageReady()
+else window.addEventListener('load', onPageReady)
 onSettingsChanged(() => void reportReloadState())

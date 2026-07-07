@@ -1,11 +1,13 @@
 import {
   analyzeTranscript,
   builtinAvailability,
+  findAdSelectors,
   findElementSelector,
   resolveProvider,
 } from './llm-client'
 import { getBlockerState, initNetBlocker } from './net-blocker'
 import {
+  addGapfillSelectors,
   getCachedAnalysis,
   getSettings,
   incrementStat,
@@ -216,6 +218,20 @@ async function findSelector(
   }
 }
 
+/** Gap-filler: ask the LLM for ad selectors the filter lists missed; cache them. */
+async function findAds(html: string, domain: string): Promise<string[]> {
+  const settings = await getSettings()
+  if (!settings.aiEnhancements) return []
+  const controller = new AbortController()
+  try {
+    const selectors = await findAdSelectors(html, settings, controller.signal)
+    if (selectors.length > 0) await addGapfillSelectors(domain, selectors)
+    return selectors
+  } catch {
+    return []
+  }
+}
+
 function abandonAnalysis(videoId: string) {
   const entry = inflight.get(videoId)
   if (!entry) return
@@ -275,6 +291,9 @@ chrome.runtime.onMessage.addListener(
         return false
       case 'skipSensei:findSelector':
         void findSelector(message.html, message.description).then(sendResponse)
+        return true
+      case 'skipSensei:findAdSelectors':
+        void findAds(message.html, message.domain).then(sendResponse)
         return true
       default:
         return false

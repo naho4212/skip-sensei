@@ -136,6 +136,11 @@ export type Message =
       html: string
       description: string
     } // → string | null (AI-found CSS selector)
+  | {
+      type: 'skipSensei:findAdSelectors'
+      html: string
+      domain: string
+    } // → string[] (AI-found ad selectors, also cached for the domain)
 
 export interface SessionStats {
   sessionAdSkips: number
