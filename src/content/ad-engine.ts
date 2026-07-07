@@ -1,9 +1,12 @@
 import {
   AD_SHOWING_CLASSES,
+  ENFORCEMENT_MESSAGE,
+  MODAL_BACKDROP,
   OVERLAY_ADS,
   OVERLAY_CLOSE_BUTTONS,
   PAUSE_OVERLAY_ADS,
   PLAYER,
+  POPUP_DIALOG,
   SKIP_BUTTONS,
   VIDEO,
 } from '../selectors'
@@ -78,6 +81,7 @@ export class AdEngine {
   private check() {
     if (!this.player) return
 
+    this.dismissEnforcementWall()
     this.removeOverlayAds()
     this.dismissPauseOverlays()
 
@@ -127,6 +131,29 @@ export class AdEngine {
       this.fastForwarding = true
       this.onSkip('fast-forward')
     }
+  }
+
+  /**
+   * Dismiss YouTube's "Video player will be blocked" anti-ad-blocker wall:
+   * remove the modal + backdrop, restore page scroll, and resume the video it
+   * paused. Runs every check() so a wall that appears mid-session is cleared.
+   */
+  private dismissEnforcementWall() {
+    const message = document.querySelector(ENFORCEMENT_MESSAGE)
+    if (!message) return
+
+    document.querySelectorAll(POPUP_DIALOG).forEach((dialog) => {
+      if (dialog.querySelector(ENFORCEMENT_MESSAGE)) dialog.remove()
+    })
+    message.closest('ytd-popup-container')?.remove()
+    message.remove()
+    document.querySelectorAll(MODAL_BACKDROP).forEach((el) => el.remove())
+
+    // YouTube locks scroll and pauses playback behind the wall; undo both.
+    document.documentElement.style.overflow = ''
+    document.body.style.overflow = ''
+    const video = document.querySelector<HTMLVideoElement>(VIDEO)
+    if (video && video.paused) void video.play().catch(() => {})
   }
 
   private removeOverlayAds() {

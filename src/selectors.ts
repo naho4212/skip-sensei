@@ -36,6 +36,16 @@ export const PAUSE_OVERLAY_ADS = ['.ytp-pause-overlay-container']
 /** Present in the player controls during live playback. */
 export const LIVE_BADGE = `${PLAYER} .ytp-live`
 
+/**
+ * YouTube's anti-ad-blocker enforcement wall ("Video player will be blocked")
+ * and its surrounding modal chrome. These are what YouTube injects when it
+ * detects ads aren't playing; removing them + resuming playback dismisses it.
+ * Most likely to change when YouTube updates detection — update here.
+ */
+export const ENFORCEMENT_MESSAGE = 'ytd-enforcement-message-view-model'
+export const POPUP_DIALOG = 'ytd-popup-container tp-yt-paper-dialog'
+export const MODAL_BACKDROP = 'tp-yt-iron-overlay-backdrop'
+
 /** Badge shown while an ad plays — secondary ad-detection signal. */
 export const AD_BADGES = [
   '.ytp-ad-simple-ad-badge',
