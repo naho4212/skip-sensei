@@ -152,6 +152,62 @@ function parseTimestamp(timestamp: string): number {
 }
 
 // ---------------------------------------------------------------------------
+// Creator chapters (InnerTube `next`) — used to detect "Ad Break" chapters
+// ---------------------------------------------------------------------------
+
+export interface Chapter {
+  /** Seconds from video start. */
+  start: number
+  title: string
+}
+
+export async function fetchChapters(videoId: string): Promise<Chapter[]> {
+  try {
+    const response = await fetch(
+      'https://www.youtube.com/youtubei/v1/next?prettyPrint=false',
+      {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          context: {
+            client: {
+              clientName: 'WEB',
+              clientVersion: getClientVersion(),
+              hl: 'en',
+            },
+          },
+          videoId,
+        }),
+      },
+    )
+    if (!response.ok) return []
+    const chapters: Chapter[] = []
+    collectChapters(await response.json(), chapters)
+    return chapters.sort((a, b) => a.start - b.start)
+  } catch {
+    return []
+  }
+}
+
+function collectChapters(node: unknown, out: Chapter[]) {
+  if (!node || typeof node !== 'object') return
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const obj = node as any
+  const chapter = obj.chapterRenderer
+  if (chapter?.timeRangeStartMillis !== undefined) {
+    const title =
+      chapter.title?.simpleText ??
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (chapter.title?.runs ?? []).map((r: any) => r.text ?? '').join('')
+    if (title) {
+      out.push({ start: Number(chapter.timeRangeStartMillis) / 1000, title })
+    }
+  }
+  for (const value of Object.values(obj)) collectChapters(value, out)
+}
+
+// ---------------------------------------------------------------------------
 // Fallback: watch-page player response → timedtext
 // ---------------------------------------------------------------------------
 

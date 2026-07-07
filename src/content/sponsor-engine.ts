@@ -1,5 +1,5 @@
 import { LIVE_BADGE, VIDEO } from '../selectors'
-import { fetchTranscript } from '../transcript'
+import { fetchChapters, fetchTranscript } from '../transcript'
 import type {
   Message,
   Settings,
@@ -11,6 +11,13 @@ import { removeToast, showSkipToast } from './toast'
 
 /** Videos shorter than this skip the LLM call — sponsor reads are rare and cost isn't worth it. */
 const MIN_VIDEO_SECONDS = 120
+
+/** Creator chapter titles that unambiguously mark advertising. */
+const AD_CHAPTER_RE =
+  /^\s*(ads?|ad ?breaks?|sponsors?|sponsor ?breaks?|sponsored( segment)?|promos?|advertisements?|commercial( break)?s?)\s*$/i
+
+/** Sanity cap: an "ad break" chapter longer than this is probably mislabeled. */
+const CHAPTER_AD_MAX_SECONDS = 180
 
 const log = (...args: unknown[]) => console.log('[skipSensei]', ...args)
 
@@ -31,6 +38,7 @@ export class SponsorEngine {
   status: SponsorEngineStatus = 'analyzing'
   reason: string | undefined
   private segments: SponsorSegment[] = []
+  private chapterSegments: SponsorSegment[] = []
   private stopped = false
   private video: HTMLVideoElement | null = null
   /**
@@ -88,7 +96,58 @@ export class SponsorEngine {
     }
     this.video = video
     video.addEventListener('timeupdate', this.onTimeUpdate)
+
+    // Creator-declared "Ad Break" chapters are a deterministic signal: fetch
+    // them first so those skips are armed instantly, independent of the LLM.
+    this.chapterSegments = await this.loadChapterSegments(video.duration)
+    if (this.stopped) return
+    if (this.chapterSegments.length > 0) {
+      this.segments = [...this.chapterSegments]
+      log('ad chapters:', describeSegments(this.chapterSegments))
+    }
+
     await this.analyze(video)
+  }
+
+  private async loadChapterSegments(
+    durationSeconds: number,
+  ): Promise<SponsorSegment[]> {
+    const chapters = await fetchChapters(this.videoId)
+    const segments: SponsorSegment[] = []
+    chapters.forEach((chapter, i) => {
+      if (!AD_CHAPTER_RE.test(chapter.title)) return
+      const nextStart = chapters[i + 1]?.start
+      const hardEnd = Number.isFinite(durationSeconds)
+        ? durationSeconds
+        : chapter.start + CHAPTER_AD_MAX_SECONDS
+      const end = Math.min(
+        nextStart ?? hardEnd,
+        chapter.start + CHAPTER_AD_MAX_SECONDS,
+        hardEnd,
+      )
+      if (end > chapter.start + 1) {
+        segments.push({
+          start: chapter.start,
+          end,
+          type: 'ad-read',
+          confidence: 1,
+          source: 'chapter',
+        })
+      }
+    })
+    return segments
+  }
+
+  /** Chapter segments win; LLM segments overlapping one are absorbed by it. */
+  private mergeSegments(llmSegments: SponsorSegment[]): SponsorSegment[] {
+    const merged = [...this.chapterSegments]
+    for (const segment of llmSegments) {
+      const overlapsChapter = this.chapterSegments.some(
+        (c) => segment.start < c.end && segment.end > c.start,
+      )
+      if (!overlapsChapter) merged.push({ ...segment, source: 'llm' })
+    }
+    return merged.sort((a, b) => a.start - b.start)
   }
 
   private async analyze(video: HTMLVideoElement) {
@@ -149,9 +208,11 @@ export class SponsorEngine {
 
   private applyAnalysis(analysis: VideoAnalysis) {
     if (analysis.status === 'ok') {
-      this.segments = analysis.segments
+      this.segments = this.mergeSegments(analysis.segments)
       this.setStatus('ready')
     } else {
+      // Chapter-derived segments (if any) stay active even when the LLM
+      // path is unavailable — this.segments already holds them.
       this.setStatus(
         analysis.status === 'no-transcript' ? 'no-transcript' : analysis.status,
         analysis.reason,

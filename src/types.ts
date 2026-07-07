@@ -65,6 +65,8 @@ export interface SponsorSegment {
   confidence: number
   /** Set when the user hit "unskip / that was wrong". Never auto-skipped again. */
   dismissed?: boolean
+  /** 'chapter' = derived from a creator chapter titled "Ad Break"/"Sponsor"/…. */
+  source?: 'llm' | 'chapter'
 }
 
 export type AnalysisStatus =
