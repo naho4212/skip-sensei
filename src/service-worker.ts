@@ -336,6 +336,9 @@ chrome.runtime.onMessage.addListener(
           setReloadBadge(sender.tab.id, message.needsReload)
         }
         return false
+      case 'skipSensei:getTabBlocked':
+        sendResponse(badgeState(message.tabId).blocked)
+        return false
       case 'skipSensei:findSelector':
         void findSelector(message.html, message.description).then(sendResponse)
         return true

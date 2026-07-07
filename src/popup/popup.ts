@@ -68,16 +68,13 @@ async function renderSiteSection() {
   if (paused) {
     pageBlockedEl.textContent = 'paused'
   } else {
-    // Always show a number, even 0 — never blank.
+    // Same live counter the icon badge uses, so the two never disagree.
     let n = 0
     if (tab?.id !== undefined) {
-      try {
-        const { rulesMatchedInfo } =
-          await chrome.declarativeNetRequest.getMatchedRules({ tabId: tab.id })
-        n = rulesMatchedInfo.length
-      } catch {
-        n = 0
-      }
+      const count = await chrome.runtime
+        .sendMessage({ type: 'skipSensei:getTabBlocked', tabId: tab.id })
+        .catch(() => 0)
+      n = typeof count === 'number' ? count : 0
     }
     pageBlockedEl.textContent = `${n} blocked here`
   }
