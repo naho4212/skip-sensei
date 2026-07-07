@@ -103,6 +103,7 @@ export async function analyzeTranscript(
   const chunks = chunkLines(lines, MAX_INPUT_CHARS[provider])
   const segments: SponsorSegment[] = []
   let failures = 0
+  let lastError: unknown
   for (const [index, chunk] of chunks.entries()) {
     onProgress?.(index, chunks.length)
     if (signal.aborted) throw new LlmError('Aborted')
@@ -122,15 +123,19 @@ export async function analyzeTranscript(
       // One slow/failed chunk shouldn't discard the whole video's analysis —
       // that section just loses its segments (a possible late/missed skip).
       failures++
+      lastError = error
       console.warn(
         `[skipSensei] chunk ${index + 1}/${chunks.length} failed:`,
         error instanceof Error ? error.message : error,
       )
     }
   }
-  // Only a total wipeout is a real failure worth surfacing to the user.
+  // Only a total wipeout is a real failure. Surface the ACTUAL provider error
+  // (e.g. "Gemini API 400: invalid key") rather than a generic message.
   if (chunks.length > 0 && failures === chunks.length) {
-    throw new LlmError(`All ${chunks.length} analysis chunk(s) failed`)
+    throw lastError instanceof Error
+      ? lastError
+      : new LlmError(`All ${chunks.length} analysis chunk(s) failed`)
   }
   onProgress?.(chunks.length, chunks.length)
   return verifySegments(mergeSegments(segments), lines)
@@ -246,8 +251,9 @@ export function verifySegments(
 }
 
 export function resolveProvider(settings: Settings): LlmProvider {
-  if (settings.llmProvider !== 'builtin' && settings.apiKey.trim()) {
-    return settings.llmProvider
+  const provider = settings.llmProvider
+  if (provider !== 'builtin' && settings.apiKeys[provider]?.trim()) {
+    return provider
   }
   return 'builtin'
 }
@@ -450,7 +456,7 @@ async function completeAnthropic(
     signal,
     headers: {
       'content-type': 'application/json',
-      'x-api-key': settings.apiKey.trim(),
+      'x-api-key': (settings.apiKeys.anthropic ?? '').trim(),
       'anthropic-version': '2023-06-01',
       // Extension service-worker fetch is browser-originated.
       'anthropic-dangerous-direct-browser-access': 'true',
@@ -486,7 +492,7 @@ async function completeOpenAiCompatible(
     signal,
     headers: {
       'content-type': 'application/json',
-      authorization: `Bearer ${settings.apiKey.trim()}`,
+      authorization: `Bearer ${(settings.apiKeys[provider] ?? '').trim()}`,
     },
     body: JSON.stringify({
       model: settings.model.trim() || DEFAULT_MODELS[provider],

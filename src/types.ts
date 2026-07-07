@@ -10,8 +10,8 @@ export interface Settings {
   confidenceThreshold: number
   showSkipToast: boolean
   llmProvider: LlmProvider
-  /** Cloud-provider API key; unused for 'builtin'. */
-  apiKey: string
+  /** Per-provider API keys, so switching providers never reuses the wrong key. */
+  apiKeys: Partial<Record<Exclude<LlmProvider, 'builtin'>, string>>
   /** Model override; '' = provider default. */
   model: string
 }
@@ -23,7 +23,7 @@ export const DEFAULT_SETTINGS: Settings = {
   confidenceThreshold: 0.7,
   showSkipToast: true,
   llmProvider: 'builtin',
-  apiKey: '',
+  apiKeys: {},
   model: '',
 }
 

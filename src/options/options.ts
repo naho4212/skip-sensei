@@ -13,9 +13,18 @@ const thresholdEl = $<HTMLInputElement>('threshold')
 const thresholdValueEl = $<HTMLOutputElement>('threshold-value')
 const showToastEl = $<HTMLInputElement>('show-toast')
 const builtinStatusEl = $('builtin-status')
+const apiKeyLinkEl = $<HTMLAnchorElement>('api-key-link')
 const savedNoteEl = $('saved-note')
 
 let savedTimer: number | null = null
+let currentSettings: Settings
+
+/** Where to get a key, per cloud provider. */
+const KEY_LINKS: Record<Exclude<LlmProvider, 'builtin'>, string> = {
+  gemini: 'https://aistudio.google.com/apikey',
+  anthropic: 'https://console.anthropic.com/settings/keys',
+  openai: 'https://platform.openai.com/api-keys',
+}
 
 function flashSaved() {
   savedNoteEl.hidden = false
@@ -35,15 +44,24 @@ const PROVIDER_INFO: Record<LlmProvider, string> = {
 }
 
 function render(settings: Settings) {
-  providerEl.value = settings.llmProvider
-  providerInfoEl.textContent = PROVIDER_INFO[settings.llmProvider]
-  apiKeyEl.value = settings.apiKey
+  currentSettings = settings
+  const provider = settings.llmProvider
+  providerEl.value = provider
+  providerInfoEl.textContent = PROVIDER_INFO[provider]
   modelEl.value = settings.model
   thresholdEl.value = String(settings.confidenceThreshold)
   thresholdValueEl.value = settings.confidenceThreshold.toFixed(2)
   showToastEl.checked = settings.showSkipToast
-  cloudFieldsEl.hidden = settings.llmProvider === 'builtin'
-  builtinStatusEl.hidden = settings.llmProvider !== 'builtin'
+  cloudFieldsEl.hidden = provider === 'builtin'
+  builtinStatusEl.hidden = provider !== 'builtin'
+
+  if (provider !== 'builtin') {
+    apiKeyEl.value = settings.apiKeys[provider] ?? ''
+    const link = KEY_LINKS[provider]
+    apiKeyLinkEl.href = link
+    apiKeyLinkEl.textContent =
+      provider === 'gemini' ? 'Get a free key →' : 'Get a key →'
+  }
 }
 
 async function save(patch: Partial<Settings>) {
@@ -88,7 +106,13 @@ async function main() {
   )
   apiKeyEl.addEventListener(
     'input',
-    debounce(() => void save({ apiKey: apiKeyEl.value }), 400),
+    debounce(() => {
+      const provider = currentSettings.llmProvider
+      if (provider === 'builtin') return
+      void save({
+        apiKeys: { ...currentSettings.apiKeys, [provider]: apiKeyEl.value },
+      })
+    }, 400),
   )
   modelEl.addEventListener(
     'input',
