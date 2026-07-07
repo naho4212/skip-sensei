@@ -67,15 +67,19 @@ async function renderSiteSection() {
   const pageBlockedEl = $('page-blocked')
   if (paused) {
     pageBlockedEl.textContent = 'paused'
-  } else if (tab?.id !== undefined) {
-    try {
-      const { rulesMatchedInfo } =
-        await chrome.declarativeNetRequest.getMatchedRules({ tabId: tab.id })
-      const n = rulesMatchedInfo.length
-      pageBlockedEl.textContent = `${n} blocked here`
-    } catch {
-      pageBlockedEl.textContent = ''
+  } else {
+    // Always show a number, even 0 — never blank.
+    let n = 0
+    if (tab?.id !== undefined) {
+      try {
+        const { rulesMatchedInfo } =
+          await chrome.declarativeNetRequest.getMatchedRules({ tabId: tab.id })
+        n = rulesMatchedInfo.length
+      } catch {
+        n = 0
+      }
     }
+    pageBlockedEl.textContent = `${n} blocked here`
   }
 }
 
