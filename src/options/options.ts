@@ -5,6 +5,7 @@ const $ = <T extends HTMLElement>(id: string) =>
   document.getElementById(id) as T
 
 const providerEl = $<HTMLSelectElement>('provider')
+const providerInfoEl = $('provider-info')
 const cloudFieldsEl = $('cloud-fields')
 const apiKeyEl = $<HTMLInputElement>('api-key')
 const modelEl = $<HTMLInputElement>('model')
@@ -22,8 +23,18 @@ function flashSaved() {
   savedTimer = window.setTimeout(() => (savedNoteEl.hidden = true), 1200)
 }
 
+const PROVIDER_INFO: Record<LlmProvider, string> = {
+  builtin:
+    'Analysis time: runs on your device — roughly 30–60 seconds per 20 minutes of video, so an hour-long podcast can take ~5 minutes on first watch. Each video is analyzed once, then cached; re-watches are instant. Free and fully private.',
+  anthropic:
+    'Analysis time: a few seconds, regardless of video length. Uses your Anthropic API key (default model claude-haiku-4-5); typical cost is well under 1¢ per video. Each video is analyzed once, then cached.',
+  openai:
+    'Analysis time: a few seconds, regardless of video length. Uses your OpenAI API key (default model gpt-5-mini); typical cost is well under 1¢ per video. Each video is analyzed once, then cached.',
+}
+
 function render(settings: Settings) {
   providerEl.value = settings.llmProvider
+  providerInfoEl.textContent = PROVIDER_INFO[settings.llmProvider]
   apiKeyEl.value = settings.apiKey
   modelEl.value = settings.model
   thresholdEl.value = String(settings.confidenceThreshold)
