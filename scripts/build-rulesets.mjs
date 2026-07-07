@@ -20,6 +20,7 @@ const KEEP_ACTIONS = new Set(['block', 'allow', 'allowAllRequests'])
 const RULESETS = [
   { adguardId: 2, id: 'ads_base', name: 'AdGuard Base (EasyList-equivalent)' },
   { adguardId: 11, id: 'ads_mobile', name: 'AdGuard Mobile Ads' },
+  { adguardId: 3, id: 'trackers', name: 'AdGuard Tracking Protection' },
 ]
 
 if (!existsSync(OUT)) mkdirSync(OUT, { recursive: true })

@@ -10,7 +10,8 @@ import { getSettings, onSettingsChanged } from './storage'
  * we surface that via getBlockerState() rather than throwing.
  */
 
-const RULESET_IDS = ['ads_base', 'ads_mobile']
+const AD_RULESET_IDS = ['ads_base', 'ads_mobile']
+const TRACKER_RULESET_IDS = ['trackers']
 
 /** Priority for allowlist rules — must beat the static block rules (priority 1). */
 const ALLOWLIST_PRIORITY = 1_000_000
@@ -25,33 +26,51 @@ let lastError: string | undefined
 
 export async function syncNetBlocker(): Promise<BlockerState> {
   const settings = await getSettings()
-  const shouldEnable = settings.masterEnabled && settings.blockAllAds
   lastError = undefined
 
+  // Ad and tracker rulesets are enabled in SEPARATE calls so that if the
+  // larger tracker set hits the shared rule-pool limit, ad blocking still works.
+  await setRulesets(
+    AD_RULESET_IDS,
+    settings.masterEnabled && settings.blockAllAds,
+    'ad blocking',
+  )
+  await setRulesets(
+    TRACKER_RULESET_IDS,
+    settings.masterEnabled && settings.blockTrackers,
+    'tracker blocking',
+  )
+
+  try {
+    await syncAllowlist(settings.allowlist)
+  } catch {
+    // allowlist failures are non-fatal
+  }
+
+  return getBlockerState()
+}
+
+async function setRulesets(ids: string[], on: boolean, label: string) {
   try {
     const current = new Set(
       await chrome.declarativeNetRequest.getEnabledRulesets(),
     )
-    const alreadyOn = RULESET_IDS.every((id) => current.has(id))
-    const allOff = RULESET_IDS.every((id) => !current.has(id))
-
-    if (shouldEnable && !alreadyOn) {
+    const allOn = ids.every((id) => current.has(id))
+    const allOff = ids.every((id) => !current.has(id))
+    if (on && !allOn) {
       await chrome.declarativeNetRequest.updateEnabledRulesets({
-        enableRulesetIds: RULESET_IDS,
+        enableRulesetIds: ids,
       })
-    } else if (!shouldEnable && !allOff) {
+    } else if (!on && !allOff) {
       await chrome.declarativeNetRequest.updateEnabledRulesets({
-        disableRulesetIds: RULESET_IDS,
+        disableRulesetIds: ids,
       })
     }
-    await syncAllowlist(settings.allowlist)
   } catch (error) {
-    // Most likely the enabled-static-rule limit (other blockers using the pool).
-    lastError =
-      error instanceof Error ? error.message : 'Could not update ad blocking'
+    // Most likely the enabled-static-rule limit (other extensions using the pool).
+    const msg = error instanceof Error ? error.message : `Could not update ${label}`
+    lastError = `${label}: ${msg}`
   }
-
-  return getBlockerState()
 }
 
 /**
@@ -87,7 +106,7 @@ export async function getBlockerState(): Promise<BlockerState> {
   let active = false
   try {
     const current = await chrome.declarativeNetRequest.getEnabledRulesets()
-    active = RULESET_IDS.every((id) => current.includes(id))
+    active = AD_RULESET_IDS.every((id) => current.includes(id))
   } catch {
     // ignore — reported via error below
   }

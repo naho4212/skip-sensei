@@ -8,6 +8,8 @@ export interface Settings {
   sponsorEngineEnabled: boolean
   /** General web ad blocking (declarativeNetRequest filter lists). Off by default. */
   blockAllAds: boolean
+  /** Also block tracking/analytics pixels (separate, larger ruleset). Off by default. */
+  blockTrackers: boolean
   /** Hostnames where "Block all ads" is paused (not blocked). */
   allowlist: string[]
   /** Segments below this confidence are never skipped. */
@@ -25,6 +27,7 @@ export const DEFAULT_SETTINGS: Settings = {
   adEngineEnabled: true,
   sponsorEngineEnabled: true,
   blockAllAds: false,
+  blockTrackers: false,
   allowlist: [],
   confidenceThreshold: 0.7,
   showSkipToast: true,

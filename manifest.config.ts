@@ -73,6 +73,7 @@ export default defineManifest({
     rule_resources: [
       { id: 'ads_base', enabled: false, path: 'rulesets/ads_base.json' },
       { id: 'ads_mobile', enabled: false, path: 'rulesets/ads_mobile.json' },
+      { id: 'trackers', enabled: false, path: 'rulesets/trackers.json' },
     ],
   },
 })

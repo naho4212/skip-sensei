@@ -157,6 +157,12 @@ async function main() {
     save({ showSkipToast: showToastEl.checked }),
   )
 
+  const blockTrackersEl = $<HTMLInputElement>('block-trackers')
+  blockTrackersEl.checked = (await getSettings()).blockTrackers
+  blockTrackersEl.addEventListener('change', () =>
+    save({ blockTrackers: blockTrackersEl.checked }),
+  )
+
   await renderAllowlist()
   const allowlistInput = $<HTMLInputElement>('allowlist-input')
   const addSite = async () => {
