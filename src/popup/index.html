@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Ad Sensei</title>
+    <link rel="stylesheet" href="./popup.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Ad Sensei</h1>
+      <label class="switch" title="Master toggle">
+        <input type="checkbox" id="master-toggle" />
+        <span class="slider"></span>
+      </label>
+    </header>
+
+    <main>
+      <section class="engines">
+        <label class="row">
+          <span>Skip YouTube ads</span>
+          <span class="switch">
+            <input type="checkbox" id="ad-engine-toggle" />
+            <span class="slider"></span>
+          </span>
+        </label>
+        <label class="row">
+          <span>Skip sponsor segments</span>
+          <span class="switch">
+            <input type="checkbox" id="sponsor-engine-toggle" />
+            <span class="slider"></span>
+          </span>
+        </label>
+        <p class="hint" id="sponsor-hint">Sponsor detection coming soon.</p>
+      </section>
+
+      <section class="stats">
+        <div class="stat">
+          <span class="stat-value" id="session-skips">0</span>
+          <span class="stat-label">skipped this session</span>
+        </div>
+        <div class="stat">
+          <span class="stat-value" id="alltime-skips">0</span>
+          <span class="stat-label">skipped all time</span>
+        </div>
+      </section>
+
+      <p class="status" id="video-status"></p>
+    </main>
+
+    <script type="module" src="./popup.ts"></script>
+  </body>
+</html>
