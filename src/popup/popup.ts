@@ -87,6 +87,18 @@ async function renderSiteSection() {
   }
 }
 
+async function pageHasLoadedAds(): Promise<boolean> {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+  if (!tab?.id) return false
+  try {
+    return await chrome.tabs.sendMessage(tab.id, {
+      type: 'skipSensei:pageHasAds',
+    })
+  } catch {
+    return false
+  }
+}
+
 async function renderBlockerState() {
   const textEl = $('blocker-note-text')
   const reloadBtn = $('blocker-reload')
@@ -99,10 +111,18 @@ async function renderBlockerState() {
       blockerNoteEl.hidden = false
       reloadBtn.hidden = true
     } else if (state.enabled && state.active) {
-      textEl.textContent = 'Blocking ads across the web. Reload to apply.'
       blockerNoteEl.className = 'blocker-note'
       blockerNoteEl.hidden = false
-      reloadBtn.hidden = false
+      // Only offer a reload when THIS page still has ads that loaded before
+      // blocking — so we never nag (or risk losing work) when it's not needed.
+      const needsReload = await pageHasLoadedAds()
+      if (needsReload) {
+        textEl.textContent = 'Ads loaded before blocking — reload to clear them.'
+        reloadBtn.hidden = false
+      } else {
+        textEl.textContent = 'Blocking ads across the web.'
+        reloadBtn.hidden = true
+      }
     } else {
       blockerNoteEl.hidden = true
     }
@@ -265,15 +285,12 @@ async function main() {
   })
 
   $('blocker-reload').addEventListener('click', async () => {
-    // Network rules only affect NEW requests, so already-open tabs keep their
-    // ads until reloaded. Reload them all so blocking applies everywhere at once.
-    const tabs = await chrome.tabs.query({})
-    await Promise.all(
-      tabs.map((t) =>
-        t.id ? chrome.tabs.reload(t.id).catch(() => {}) : Promise.resolve(),
-      ),
-    )
-    window.close()
+    // Only the current tab — reloading others could lose work in progress.
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+    if (tab?.id) {
+      await chrome.tabs.reload(tab.id)
+      window.close()
+    }
   })
 
   $('open-options').addEventListener('click', (event) => {

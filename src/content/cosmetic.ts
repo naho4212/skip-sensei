@@ -86,3 +86,34 @@ async function apply() {
 
 void apply()
 onSettingsChanged(() => void apply())
+
+/**
+ * Whether this page currently has ad content that loaded from the network —
+ * ad-network iframes or filled AdSense slots. Their presence means the page
+ * loaded before blocking took effect, so a reload would clear them. (Network
+ * blocking only affects new requests; it can't un-load already-fetched ads.)
+ */
+const AD_IFRAME_HINTS = [
+  'doubleclick',
+  'googlesyndication',
+  'adnxs',
+  'amazon-adsystem',
+  'adservice',
+  'adsystem',
+  '/ads/',
+  '/adserver',
+]
+
+function pageHasLoadedAds(): boolean {
+  for (const frame of document.querySelectorAll<HTMLIFrameElement>('iframe[src]')) {
+    const src = frame.src.toLowerCase()
+    if (AD_IFRAME_HINTS.some((h) => src.includes(h))) return true
+  }
+  return !!document.querySelector('ins.adsbygoogle[data-ad-status="filled"]')
+}
+
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message?.type === 'skipSensei:pageHasAds') {
+    sendResponse(pageHasLoadedAds())
+  }
+})
