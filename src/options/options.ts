@@ -1,4 +1,4 @@
-import { getSettings, updateSettings } from '../storage'
+import { clearAnalysisCache, getSettings, updateSettings } from '../storage'
 import type { LlmProvider, Message, Settings } from '../types'
 
 const $ = <T extends HTMLElement>(id: string) =>
@@ -90,6 +90,15 @@ async function main() {
   showToastEl.addEventListener('change', () =>
     save({ showSkipToast: showToastEl.checked }),
   )
+
+  const clearCacheEl = $<HTMLButtonElement>('clear-cache')
+  const clearResultEl = $('clear-cache-result')
+  clearCacheEl.addEventListener('click', async () => {
+    clearCacheEl.disabled = true
+    const count = await clearAnalysisCache()
+    clearResultEl.textContent = `Cleared ${count} cached ${count === 1 ? 'video' : 'videos'}.`
+    clearCacheEl.disabled = false
+  })
 }
 
 void main()

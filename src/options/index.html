@@ -58,6 +58,16 @@
         </label>
       </section>
 
+      <section>
+        <h2>Analysis cache</h2>
+        <p class="hint">
+          Sponsor analysis is cached per video so a re-watch never re-runs the
+          AI. Clear it to force fresh analysis (e.g. after changing provider).
+        </p>
+        <button id="clear-cache" type="button">Clear analysis cache</button>
+        <span class="hint" id="clear-cache-result"></span>
+      </section>
+
       <p class="saved" id="saved-note" hidden>Saved ✓</p>
     </main>
     <script type="module" src="./options.ts"></script>

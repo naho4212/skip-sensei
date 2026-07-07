@@ -90,6 +90,25 @@ output {
   max-width: 460px;
 }
 
+button {
+  font: inherit;
+  padding: 7px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+button:hover {
+  background: color-mix(in srgb, currentColor 8%, transparent);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .saved {
   position: fixed;
   bottom: 16px;

@@ -85,6 +85,16 @@ export async function setCachedAnalysis(analysis: VideoAnalysis) {
   })
 }
 
+/** Drop every cached analysis (settings, stats, and corrections survive). */
+export async function clearAnalysisCache(): Promise<number> {
+  const all = await chrome.storage.local.get(null)
+  const keys = Object.keys(all).filter(
+    (key) => key.startsWith(CACHE_PREFIX) || key === CACHE_INDEX_KEY,
+  )
+  await chrome.storage.local.remove(keys)
+  return Math.max(0, keys.length - 1) // exclude the index from the count
+}
+
 // ---------------------------------------------------------------------------
 // User corrections ("that was wrong") — raw log for tuning, plus the cached
 // segment is flagged dismissed so it is never auto-skipped again.
