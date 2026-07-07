@@ -43,6 +43,14 @@ export default defineManifest({
       js: ['src/content/index.ts'],
       run_at: 'document_idle',
     },
+    {
+      // Cosmetic filtering for "Block all ads": hide ad containers on every
+      // site. Gates itself on the blockAllAds setting + allowlist at runtime.
+      matches: ['<all_urls>'],
+      js: ['src/content/cosmetic.ts'],
+      run_at: 'document_start',
+      all_frames: true,
+    },
   ],
   action: {
     default_popup: 'src/popup/index.html',

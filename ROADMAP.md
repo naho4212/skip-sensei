@@ -34,8 +34,10 @@ Three "what to block" capabilities, each independently useful:
 - **Phase 5 — Per-site control + allowlist** ✅: current-site section in popup,
   "Pause ad blocking here" toggle (dynamic allowAllRequests rules), managed
   allowlist in options, per-page blocked counter (under Sponsor segments).
-- **Phase 6 — Cosmetic filtering**: content-script element hiding, extended
-  selectors, optional toggle.
+- **Phase 6 — Cosmetic filtering** ✅: content-script (`cosmetic.ts`, all_urls,
+  document_start) hides ad containers via curated high-signal selectors;
+  gated on blockAllAds + allowlist. Catches first-party banners + leftover ad
+  boxes network blocking can't. (Adds the all-sites content-script permission.)
 - **Phase 7 — Filter-list management**: list versions/dates, manual update,
   optional extra lists.
 - **Phase 8 — AI enhancements (differentiator)**: self-healing selectors
