@@ -6,6 +6,8 @@ export interface Settings {
   masterEnabled: boolean
   adEngineEnabled: boolean
   sponsorEngineEnabled: boolean
+  /** General web ad blocking (declarativeNetRequest filter lists). Off by default. */
+  blockAllAds: boolean
   /** Segments below this confidence are never skipped. */
   confidenceThreshold: number
   showSkipToast: boolean
@@ -20,6 +22,7 @@ export const DEFAULT_SETTINGS: Settings = {
   masterEnabled: true,
   adEngineEnabled: true,
   sponsorEngineEnabled: true,
+  blockAllAds: false,
   confidenceThreshold: 0.7,
   showSkipToast: true,
   llmProvider: 'builtin',
@@ -112,6 +115,7 @@ export type Message =
       end: number
     }
   | { type: 'skipSensei:checkBuiltinAI' } // → { availability: string }
+  | { type: 'skipSensei:getBlockerState' } // → BlockerState
 
 export interface SessionStats {
   sessionAdSkips: number

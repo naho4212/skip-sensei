@@ -1,4 +1,5 @@
 import { analyzeTranscript, builtinAvailability, resolveProvider } from './llm-client'
+import { getBlockerState, initNetBlocker } from './net-blocker'
 import {
   getCachedAnalysis,
   getSettings,
@@ -236,8 +237,14 @@ chrome.runtime.onMessage.addListener(
           sendResponse({ availability }),
         )
         return true
+      case 'skipSensei:getBlockerState':
+        void getBlockerState().then(sendResponse)
+        return true
       default:
         return false
     }
   },
 )
+
+// "Block all ads" engine: enforce DNR ruleset state from settings.
+initNetBlocker()

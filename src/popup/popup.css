@@ -100,6 +100,24 @@ body.disabled main {
   color: var(--text-2);
 }
 
+.row-note {
+  font-style: normal;
+  font-size: 11px;
+  color: var(--text-2);
+  margin-left: 4px;
+}
+
+.blocker-note {
+  margin: 0;
+  padding: 0 16px 8px;
+  font-size: 11px;
+  color: var(--text-2);
+}
+
+.blocker-note.warn {
+  color: var(--accent);
+}
+
 .engines {
   padding: 4px 0;
   border-bottom: 1px solid var(--divider);

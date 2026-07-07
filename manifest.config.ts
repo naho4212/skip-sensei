@@ -15,7 +15,7 @@ export default defineManifest({
     48: 'src/icons/icon-48.png',
     128: 'src/icons/icon-128.png',
   },
-  permissions: ['storage', 'activeTab'],
+  permissions: ['storage', 'activeTab', 'declarativeNetRequest'],
   host_permissions: [
     '*://*.youtube.com/*',
     // Cloud LLM providers for sponsor detection (only contacted when the user
@@ -49,5 +49,16 @@ export default defineManifest({
   options_ui: {
     page: 'src/options/index.html',
     open_in_tab: true,
+  },
+  // General web ad blocking (the "Block all ads" engine). Rulesets are
+  // block-only (EasyList-derived via AdGuard) and ship DISABLED — the toggle
+  // enables them at runtime via updateEnabledRulesets, so we never hit the
+  // static-rule limit at install. Files live in public/rulesets (see
+  // scripts/build-rulesets.mjs).
+  declarative_net_request: {
+    rule_resources: [
+      { id: 'ads_base', enabled: false, path: 'rulesets/ads_base.json' },
+      { id: 'ads_mobile', enabled: false, path: 'rulesets/ads_mobile.json' },
+    ],
   },
 })

@@ -14,6 +14,8 @@ const $ = <T extends HTMLElement>(id: string) =>
 const masterToggle = $<HTMLInputElement>('master-toggle')
 const adToggle = $<HTMLInputElement>('ad-engine-toggle')
 const sponsorToggle = $<HTMLInputElement>('sponsor-engine-toggle')
+const blockAdsToggle = $<HTMLInputElement>('block-ads-toggle')
+const blockerNoteEl = $('blocker-note')
 const videoStatusEl = $('video-status')
 const segmentListEl = $<HTMLUListElement>('segment-list')
 const reloadTabEl = $<HTMLButtonElement>('reload-tab')
@@ -22,7 +24,28 @@ function renderSettings(settings: Settings) {
   masterToggle.checked = settings.masterEnabled
   adToggle.checked = settings.adEngineEnabled
   sponsorToggle.checked = settings.sponsorEngineEnabled
+  blockAdsToggle.checked = settings.blockAllAds
   document.body.classList.toggle('disabled', !settings.masterEnabled)
+}
+
+async function renderBlockerState() {
+  try {
+    const state: { enabled: boolean; active: boolean; error?: string } =
+      await chrome.runtime.sendMessage({ type: 'skipSensei:getBlockerState' })
+    if (state.error) {
+      blockerNoteEl.textContent = `Couldn't enable ad blocking: ${state.error}`
+      blockerNoteEl.className = 'blocker-note warn'
+      blockerNoteEl.hidden = false
+    } else if (state.enabled && state.active) {
+      blockerNoteEl.textContent = 'Blocking ads across the web. Reload open tabs to apply.'
+      blockerNoteEl.className = 'blocker-note'
+      blockerNoteEl.hidden = false
+    } else {
+      blockerNoteEl.hidden = true
+    }
+  } catch {
+    blockerNoteEl.hidden = true
+  }
 }
 
 function renderStats(stats: Stats, session: SessionStats | null) {
@@ -161,6 +184,11 @@ async function main() {
   wireToggle(masterToggle, 'masterEnabled')
   wireToggle(adToggle, 'adEngineEnabled')
   wireToggle(sponsorToggle, 'sponsorEngineEnabled')
+  blockAdsToggle.addEventListener('change', async () => {
+    renderSettings(await updateSettings({ blockAllAds: blockAdsToggle.checked }))
+    // Give the service worker a moment to flip the rulesets, then report.
+    setTimeout(renderBlockerState, 300)
+  })
 
   $('open-options').addEventListener('click', (event) => {
     event.preventDefault()
@@ -176,6 +204,7 @@ async function main() {
   })
 
   void renderVideoStatus()
+  void renderBlockerState()
   // Analysis finishes async while the popup is open; 1s keeps the elapsed
   // timer ticking smoothly.
   setInterval(renderVideoStatus, 1000)
