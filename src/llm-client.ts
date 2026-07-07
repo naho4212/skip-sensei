@@ -330,6 +330,31 @@ export async function reviewPopup(
   }
 }
 
+const CONSENT_SYSTEM_PROMPT = `You are given the HTML of a cookie-consent / privacy banner. Find the button that REJECTS non-essential cookies — the most privacy-protective choice (labels like "Reject all", "Decline", "Necessary only", "Only essential", "Refuse", "Deny"). Return ONLY JSON: {"selector":"<css>"} for a clickable element (button/a) that performs that rejection, or {"selector":null} if there is no clear reject option (do NOT return an "Accept" button — never). Prefer stable attributes. No prose.`
+
+/** Find the "reject all / necessary only" button in a cookie banner. Never returns Accept. */
+export async function findConsentReject(
+  html: string,
+  settings: Settings,
+  signal: AbortSignal,
+): Promise<string | null> {
+  const provider = resolveProvider(settings)
+  const raw = await withTimeout(
+    complete(provider, CONSENT_SYSTEM_PROMPT, `Banner HTML:\n${html.slice(0, 5000)}`, settings, signal),
+    CHUNK_TIMEOUT_MS[provider],
+  )
+  const cleaned = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '')
+  const first = cleaned.indexOf('{')
+  const last = cleaned.lastIndexOf('}')
+  if (first === -1 || last <= first) return null
+  try {
+    const sel = JSON.parse(cleaned.slice(first, last + 1)).selector
+    return typeof sel === 'string' && sel.trim() ? sel.trim() : null
+  } catch {
+    return null
+  }
+}
+
 export function resolveProvider(settings: Settings): LlmProvider {
   const provider = settings.llmProvider
   if (provider !== 'builtin' && settings.apiKeys[provider]?.trim()) {

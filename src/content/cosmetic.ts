@@ -4,6 +4,7 @@ import {
   getSettings,
   onSettingsChanged,
 } from '../storage'
+import { initConsent } from './consent'
 import { initPopupReviewer } from './popup-reviewer'
 
 /**
@@ -250,6 +251,7 @@ function onPageReady() {
   scheduleReloadChecks()
   // Give ads time to load, then scan once for anything the lists missed.
   setTimeout(() => void runGapfill(), 3500)
+  initConsent() // AI cookie-consent auto-reject
 }
 
 if (document.readyState === 'complete') onPageReady()
@@ -257,6 +259,7 @@ else window.addEventListener('load', onPageReady)
 onSettingsChanged(() => {
   void reportReloadState()
   initPopupReviewer()
+  initConsent()
 })
 
 // AI-reviewed popup/overlay blocking (gates itself on settings internally).

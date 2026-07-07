@@ -2,6 +2,7 @@ import {
   analyzeTranscript,
   builtinAvailability,
   findAdSelectors,
+  findConsentReject,
   findElementSelector,
   resolveProvider,
   reviewPopup,
@@ -219,6 +220,18 @@ async function findSelector(
   }
 }
 
+/** AI consent auto-answer: find the reject/necessary-only button in a cookie banner. */
+async function findConsent(html: string): Promise<string | null> {
+  const settings = await getSettings()
+  if (!settings.aiEnhancements) return null
+  const controller = new AbortController()
+  try {
+    return await findConsentReject(html, settings, controller.signal)
+  } catch {
+    return null
+  }
+}
+
 /** AI popup review: is this overlay an intrusive annoyance (hide) or functional (keep)? */
 async function reviewPopupMsg(html: string): Promise<boolean> {
   const settings = await getSettings()
@@ -310,6 +323,9 @@ chrome.runtime.onMessage.addListener(
         return true
       case 'skipSensei:reviewPopup':
         void reviewPopupMsg(message.html).then(sendResponse)
+        return true
+      case 'skipSensei:findConsentReject':
+        void findConsent(message.html).then(sendResponse)
         return true
       default:
         return false

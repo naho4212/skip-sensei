@@ -42,6 +42,9 @@ export class AdEngine {
   private lastSkipButtonCountAt = 0
   /** Runtime skip-button selectors = hardcoded + AI-healed ones from storage. */
   private skipSelectors: string[] = [...SKIP_BUTTONS]
+  /** AI-healed selectors for the anti-adblock enforcement modal. */
+  private wallSelectors: string[] = []
+  private wallHealInFlight = false
   /** Wall-clock when the current ad started showing (for the heal timer). */
   private adShowingSince: number | null = null
   private healInFlight = false
@@ -53,12 +56,13 @@ export class AdEngine {
     this.attachWhenPlayerExists()
   }
 
-  /** Seed the runtime selector list with any selectors the AI healed earlier. */
+  /** Seed the runtime selector lists with any selectors the AI healed earlier. */
   private async loadHealedSelectors() {
-    const healed = (await getHealedSelectors()).skipButton ?? []
-    for (const selector of healed) {
+    const healed = await getHealedSelectors()
+    for (const selector of healed.skipButton ?? []) {
       if (!this.skipSelectors.includes(selector)) this.skipSelectors.push(selector)
     }
+    this.wallSelectors = healed.enforcementWall ?? []
   }
 
   stop() {
@@ -248,8 +252,24 @@ export class AdEngine {
    * paused. Runs every check() so a wall that appears mid-session is cleared.
    */
   private dismissEnforcementWall() {
-    const message = document.querySelector(ENFORCEMENT_MESSAGE)
-    if (!message) return
+    // Known selector, plus any the AI healed after a prior YouTube change.
+    let message = document.querySelector(ENFORCEMENT_MESSAGE)
+    if (!message) {
+      for (const selector of this.wallSelectors) {
+        try {
+          message = document.querySelector(selector)
+        } catch {
+          continue
+        }
+        if (message) break
+      }
+    }
+
+    if (!message) {
+      // Wall may be present under a renamed element — self-heal if it looks blocked.
+      void this.trySelfHealWall()
+      return
+    }
 
     document.querySelectorAll(POPUP_DIALOG).forEach((dialog) => {
       if (dialog.querySelector(ENFORCEMENT_MESSAGE)) dialog.remove()
@@ -263,6 +283,49 @@ export class AdEngine {
     document.body.style.overflow = ''
     const video = document.querySelector<HTMLVideoElement>(VIDEO)
     if (video && video.paused) void video.play().catch(() => {})
+  }
+
+  /**
+   * Self-heal the enforcement wall: if the video is unexpectedly paused with a
+   * large blocking dialog present that our known selectors didn't match,
+   * YouTube likely renamed the wall. Ask the AI which element is the
+   * ad-blocker enforcement modal, cache it, and dismiss.
+   */
+  private async trySelfHealWall() {
+    if (this.wallHealInFlight) return
+    const video = document.querySelector<HTMLVideoElement>(VIDEO)
+    const dialog = document.querySelector('ytd-popup-container tp-yt-paper-dialog, tp-yt-paper-dialog')
+    // Only bother when the state actually looks like a block: paused + a dialog.
+    if (!video || !video.paused || !dialog) return
+    if (!(await getSettings()).aiEnhancements) return
+
+    this.wallHealInFlight = true
+    try {
+      const selector = await this.send<string | null>({
+        type: 'skipSensei:findSelector',
+        html: (dialog as HTMLElement).outerHTML.slice(0, 6000),
+        description:
+          'the YouTube ad-blocker enforcement message that says video playback will be blocked (the modal to remove), if present',
+      })
+      if (!selector) return
+      let el: Element | null = null
+      try {
+        el = document.querySelector(selector)
+      } catch {
+        return
+      }
+      if (el) {
+        log('self-healed enforcement wall selector:', selector)
+        if (!this.wallSelectors.includes(selector)) this.wallSelectors.push(selector)
+        await addHealedSelector('enforcementWall', selector)
+        this.dismissEnforcementWall() // dismiss it now via the healed selector
+      }
+    } catch {
+      // nothing to do
+    } finally {
+      // Allow another attempt if the wall reappears later.
+      setTimeout(() => (this.wallHealInFlight = false), 5000)
+    }
   }
 
   private removeOverlayAds() {
