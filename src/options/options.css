@@ -109,6 +109,16 @@ button:disabled {
   cursor: default;
 }
 
+.footer {
+  margin-top: 24px;
+  font-size: 13px;
+  opacity: 0.8;
+}
+
+.footer a {
+  color: inherit;
+}
+
 .saved {
   position: fixed;
   bottom: 16px;

@@ -116,6 +116,25 @@ body.disabled main {
   min-height: 14px;
 }
 
+footer {
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  text-align: center;
+}
+
+.coffee {
+  font-size: 12px;
+  color: inherit;
+  opacity: 0.7;
+  text-decoration: none;
+}
+
+.coffee:hover {
+  opacity: 1;
+  text-decoration: underline;
+}
+
 /* Toggle switch */
 .switch {
   position: relative;
