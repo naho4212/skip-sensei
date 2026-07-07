@@ -168,12 +168,12 @@ export class SponsorEngine {
     }
 
     if (document.querySelector(LIVE_BADGE) || !Number.isFinite(video.duration)) {
-      this.setStatus('unavailable', 'Live stream — no complete transcript')
+      this.setStatus('unavailable', 'live stream has no complete transcript')
       return
     }
     const durationSeconds = video.duration
     if (durationSeconds < MIN_VIDEO_SECONDS) {
-      this.setStatus('unavailable', 'Video too short to analyze')
+      this.setStatus('unavailable', 'video too short to scan')
       return
     }
 

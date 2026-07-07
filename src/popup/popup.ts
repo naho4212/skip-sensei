@@ -38,7 +38,6 @@ function renderSettings(settings: Settings) {
 let currentHost: string | null = null
 
 async function renderSiteSection() {
-  const titleEl = $('site-section-title')
   const sectionEl = $('site-section')
   const settings = await getSettings()
 
@@ -56,33 +55,26 @@ async function renderSiteSection() {
 
   // Only relevant for the general "Block all ads" engine on a real web page.
   if (!settings.blockAllAds || !host) {
-    titleEl.hidden = true
     sectionEl.hidden = true
-    $('page-blocked').hidden = true
     return
   }
-  titleEl.hidden = false
   sectionEl.hidden = false
 
   $('site-host').textContent = host
   const paused = settings.allowlist.includes(host)
   pauseSiteToggle.checked = paused
 
-  // Page-blocked count lives in the "Skipped" section (under Sponsor segments).
   const pageBlockedEl = $('page-blocked')
-  const pageBlockedCountEl = $('page-blocked-count')
-  pageBlockedEl.hidden = false
   if (paused) {
-    pageBlockedCountEl.textContent = '0'
-    pageBlockedEl.lastChild!.textContent = ' ads blocked (paused here)'
+    pageBlockedEl.textContent = 'paused'
   } else if (tab?.id !== undefined) {
     try {
       const { rulesMatchedInfo } =
         await chrome.declarativeNetRequest.getMatchedRules({ tabId: tab.id })
-      pageBlockedCountEl.textContent = String(rulesMatchedInfo.length)
-      pageBlockedEl.lastChild!.textContent = ' ads blocked on this page'
+      const n = rulesMatchedInfo.length
+      pageBlockedEl.textContent = `${n} blocked here`
     } catch {
-      pageBlockedEl.hidden = true
+      pageBlockedEl.textContent = ''
     }
   }
 }
@@ -212,9 +204,11 @@ function sponsorStatusText(status: PageStatus): string {
       return `Analyzing transcript${status.sponsorReason ? ` (${status.sponsorReason})` : ''}…${elapsed}`
     }
     case 'no-transcript':
-      return 'No transcript available — sponsor skipping off for this video.'
+      return 'No transcript available — can’t scan for sponsor segments.'
     case 'unavailable':
-      return status.sponsorReason ?? 'Sponsor skipping unavailable for this video.'
+      return status.sponsorReason
+        ? `No sponsor scan — ${status.sponsorReason}.`
+        : 'No sponsor scan for this video.'
     case 'error':
       return `Sponsor analysis failed${status.sponsorReason ? `: ${status.sponsorReason}` : ''}`
     case 'off':

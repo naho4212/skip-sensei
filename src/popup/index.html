@@ -83,17 +83,14 @@
             </tr>
           </tbody>
         </table>
-        <p class="page-blocked" id="page-blocked" hidden>
-          <span id="page-blocked-count">0</span> ads blocked on this page
-        </p>
       </section>
 
-      <div class="section-title" id="site-section-title" hidden>This site</div>
       <section class="site" id="site-section" hidden>
-        <p class="status">
+        <div class="site-head">
           <span id="site-host"></span>
-        </p>
-        <label class="row" id="pause-row">
+          <span class="page-blocked" id="page-blocked"></span>
+        </div>
+        <label class="row compact" id="pause-row">
           <span>Pause ad blocking here</span>
           <span class="switch">
             <input type="checkbox" id="pause-site-toggle" />
@@ -102,7 +99,6 @@
         </label>
       </section>
 
-      <div class="section-title">This video</div>
       <section class="current">
         <p class="status">
           <span id="video-status"></span>
