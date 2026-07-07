@@ -33,8 +33,12 @@ export class SponsorEngine {
   private segments: SponsorSegment[] = []
   private stopped = false
   private video: HTMLVideoElement | null = null
-  /** Segment starts already skipped/dismissed this page — prevents skip loops. */
-  private handled = new Set<number>()
+  /**
+   * Wall-clock time of each segment's last skip. A short cooldown (instead of
+   * a once-per-page flag) prevents seek-race double skips while still
+   * re-skipping when the user rewinds back into the segment later.
+   */
+  private lastSkipAt = new Map<number, number>()
   private onTimeUpdate = () => this.checkPlayback()
 
   constructor(
@@ -179,13 +183,15 @@ export class SponsorEngine {
     const time = this.video.currentTime
 
     for (const segment of this.segments) {
-      if (segment.dismissed || this.handled.has(segment.start)) continue
+      if (segment.dismissed) continue
+      const lastSkip = this.lastSkipAt.get(segment.start)
+      if (lastSkip !== undefined && Date.now() - lastSkip < 5000) continue
       if (segment.confidence < settings.confidenceThreshold) continue
       const inSegment = time >= segment.start && time < segment.end - 0.5
       // Only skip when there's meaningfully more segment left than a seek costs.
       if (!inSegment || segment.end - time < 1) continue
 
-      this.handled.add(segment.start)
+      this.lastSkipAt.set(segment.start, Date.now())
       this.video.currentTime = segment.end
       log(`skipped sponsor segment ${segment.start}s → ${segment.end}s`)
       this.send({ type: 'skipSensei:sponsorSkipped', videoId: this.videoId })
