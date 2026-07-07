@@ -4,6 +4,7 @@ import {
   getSettings,
   onSettingsChanged,
 } from '../storage'
+import { initPopupReviewer } from './popup-reviewer'
 
 /**
  * Cosmetic filtering (Phase 6): hides ad *containers* by CSS selector, which
@@ -253,4 +254,10 @@ function onPageReady() {
 
 if (document.readyState === 'complete') onPageReady()
 else window.addEventListener('load', onPageReady)
-onSettingsChanged(() => void reportReloadState())
+onSettingsChanged(() => {
+  void reportReloadState()
+  initPopupReviewer()
+})
+
+// AI-reviewed popup/overlay blocking (gates itself on settings internally).
+initPopupReviewer()

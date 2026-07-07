@@ -21,6 +21,9 @@ const RULESETS = [
   { adguardId: 2, id: 'ads_base', name: 'AdGuard Base (EasyList-equivalent)' },
   { adguardId: 11, id: 'ads_mobile', name: 'AdGuard Mobile Ads' },
   { adguardId: 3, id: 'trackers', name: 'AdGuard Tracking Protection' },
+  { adguardId: 18, id: 'cookies', name: 'AdGuard Cookie Notices' },
+  { adguardId: 4, id: 'social', name: 'AdGuard Social Media' },
+  { adguardId: 19, id: 'popups', name: 'AdGuard Popups' },
 ]
 
 if (!existsSync(OUT)) mkdirSync(OUT, { recursive: true })

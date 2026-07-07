@@ -28,17 +28,30 @@ export async function syncNetBlocker(): Promise<BlockerState> {
   const settings = await getSettings()
   lastError = undefined
 
-  // Ad and tracker rulesets are enabled in SEPARATE calls so that if the
-  // larger tracker set hits the shared rule-pool limit, ad blocking still works.
-  await setRulesets(
-    AD_RULESET_IDS,
-    settings.masterEnabled && settings.blockAllAds,
-    'ad blocking',
-  )
+  // Each ruleset group is enabled in a SEPARATE call so that if one hits the
+  // shared rule-pool limit, the others still apply. Ad blocking is the base;
+  // the rest are independent opt-ins gated on their own settings AND blockAllAds.
+  const master = settings.masterEnabled
+  await setRulesets(AD_RULESET_IDS, master && settings.blockAllAds, 'ad blocking')
   await setRulesets(
     TRACKER_RULESET_IDS,
-    settings.masterEnabled && settings.blockTrackers,
+    master && settings.blockTrackers,
     'tracker blocking',
+  )
+  await setRulesets(
+    ['cookies'],
+    master && settings.blockAllAds && settings.blockCookieNotices,
+    'cookie-notice blocking',
+  )
+  await setRulesets(
+    ['social'],
+    master && settings.blockAllAds && settings.blockSocial,
+    'social blocking',
+  )
+  await setRulesets(
+    ['popups'],
+    master && settings.blockAllAds && settings.blockPopups,
+    'popup blocking',
   )
 
   try {

@@ -10,6 +10,12 @@ export interface Settings {
   blockAllAds: boolean
   /** Also block tracking/analytics pixels (separate, larger ruleset). Off by default. */
   blockTrackers: boolean
+  /** Hide cookie-consent notices. Off by default. */
+  blockCookieNotices: boolean
+  /** Block social-media widgets/tracking. Off by default. */
+  blockSocial: boolean
+  /** Block popups / notification prompts. Off by default. */
+  blockPopups: boolean
   /** Hostnames where "Block all ads" is paused (not blocked). */
   allowlist: string[]
   /** Segments below this confidence are never skipped. */
@@ -32,6 +38,9 @@ export const DEFAULT_SETTINGS: Settings = {
   sponsorEngineEnabled: true,
   blockAllAds: false,
   blockTrackers: false,
+  blockCookieNotices: false,
+  blockSocial: false,
+  blockPopups: false,
   allowlist: [],
   confidenceThreshold: 0.7,
   showSkipToast: true,
@@ -141,6 +150,7 @@ export type Message =
       html: string
       domain: string
     } // → string[] (AI-found ad selectors, also cached for the domain)
+  | { type: 'skipSensei:reviewPopup'; html: string } // → boolean (hide this overlay?)
 
 export interface SessionStats {
   sessionAdSkips: number

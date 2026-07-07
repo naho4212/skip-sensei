@@ -306,6 +306,30 @@ export async function findAdSelectors(
   }
 }
 
+const POPUP_SYSTEM_PROMPT = `You decide whether an on-page overlay/popup should be hidden. HIDE only intrusive annoyances: newsletter/email-signup walls, promotional/discount popups, "subscribe" interstitials, app-install nags, survey/feedback popups, and popup/overlay ADS. KEEP (do not hide) anything functional or that the user may need: login/sign-in dialogs, authentication (OAuth), cookie/consent choices, age verification, payment/checkout, error or confirmation dialogs, and the site's actual content. When unsure, KEEP. Respond with ONLY JSON: {"hide": true|false}. No prose.`
+
+/** Decide whether an overlay is an intrusive annoyance (hide) or functional (keep). */
+export async function reviewPopup(
+  html: string,
+  settings: Settings,
+  signal: AbortSignal,
+): Promise<boolean> {
+  const provider = resolveProvider(settings)
+  const raw = await withTimeout(
+    complete(provider, POPUP_SYSTEM_PROMPT, `Overlay HTML:\n${html.slice(0, 4000)}`, settings, signal),
+    CHUNK_TIMEOUT_MS[provider],
+  )
+  const cleaned = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '')
+  const first = cleaned.indexOf('{')
+  const last = cleaned.lastIndexOf('}')
+  if (first === -1 || last <= first) return false
+  try {
+    return JSON.parse(cleaned.slice(first, last + 1)).hide === true
+  } catch {
+    return false
+  }
+}
+
 export function resolveProvider(settings: Settings): LlmProvider {
   const provider = settings.llmProvider
   if (provider !== 'builtin' && settings.apiKeys[provider]?.trim()) {

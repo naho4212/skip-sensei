@@ -79,11 +79,40 @@
 
       <section>
         <h2>Ad blocking</h2>
+        <p class="hint">
+          Extra filter lists, applied on top of ad blocking (needs
+          <strong>Block all ads</strong> on). Each is off by default.
+        </p>
         <label class="field checkbox">
           <input type="checkbox" id="block-trackers" />
           <span>
-            Also block trackers &amp; analytics
-            <em>(TikTok, Snapchat, Google Tag Manager, etc. — a larger ruleset)</em>
+            Block trackers &amp; analytics
+            <em>(TikTok, Snapchat, Google Tag Manager, etc.)</em>
+          </span>
+        </label>
+        <label class="field checkbox">
+          <input type="checkbox" id="block-cookie-notices" />
+          <span>
+            Hide cookie-consent notices
+            <em>(the “we value your privacy” banners)</em>
+          </span>
+        </label>
+        <label class="field checkbox">
+          <input type="checkbox" id="block-social" />
+          <span>
+            Block social-media widgets &amp; tracking
+            <em>(share buttons, embedded like/follow trackers)</em>
+          </span>
+        </label>
+        <label class="field checkbox">
+          <input type="checkbox" id="block-popups" />
+          <span>
+            Block popup &amp; overlay ads <em>(AI-reviewed)</em>
+            <em
+              >— blocks intrusive popup/overlay ads; with AI enhancements on,
+              the AI reviews each overlay and keeps useful ones (logins, consent
+              dialogs), hiding only annoyances (newsletter walls, promos).</em
+            >
           </span>
         </label>
         <p class="hint">

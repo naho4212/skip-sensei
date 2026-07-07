@@ -4,6 +4,7 @@ import {
   findAdSelectors,
   findElementSelector,
   resolveProvider,
+  reviewPopup,
 } from './llm-client'
 import { getBlockerState, initNetBlocker } from './net-blocker'
 import {
@@ -218,6 +219,18 @@ async function findSelector(
   }
 }
 
+/** AI popup review: is this overlay an intrusive annoyance (hide) or functional (keep)? */
+async function reviewPopupMsg(html: string): Promise<boolean> {
+  const settings = await getSettings()
+  if (!settings.aiEnhancements) return false
+  const controller = new AbortController()
+  try {
+    return await reviewPopup(html, settings, controller.signal)
+  } catch {
+    return false // on any failure, keep the overlay (never break functionality)
+  }
+}
+
 /** Gap-filler: ask the LLM for ad selectors the filter lists missed; cache them. */
 async function findAds(html: string, domain: string): Promise<string[]> {
   const settings = await getSettings()
@@ -294,6 +307,9 @@ chrome.runtime.onMessage.addListener(
         return true
       case 'skipSensei:findAdSelectors':
         void findAds(message.html, message.domain).then(sendResponse)
+        return true
+      case 'skipSensei:reviewPopup':
+        void reviewPopupMsg(message.html).then(sendResponse)
         return true
       default:
         return false

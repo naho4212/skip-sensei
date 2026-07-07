@@ -157,11 +157,18 @@ async function main() {
     save({ showSkipToast: showToastEl.checked }),
   )
 
-  const blockTrackersEl = $<HTMLInputElement>('block-trackers')
-  blockTrackersEl.checked = (await getSettings()).blockTrackers
-  blockTrackersEl.addEventListener('change', () =>
-    save({ blockTrackers: blockTrackersEl.checked }),
-  )
+  const extraLists: [string, keyof Settings][] = [
+    ['block-trackers', 'blockTrackers'],
+    ['block-cookie-notices', 'blockCookieNotices'],
+    ['block-social', 'blockSocial'],
+    ['block-popups', 'blockPopups'],
+  ]
+  const loaded = await getSettings()
+  for (const [elId, key] of extraLists) {
+    const el = $<HTMLInputElement>(elId)
+    el.checked = loaded[key] as boolean
+    el.addEventListener('change', () => save({ [key]: el.checked }))
+  }
 
   const aiEnhancementsEl = $<HTMLInputElement>('ai-enhancements')
   aiEnhancementsEl.checked = (await getSettings()).aiEnhancements

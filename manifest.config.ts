@@ -81,6 +81,9 @@ export default defineManifest({
       { id: 'ads_base', enabled: false, path: 'rulesets/ads_base.json' },
       { id: 'ads_mobile', enabled: false, path: 'rulesets/ads_mobile.json' },
       { id: 'trackers', enabled: false, path: 'rulesets/trackers.json' },
+      { id: 'cookies', enabled: false, path: 'rulesets/cookies.json' },
+      { id: 'social', enabled: false, path: 'rulesets/social.json' },
+      { id: 'popups', enabled: false, path: 'rulesets/popups.json' },
     ],
   },
 })
