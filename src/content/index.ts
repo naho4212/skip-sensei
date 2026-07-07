@@ -7,6 +7,7 @@ import type {
   TabMessage,
 } from '../types'
 import { AdEngine } from './ad-engine'
+import { SponsorEngine } from './sponsor-engine'
 
 /**
  * Content-script entry. Runs on all youtube.com pages (YouTube is an SPA, so
@@ -16,9 +17,14 @@ import { AdEngine } from './ad-engine'
 
 let settings: Settings | null = null
 let adEngine: AdEngine | null = null
+let sponsorEngine: SponsorEngine | null = null
 
 function isWatchPage(): boolean {
   return location.pathname === '/watch'
+}
+
+function getVideoId(): string | null {
+  return new URLSearchParams(location.search).get('v')
 }
 
 function reportAdSkip(method: AdSkipMethod) {
@@ -28,27 +34,52 @@ function reportAdSkip(method: AdSkipMethod) {
 }
 
 function syncEngines() {
-  const shouldRun =
-    isWatchPage() &&
-    settings !== null &&
-    settings.masterEnabled &&
-    settings.adEngineEnabled
+  if (!settings) return
+  const onWatchPage = isWatchPage()
+  const videoId = getVideoId()
 
-  if (shouldRun && !adEngine) {
+  const adShouldRun =
+    onWatchPage && settings.masterEnabled && settings.adEngineEnabled
+  if (adShouldRun && !adEngine) {
     adEngine = new AdEngine(reportAdSkip)
     adEngine.start()
-  } else if (!shouldRun && adEngine) {
+  } else if (!adShouldRun && adEngine) {
     adEngine.stop()
     adEngine = null
+  }
+
+  const sponsorShouldRun =
+    onWatchPage &&
+    videoId !== null &&
+    settings.masterEnabled &&
+    settings.sponsorEngineEnabled
+  if (sponsorShouldRun && !sponsorEngine) {
+    sponsorEngine = new SponsorEngine(videoId!, () => settings!)
+    sponsorEngine.start()
+  } else if (!sponsorShouldRun && sponsorEngine) {
+    sponsorEngine.stop()
+    sponsorEngine = null
   }
 }
 
 function onNavigate() {
-  // Tear down unconditionally: even watch → watch needs a fresh attach
-  // because YouTube may swap player internals.
+  // Tear down unconditionally: even watch → watch needs fresh engines
+  // (new videoId, possibly swapped player internals).
   adEngine?.stop()
   adEngine = null
+  sponsorEngine?.stop()
+  sponsorEngine = null
   syncEngines()
+}
+
+function getPageStatus(): PageStatus {
+  return {
+    isWatchPage: isWatchPage(),
+    adEngineActive: adEngine?.isActive ?? false,
+    sponsorStatus: sponsorEngine?.status ?? 'off',
+    sponsorReason: sponsorEngine?.reason,
+    segmentCount: sponsorEngine?.segmentCount ?? 0,
+  }
 }
 
 async function main() {
@@ -64,11 +95,7 @@ async function main() {
   chrome.runtime.onMessage.addListener(
     (message: TabMessage, _sender, sendResponse) => {
       if (message?.type === 'skipSensei:getPageStatus') {
-        const status: PageStatus = {
-          isWatchPage: isWatchPage(),
-          adEngineActive: adEngine?.isActive ?? false,
-        }
-        sendResponse(status)
+        sendResponse(getPageStatus())
       }
     },
   )

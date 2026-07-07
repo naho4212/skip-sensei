@@ -14,10 +14,27 @@ segments detected by LLM analysis of the video transcript.
 - ✅ **Phase 1 — Ad Engine**: skip-button clicking, un-skippable-ad
   fast-forward, overlay/banner removal, pause-screen ad dismissal, SPA
   re-attach, popup with toggles + skip counters.
-- ⬜ **Phase 2 — Sponsor Engine**: transcript fetch, LLM segment detection,
-  playback skip watcher, per-videoId caching.
-- ⬜ **Phase 3 — Polish**: confidence slider, correction feedback, skip toast,
-  options page.
+- ✅ **Phase 2 — Sponsor Engine**: transcript fetch (timedtext json3 + XML
+  fallback), LLM segment detection with a strict JSON contract, per-videoId
+  caching, playback skip watcher, status UI.
+- ✅ **Phase 3 — Polish**: confidence slider, skip toast with
+  "Unskip" correction feedback, options page, live-stream/short-video
+  edge cases.
+
+## LLM backends (hybrid)
+
+Consumer Claude/ChatGPT logins can't power third-party apps (ToS), so the
+Sponsor Engine supports:
+
+| Provider | Setup | Notes |
+| --- | --- | --- |
+| **Chrome built-in AI** (default) | none | Gemini Nano via the Prompt API, free + on-device; needs Chrome 138+, downloads the model on first use |
+| **Anthropic Claude** | API key in options | default model `claude-haiku-4-5` |
+| **OpenAI** | API key in options | default model `gpt-5-mini` |
+
+`src/llm-client.ts` keeps the contract identical across providers:
+`{"segments": [{start, end, type, confidence}]}` — validated on receipt,
+one retry, then graceful degradation to ad-skipping only.
 
 ## Development
 
@@ -40,12 +57,18 @@ npm run dev       # vite dev server with HMR (crxjs)
 src/
   selectors.ts        SINGLE source of truth for all YouTube DOM selectors
   types.ts            shared message/settings/stats contracts
-  storage.ts          chrome.storage wrappers
+  storage.ts          chrome.storage wrappers; analysis cache + corrections log
+  transcript.ts       transcript fetch + parse (runs in content script for cookies)
+  llm-client.ts       prompt construction, providers, JSON parsing/validation
+  builtin-ai.d.ts     ambient types for Chrome's Prompt API (Gemini Nano)
   content/
     index.ts          content-script entry; SPA navigation + engine lifecycle
     ad-engine.ts      YouTube ad detection + skipping
-  service-worker.ts   session counters; Phase 2: LLM calls + segment cache
-  popup/              toggle UI + skip counters
+    sponsor-engine.ts segment fetch + timeupdate skip watcher
+    toast.ts          in-player "Skipped sponsor / Unskip" toast
+  service-worker.ts   LLM orchestration, segment cache, session counters
+  popup/              toggle UI, skip counters, per-video status
+  options/            provider/API key, confidence slider, toast toggle
 ```
 
 **Key invariants**

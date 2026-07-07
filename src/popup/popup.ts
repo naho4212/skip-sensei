@@ -45,6 +45,26 @@ async function fetchSessionStats(): Promise<SessionStats | null> {
   }
 }
 
+function sponsorStatusText(status: PageStatus): string {
+  const plural = (n: number) => (n === 1 ? 'segment' : 'segments')
+  switch (status.sponsorStatus) {
+    case 'ready':
+      return status.segmentCount > 0
+        ? `Transcript analyzed — ${status.segmentCount} sponsor ${plural(status.segmentCount)} found.`
+        : 'Transcript analyzed — no sponsor segments found.'
+    case 'analyzing':
+      return 'Analyzing transcript…'
+    case 'no-transcript':
+      return 'No transcript available — sponsor skipping off for this video.'
+    case 'unavailable':
+      return status.sponsorReason ?? 'Sponsor skipping unavailable for this video.'
+    case 'error':
+      return `Sponsor analysis failed${status.sponsorReason ? `: ${status.sponsorReason}` : ''}`
+    case 'off':
+      return 'Sponsor skipping is off.'
+  }
+}
+
 async function renderVideoStatus() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
   if (!tab?.id || !tab.url?.includes('youtube.com')) {
@@ -56,11 +76,12 @@ async function renderVideoStatus() {
     const status: PageStatus = await chrome.tabs.sendMessage(tab.id, message)
     if (!status.isWatchPage) {
       videoStatusEl.textContent = 'Not watching a video.'
-    } else if (status.adEngineActive) {
-      videoStatusEl.textContent = 'Watching for ads on this video.'
-    } else {
-      videoStatusEl.textContent = 'Ad skipping is off for this video.'
+      return
     }
+    const adText = status.adEngineActive
+      ? 'Watching for ads.'
+      : 'Ad skipping is off.'
+    videoStatusEl.textContent = `${adText} ${sponsorStatusText(status)}`
   } catch {
     videoStatusEl.textContent = 'Reload the YouTube tab to activate.'
   }
@@ -84,7 +105,14 @@ async function main() {
   wireToggle(adToggle, 'adEngineEnabled')
   wireToggle(sponsorToggle, 'sponsorEngineEnabled')
 
+  $('open-options').addEventListener('click', (event) => {
+    event.preventDefault()
+    void chrome.runtime.openOptionsPage()
+  })
+
   void renderVideoStatus()
+  // Analysis finishes async while the popup is open; keep the status fresh.
+  setInterval(renderVideoStatus, 1500)
 }
 
 void main()

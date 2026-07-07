@@ -10,7 +10,13 @@ export default defineManifest({
   description:
     'Automatically skip advertisements and sponsor segments on YouTube.',
   permissions: ['storage', 'activeTab'],
-  host_permissions: ['*://*.youtube.com/*'],
+  host_permissions: [
+    '*://*.youtube.com/*',
+    // Cloud LLM providers for sponsor detection (only contacted when the user
+    // configures an API key; default is Chrome's on-device AI).
+    'https://api.anthropic.com/*',
+    'https://api.openai.com/*',
+  ],
   background: {
     service_worker: 'src/service-worker.ts',
     type: 'module',
@@ -28,5 +34,9 @@ export default defineManifest({
   action: {
     default_popup: 'src/popup/index.html',
     default_title: 'Ad Sensei',
+  },
+  options_ui: {
+    page: 'src/options/index.html',
+    open_in_tab: true,
   },
 })

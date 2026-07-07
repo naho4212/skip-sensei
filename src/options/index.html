@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Ad Sensei options</title>
+    <link rel="stylesheet" href="./options.css" />
+  </head>
+  <body>
+    <main>
+      <h1>Ad Sensei options</h1>
+
+      <section>
+        <h2>Sponsor detection AI</h2>
+        <p class="hint">
+          Transcripts of the videos you watch are sent to the selected AI for
+          analysis. Nothing else is collected or stored outside your browser.
+        </p>
+        <label class="field">
+          <span>Provider</span>
+          <select id="provider">
+            <option value="builtin">Chrome built-in AI (free, on-device)</option>
+            <option value="anthropic">Anthropic Claude (API key)</option>
+            <option value="openai">OpenAI (API key)</option>
+          </select>
+        </label>
+        <p class="hint" id="builtin-status"></p>
+        <div id="cloud-fields" hidden>
+          <label class="field">
+            <span>API key</span>
+            <input type="password" id="api-key" autocomplete="off" placeholder="sk-…" />
+          </label>
+          <label class="field">
+            <span>Model <em>(optional override)</em></span>
+            <input type="text" id="model" placeholder="provider default" />
+          </label>
+          <p class="hint">
+            Your key is stored locally in this browser and sent only to the
+            provider you selected.
+          </p>
+        </div>
+      </section>
+
+      <section>
+        <h2>Skipping behavior</h2>
+        <label class="field">
+          <span>
+            Confidence threshold
+            <em>(only skip segments the AI is at least this sure about)</em>
+          </span>
+          <span class="slider-row">
+            <input type="range" id="threshold" min="0.5" max="0.95" step="0.05" />
+            <output id="threshold-value">0.70</output>
+          </span>
+        </label>
+        <label class="field checkbox">
+          <input type="checkbox" id="show-toast" />
+          <span>Show a brief toast in the player when a sponsor segment is skipped</span>
+        </label>
+      </section>
+
+      <p class="saved" id="saved-note" hidden>Saved ✓</p>
+    </main>
+    <script type="module" src="./options.ts"></script>
+  </body>
+</html>

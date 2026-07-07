@@ -1,16 +1,30 @@
 /** Shared message + settings contracts. All keys are skipSensei-namespaced. */
 
+export type LlmProvider = 'builtin' | 'anthropic' | 'openai'
+
 export interface Settings {
   masterEnabled: boolean
   adEngineEnabled: boolean
-  /** Sponsor Engine ships in Phase 2; the setting exists now so the popup UI is stable. */
   sponsorEngineEnabled: boolean
+  /** Segments below this confidence are never skipped. */
+  confidenceThreshold: number
+  showSkipToast: boolean
+  llmProvider: LlmProvider
+  /** Cloud-provider API key; unused for 'builtin'. */
+  apiKey: string
+  /** Model override; '' = provider default. */
+  model: string
 }
 
 export const DEFAULT_SETTINGS: Settings = {
   masterEnabled: true,
   adEngineEnabled: true,
   sponsorEngineEnabled: true,
+  confidenceThreshold: 0.7,
+  showSkipToast: true,
+  llmProvider: 'builtin',
+  apiKey: '',
+  model: '',
 }
 
 export interface Stats {
@@ -30,19 +44,92 @@ export type AdSkipMethod =
   | 'overlay-removed'
   | 'pause-overlay-dismissed'
 
+// ---------------------------------------------------------------------------
+// Transcript + sponsor segments
+// ---------------------------------------------------------------------------
+
+export interface TranscriptLine {
+  /** Seconds from video start. */
+  start: number
+  end: number
+  text: string
+}
+
+export type SegmentType = 'sponsor' | 'self-promo' | 'ad-read'
+
+export interface SponsorSegment {
+  start: number
+  end: number
+  type: SegmentType
+  /** 0..1 — model's confidence this is a paid/promotional segment. */
+  confidence: number
+  /** Set when the user hit "unskip / that was wrong". Never auto-skipped again. */
+  dismissed?: boolean
+}
+
+export type AnalysisStatus =
+  | 'ok'
+  | 'no-transcript'
+  | 'unavailable' // live stream, very short video, …
+  | 'error'
+
+export interface VideoAnalysis {
+  videoId: string
+  status: AnalysisStatus
+  /** Human-readable detail for 'unavailable' / 'error'. */
+  reason?: string
+  segments: SponsorSegment[]
+  provider?: LlmProvider
+  analyzedAt: number
+}
+
+// ---------------------------------------------------------------------------
+// Messages: content script / popup / options → service worker
+// ---------------------------------------------------------------------------
+
 export type Message =
   | { type: 'skipSensei:adSkipped'; method: AdSkipMethod }
+  | { type: 'skipSensei:sponsorSkipped'; videoId: string }
   | { type: 'skipSensei:getSessionStats' }
+  | { type: 'skipSensei:getAnalysis'; videoId: string } // → VideoAnalysis | null
+  | {
+      type: 'skipSensei:analyzeVideo'
+      videoId: string
+      lines: TranscriptLine[]
+      durationSeconds: number
+    } // → VideoAnalysis
+  | { type: 'skipSensei:abandonAnalysis'; videoId: string }
+  | {
+      type: 'skipSensei:reportCorrection'
+      videoId: string
+      start: number
+      end: number
+    }
+  | { type: 'skipSensei:checkBuiltinAI' } // → { availability: string }
 
 export interface SessionStats {
   sessionAdSkips: number
   sessionSponsorSkips: number
 }
 
-/** Content-script status the popup queries via tabs.sendMessage. */
+// ---------------------------------------------------------------------------
+// Messages: popup → content script
+// ---------------------------------------------------------------------------
+
 export type TabMessage = { type: 'skipSensei:getPageStatus' }
+
+export type SponsorEngineStatus =
+  | 'off'
+  | 'analyzing'
+  | 'ready'
+  | 'no-transcript'
+  | 'unavailable'
+  | 'error'
 
 export interface PageStatus {
   isWatchPage: boolean
   adEngineActive: boolean
+  sponsorStatus: SponsorEngineStatus
+  sponsorReason?: string
+  segmentCount: number
 }
