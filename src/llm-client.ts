@@ -26,7 +26,9 @@ const DEFAULT_MODELS: Record<Exclude<LlmProvider, 'builtin'>, string> = {
 
 /** Per-provider transcript chunk budget (chars). Long videos are chunked. */
 const MAX_INPUT_CHARS: Record<LlmProvider, number> = {
-  builtin: 12_000, // Nano's context window is small
+  // Smaller chunks for Nano = faster per-call = far less timeout risk, at the
+  // cost of more chunks. Constrained decoding over a big input is what stalls.
+  builtin: 7_000,
   anthropic: 60_000,
   openai: 60_000,
 }
@@ -35,10 +37,15 @@ const CHUNK_OVERLAP_LINES = 5
 
 /**
  * Hard cap per LLM call. The built-in model in particular can grind for
- * minutes (or hang) on constrained decoding over a large chunk; a stuck call
- * must resolve to an error, never leave the UI at "Analyzing…" forever.
+ * minutes (or hang) on constrained decoding over a chunk; a stuck call must
+ * resolve to an error, never leave the UI at "Analyzing…" forever. Cloud
+ * providers are fast, so a shorter cap catches genuine hangs sooner.
  */
-const CHUNK_TIMEOUT_MS = 90_000
+const CHUNK_TIMEOUT_MS: Record<LlmProvider, number> = {
+  builtin: 120_000,
+  anthropic: 60_000,
+  openai: 60_000,
+}
 
 const SYSTEM_PROMPT = `You analyze YouTube video transcripts to find paid promotional segments that viewers may want to skip.
 
@@ -90,12 +97,35 @@ export async function analyzeTranscript(
   const provider = resolveProvider(settings)
   const chunks = chunkLines(lines, MAX_INPUT_CHARS[provider])
   const segments: SponsorSegment[] = []
+  let failures = 0
   for (const [index, chunk] of chunks.entries()) {
     onProgress?.(index, chunks.length)
+    if (signal.aborted) throw new LlmError('Aborted')
     const prompt = buildPrompt(chunk, durationSeconds)
-    segments.push(
-      ...(await completeWithRetry(provider, prompt, durationSeconds, settings, signal)),
-    )
+    try {
+      segments.push(
+        ...(await completeWithRetry(
+          provider,
+          prompt,
+          durationSeconds,
+          settings,
+          signal,
+        )),
+      )
+    } catch (error) {
+      if (signal.aborted) throw error
+      // One slow/failed chunk shouldn't discard the whole video's analysis —
+      // that section just loses its segments (a possible late/missed skip).
+      failures++
+      console.warn(
+        `[skipSensei] chunk ${index + 1}/${chunks.length} failed:`,
+        error instanceof Error ? error.message : error,
+      )
+    }
+  }
+  // Only a total wipeout is a real failure worth surfacing to the user.
+  if (chunks.length > 0 && failures === chunks.length) {
+    throw new LlmError(`All ${chunks.length} analysis chunk(s) failed`)
   }
   onProgress?.(chunks.length, chunks.length)
   return verifySegments(mergeSegments(segments), lines)
@@ -260,7 +290,7 @@ async function completeWithRetry(
     try {
       const raw = await withTimeout(
         complete(provider, prompt, settings, signal),
-        CHUNK_TIMEOUT_MS,
+        CHUNK_TIMEOUT_MS[provider],
       )
       return parseSegments(raw, durationSeconds)
     } catch (error) {
