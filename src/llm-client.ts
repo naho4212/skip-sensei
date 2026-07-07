@@ -70,26 +70,6 @@ Respond with ONLY this JSON, no prose, no markdown fences:
 {"segments": [{"start": <seconds>, "end": <seconds>, "type": "sponsor"|"self-promo"|"ad-read", "confidence": <0..1>}]}
 If there are no promotional segments: {"segments": []}`
 
-const RESPONSE_SCHEMA = {
-  type: 'object',
-  properties: {
-    segments: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          start: { type: 'number' },
-          end: { type: 'number' },
-          type: { type: 'string', enum: ['sponsor', 'self-promo', 'ad-read'] },
-          confidence: { type: 'number' },
-        },
-        required: ['start', 'end', 'type', 'confidence'],
-      },
-    },
-  },
-  required: ['segments'],
-} as const
-
 export class LlmError extends Error {}
 
 export async function analyzeTranscript(
@@ -250,6 +230,45 @@ export function verifySegments(
     .sort((a, b) => a.start - b.start)
 }
 
+// ---------------------------------------------------------------------------
+// Self-healing selectors (Phase 8)
+// ---------------------------------------------------------------------------
+
+const SELECTOR_SYSTEM_PROMPT = `You locate a UI element inside an HTML fragment. Given a description and the fragment, return ONLY JSON: {"selector":"<css selector>"} matching that element, or {"selector":null} if it isn't present. The selector must be valid for document.querySelector and should prefer stable attributes (class names, aria-label, role, data-*) over randomly generated ids. No prose, no markdown, no explanation.`
+
+/**
+ * Ask the configured LLM to find a CSS selector for an element described in
+ * `description` within `html`. Used to auto-repair YouTube selectors when a
+ * DOM change breaks the hardcoded ones. Returns null if nothing usable.
+ */
+export async function findElementSelector(
+  html: string,
+  description: string,
+  settings: Settings,
+  signal: AbortSignal,
+): Promise<string | null> {
+  const provider = resolveProvider(settings)
+  const prompt = `Find this element: ${description}\n\nHTML fragment:\n${html.slice(0, 8000)}`
+  const raw = await withTimeout(
+    complete(provider, SELECTOR_SYSTEM_PROMPT, prompt, settings, signal),
+    CHUNK_TIMEOUT_MS[provider],
+  )
+  const cleaned = raw
+    .trim()
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/```\s*$/, '')
+  const first = cleaned.indexOf('{')
+  const last = cleaned.lastIndexOf('}')
+  if (first === -1 || last <= first) return null
+  try {
+    const parsed = JSON.parse(cleaned.slice(first, last + 1))
+    const selector = parsed?.selector
+    return typeof selector === 'string' && selector.trim() ? selector.trim() : null
+  } catch {
+    return null
+  }
+}
+
 export function resolveProvider(settings: Settings): LlmProvider {
   const provider = settings.llmProvider
   if (provider !== 'builtin' && settings.apiKeys[provider]?.trim()) {
@@ -332,7 +351,7 @@ async function completeWithRetry(
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const raw = await withTimeout(
-        complete(provider, prompt, settings, signal),
+        complete(provider, SYSTEM_PROMPT, prompt, settings, signal),
         CHUNK_TIMEOUT_MS[provider],
       )
       return parseSegments(raw, durationSeconds)
@@ -369,17 +388,19 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 
 function complete(
   provider: LlmProvider,
+  system: string,
   prompt: string,
   settings: Settings,
   signal: AbortSignal,
 ): Promise<string> {
   switch (provider) {
     case 'anthropic':
-      return completeAnthropic(prompt, settings, signal)
+      return completeAnthropic(system, prompt, settings, signal)
     case 'openai':
       return completeOpenAiCompatible(
         'https://api.openai.com/v1/chat/completions',
         'openai',
+        system,
         prompt,
         settings,
         signal,
@@ -388,12 +409,13 @@ function complete(
       return completeOpenAiCompatible(
         'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
         'gemini',
+        system,
         prompt,
         settings,
         signal,
       )
     case 'builtin':
-      return completeBuiltin(prompt, signal)
+      return completeBuiltin(system, prompt, signal)
   }
 }
 
@@ -447,6 +469,7 @@ export function parseSegments(
 // ---------------------------------------------------------------------------
 
 async function completeAnthropic(
+  system: string,
   prompt: string,
   settings: Settings,
   signal: AbortSignal,
@@ -465,7 +488,7 @@ async function completeAnthropic(
       model: settings.model.trim() || DEFAULT_MODELS.anthropic,
       max_tokens: 1500,
       temperature: 0,
-      system: SYSTEM_PROMPT,
+      system,
       messages: [{ role: 'user', content: prompt }],
     }),
   })
@@ -483,6 +506,7 @@ async function completeAnthropic(
 async function completeOpenAiCompatible(
   url: string,
   provider: 'openai' | 'gemini',
+  system: string,
   prompt: string,
   settings: Settings,
   signal: AbortSignal,
@@ -498,7 +522,7 @@ async function completeOpenAiCompatible(
       model: settings.model.trim() || DEFAULT_MODELS[provider],
       response_format: { type: 'json_object' },
       messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'system', content: system },
         { role: 'user', content: prompt },
       ],
     }),
@@ -514,6 +538,7 @@ async function completeOpenAiCompatible(
 }
 
 async function completeBuiltin(
+  system: string,
   prompt: string,
   signal: AbortSignal,
 ): Promise<string> {
@@ -532,15 +557,7 @@ async function completeBuiltin(
   const session = await LanguageModel.create({ temperature: 0.1, topK: 3 })
   try {
     if (signal.aborted) throw new LlmError('Aborted')
-    const fullPrompt = `${SYSTEM_PROMPT}\n\n${prompt}`
-    try {
-      return await session.prompt(fullPrompt, {
-        responseConstraint: RESPONSE_SCHEMA,
-      })
-    } catch {
-      // Older Chrome without structured-output support.
-      return await session.prompt(fullPrompt)
-    }
+    return await session.prompt(`${system}\n\n${prompt}`)
   } finally {
     session.destroy()
   }

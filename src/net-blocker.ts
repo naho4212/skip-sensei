@@ -113,10 +113,39 @@ export async function getBlockerState(): Promise<BlockerState> {
   return { enabled: blockAllAds, active, error: lastError }
 }
 
+const BLOCK_RULESET_IDS = new Set([...AD_RULESET_IDS, ...TRACKER_RULESET_IDS])
+
+/**
+ * Count blocked web-ad requests for the popup stats. onRuleMatchedDebug fires
+ * per matched rule for unpacked extensions (which is how this is loaded).
+ * Matches are batched in memory and flushed to storage to avoid hammering it.
+ */
+let pendingBlocks = 0
+let flushTimer: ReturnType<typeof setTimeout> | null = null
+
+function scheduleFlush(onBlocks: (n: number) => void) {
+  if (flushTimer !== null) return
+  flushTimer = setTimeout(() => {
+    flushTimer = null
+    const n = pendingBlocks
+    pendingBlocks = 0
+    if (n > 0) onBlocks(n)
+  }, 3000)
+}
+
 /** Wire up: enforce on startup, install, and whenever settings change. */
-export function initNetBlocker() {
+export function initNetBlocker(onBlocks: (n: number) => void) {
   chrome.runtime.onInstalled.addListener(() => void syncNetBlocker())
   chrome.runtime.onStartup.addListener(() => void syncNetBlocker())
   onSettingsChanged(() => void syncNetBlocker())
+
+  // Only counts in unpacked/dev extensions; silently absent otherwise.
+  chrome.declarativeNetRequest.onRuleMatchedDebug?.addListener((info) => {
+    if (BLOCK_RULESET_IDS.has(info.rule.rulesetId)) {
+      pendingBlocks++
+      scheduleFlush(onBlocks)
+    }
+  })
+
   void syncNetBlocker()
 }

@@ -55,9 +55,12 @@ export async function getStats(): Promise<Stats> {
   return { ...DEFAULT_STATS, ...(result[STATS_KEY] ?? {}) }
 }
 
-export async function incrementStat(key: keyof Stats): Promise<Stats> {
+export async function incrementStat(
+  key: keyof Stats,
+  amount = 1,
+): Promise<Stats> {
   const next = { ...(await getStats()) }
-  next[key] += 1
+  next[key] += amount
   await chrome.storage.local.set({ [STATS_KEY]: next })
   return next
 }

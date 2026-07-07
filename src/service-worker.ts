@@ -25,6 +25,7 @@ const SESSION_STATS_KEY = 'skipSensei.sessionStats'
 const EMPTY_SESSION: SessionStats = {
   sessionAdSkips: 0,
   sessionSponsorSkips: 0,
+  sessionWebAdsBlocked: 0,
 }
 
 async function getSessionStats(): Promise<SessionStats> {
@@ -37,6 +38,13 @@ async function recordSkip(kind: 'ad' | 'sponsor') {
   const session = await getSessionStats()
   if (kind === 'ad') session.sessionAdSkips += 1
   else session.sessionSponsorSkips += 1
+  await chrome.storage.session.set({ [SESSION_STATS_KEY]: session })
+}
+
+async function recordWebBlocks(n: number) {
+  await incrementStat('allTimeWebAdsBlocked', n)
+  const session = await getSessionStats()
+  session.sessionWebAdsBlocked += n
   await chrome.storage.session.set({ [SESSION_STATS_KEY]: session })
 }
 
@@ -246,5 +254,5 @@ chrome.runtime.onMessage.addListener(
   },
 )
 
-// "Block all ads" engine: enforce DNR ruleset state from settings.
-initNetBlocker()
+// "Block all ads" engine: enforce DNR ruleset state from settings; count blocks.
+initNetBlocker((n) => void recordWebBlocks(n))

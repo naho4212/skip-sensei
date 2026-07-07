@@ -15,6 +15,8 @@ export interface Settings {
   /** Segments below this confidence are never skipped. */
   confidenceThreshold: number
   showSkipToast: boolean
+  /** Let the AI auto-repair YouTube selectors when a DOM change breaks them. */
+  aiEnhancements: boolean
   llmProvider: LlmProvider
   /** Per-provider API keys, so switching providers never reuses the wrong key. */
   apiKeys: Partial<Record<Exclude<LlmProvider, 'builtin'>, string>>
@@ -31,6 +33,7 @@ export const DEFAULT_SETTINGS: Settings = {
   allowlist: [],
   confidenceThreshold: 0.7,
   showSkipToast: true,
+  aiEnhancements: true,
   llmProvider: 'builtin',
   apiKeys: {},
   model: '',
@@ -39,11 +42,13 @@ export const DEFAULT_SETTINGS: Settings = {
 export interface Stats {
   allTimeAdSkips: number
   allTimeSponsorSkips: number
+  allTimeWebAdsBlocked: number
 }
 
 export const DEFAULT_STATS: Stats = {
   allTimeAdSkips: 0,
   allTimeSponsorSkips: 0,
+  allTimeWebAdsBlocked: 0,
 }
 
 /** How an ad was neutralized — kept for future metrics/debugging. */
@@ -126,6 +131,7 @@ export type Message =
 export interface SessionStats {
   sessionAdSkips: number
   sessionSponsorSkips: number
+  sessionWebAdsBlocked: number
 }
 
 // ---------------------------------------------------------------------------

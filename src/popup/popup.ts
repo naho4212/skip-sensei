@@ -114,9 +114,11 @@ async function renderBlockerState() {
 function renderStats(stats: Stats, session: SessionStats | null) {
   $('alltime-ad-skips').textContent = String(stats.allTimeAdSkips)
   $('alltime-sponsor-skips').textContent = String(stats.allTimeSponsorSkips)
+  $('alltime-web-blocks').textContent = String(stats.allTimeWebAdsBlocked)
   if (session) {
     $('session-ad-skips').textContent = String(session.sessionAdSkips)
     $('session-sponsor-skips').textContent = String(session.sessionSponsorSkips)
+    $('session-web-blocks').textContent = String(session.sessionWebAdsBlocked)
   }
 }
 
@@ -263,11 +265,15 @@ async function main() {
   })
 
   $('blocker-reload').addEventListener('click', async () => {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
-    if (tab?.id) {
-      await chrome.tabs.reload(tab.id)
-      window.close()
-    }
+    // Network rules only affect NEW requests, so already-open tabs keep their
+    // ads until reloaded. Reload them all so blocking applies everywhere at once.
+    const tabs = await chrome.tabs.query({})
+    await Promise.all(
+      tabs.map((t) =>
+        t.id ? chrome.tabs.reload(t.id).catch(() => {}) : Promise.resolve(),
+      ),
+    )
+    window.close()
   })
 
   $('open-options').addEventListener('click', (event) => {
