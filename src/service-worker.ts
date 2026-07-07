@@ -295,9 +295,15 @@ function setReloadBadge(tabId: number, show: boolean) {
   }
 }
 
-// After install/update, existing YouTube tabs run stale (or no) content
-// scripts until reloaded — badge them so the user knows to refresh.
-chrome.runtime.onInstalled.addListener(async () => {
+chrome.runtime.onInstalled.addListener(async (details) => {
+  // First install → open the welcome page.
+  if (details.reason === 'install') {
+    chrome.tabs
+      .create({ url: chrome.runtime.getURL('src/onboarding/index.html') })
+      .catch(() => {})
+  }
+  // After install/update, existing YouTube tabs run stale (or no) content
+  // scripts until reloaded — badge them so the user knows to refresh.
   try {
     const tabs = await chrome.tabs.query({ url: '*://*.youtube.com/*' })
     for (const tab of tabs) if (tab.id) setReloadBadge(tab.id, true)

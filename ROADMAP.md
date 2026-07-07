@@ -46,8 +46,11 @@ Three "what to block" capabilities, each independently useful:
   cached, and added to the runtime selector list so the fix persists. Behind
   the `aiEnhancements` toggle (default on; free on built-in AI). AI gap-filler
   for missed web ads is still open.
-- **Phase 9 — Unify + harden + store-safe build**: one stats surface,
-  onboarding, perf pass, store-safe variant (strip anti-adblock wall dismissal).
+- **Phase 9 — Unify + harden** ✅ (personal-use scope): first-run onboarding
+  page (3 engines + built-in-vs-Gemini), unified stats (web-ads-blocked row),
+  console noise gated behind a debugLogging setting (off by default, toggle in
+  options). Store-safe variant intentionally skipped — personal use only; the
+  anti-adblock wall dismissal stays. AI web-ad gap-filler still open.
 
 ## Decisions
 

@@ -10,6 +10,7 @@ import {
   SKIP_BUTTONS,
   VIDEO,
 } from '../selectors'
+import { log } from '../log'
 import { addHealedSelector, getHealedSelectors, getSettings } from '../storage'
 import type { AdSkipMethod } from '../types'
 
@@ -18,8 +19,6 @@ const AD_FAST_RATE = 16
 
 /** How long an ad may play with no matching skip button before we try to self-heal. */
 const HEAL_AFTER_MS = 7000
-
-const log = (...args: unknown[]) => console.log('[skipSensei]', ...args)
 
 /**
  * Ad Engine: detects YouTube-served ads on the current watch page and

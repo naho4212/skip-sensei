@@ -169,6 +169,12 @@ async function main() {
     save({ aiEnhancements: aiEnhancementsEl.checked }),
   )
 
+  const debugLoggingEl = $<HTMLInputElement>('debug-logging')
+  debugLoggingEl.checked = (await getSettings()).debugLogging
+  debugLoggingEl.addEventListener('change', () =>
+    save({ debugLogging: debugLoggingEl.checked }),
+  )
+
   await renderAllowlist()
   const allowlistInput = $<HTMLInputElement>('allowlist-input')
   const addSite = async () => {

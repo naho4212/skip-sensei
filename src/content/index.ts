@@ -1,3 +1,4 @@
+import { log } from '../log'
 import { getSettings, onSettingsChanged } from '../storage'
 import type {
   AdSkipMethod,
@@ -107,9 +108,7 @@ async function main() {
       if (message?.type === 'skipSensei:getPageStatus') {
         sendResponse(getPageStatus())
       } else if (message?.type === 'skipSensei:analysisProgress') {
-        console.log(
-          `[skipSensei] analyzing chunk ${message.done}/${message.total}`,
-        )
+        log(`analyzing chunk ${message.done}/${message.total}`)
         sponsorEngine?.noteProgress(message.videoId, message.done, message.total)
       }
     },

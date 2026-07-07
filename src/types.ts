@@ -17,6 +17,8 @@ export interface Settings {
   showSkipToast: boolean
   /** Let the AI auto-repair YouTube selectors when a DOM change breaks them. */
   aiEnhancements: boolean
+  /** Emit [skipSensei] diagnostics to the console. Off by default. */
+  debugLogging: boolean
   llmProvider: LlmProvider
   /** Per-provider API keys, so switching providers never reuses the wrong key. */
   apiKeys: Partial<Record<Exclude<LlmProvider, 'builtin'>, string>>
@@ -34,6 +36,7 @@ export const DEFAULT_SETTINGS: Settings = {
   confidenceThreshold: 0.7,
   showSkipToast: true,
   aiEnhancements: true,
+  debugLogging: false,
   llmProvider: 'builtin',
   apiKeys: {},
   model: '',

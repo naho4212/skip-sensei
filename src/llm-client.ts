@@ -1,3 +1,4 @@
+import { warn } from './log'
 import type {
   LlmProvider,
   Settings,
@@ -104,8 +105,8 @@ export async function analyzeTranscript(
       // that section just loses its segments (a possible late/missed skip).
       failures++
       lastError = error
-      console.warn(
-        `[skipSensei] chunk ${index + 1}/${chunks.length} failed:`,
+      warn(
+        `chunk ${index + 1}/${chunks.length} failed:`,
         error instanceof Error ? error.message : error,
       )
     }

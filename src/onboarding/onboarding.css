@@ -1,0 +1,112 @@
+.onboarding {
+  max-width: 680px;
+}
+
+.hero {
+  text-align: center;
+  padding: 16px 0 8px;
+  border: none;
+}
+
+.hero-icon {
+  width: 72px;
+  height: 72px;
+}
+
+.hero h1 {
+  font-size: 26px;
+  margin: 12px 0 4px;
+}
+
+.tagline {
+  color: var(--text-2);
+  font-size: 15px;
+  margin: 0;
+}
+
+.cards {
+  list-style: none;
+  counter-reset: card;
+  margin: 24px 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.card {
+  counter-increment: card;
+  position: relative;
+  padding: 16px 16px 16px 56px;
+  border: 1px solid var(--divider);
+  border-radius: 12px;
+}
+
+.card::before {
+  content: counter(card);
+  position: absolute;
+  left: 16px;
+  top: 16px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+}
+
+.card h2 {
+  margin: 0 0 4px;
+  font-size: 16px;
+}
+
+.card p {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 14px;
+}
+
+.ai-note {
+  border: 1px solid var(--divider);
+  border-radius: 12px;
+  padding: 16px;
+  margin: 0;
+}
+
+.ai-note h2 {
+  margin: 0 0 6px;
+  font-size: 15px;
+}
+
+.ai-note p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-2);
+}
+
+.ai-note a {
+  color: var(--link);
+}
+
+.cta {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin: 28px 0 8px;
+}
+
+.cta button {
+  height: 42px;
+  padding: 0 24px;
+  font-size: 15px;
+}
+
+.cta button:not(.secondary) {
+  background: var(--accent);
+  color: #fff;
+}
+
+.cta button.secondary {
+  background: var(--hover);
+}

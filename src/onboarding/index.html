@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Welcome to Ad Sensei</title>
+    <link rel="stylesheet" href="../options/options.css" />
+    <link rel="stylesheet" href="./onboarding.css" />
+  </head>
+  <body>
+    <main class="onboarding">
+      <header class="hero">
+        <img src="../icons/icon-128.png" alt="" class="hero-icon" />
+        <h1>Welcome to Ad Sensei</h1>
+        <p class="tagline">Three ways to a cleaner, ad-free browse.</p>
+      </header>
+
+      <ol class="cards">
+        <li class="card">
+          <h2>Skip YouTube ads</h2>
+          <p>
+            Automatically skips YouTube's ads — clicks “Skip” the instant it
+            appears and fast-forwards the rest. On by default.
+          </p>
+        </li>
+        <li class="card">
+          <h2>Skip sponsor segments</h2>
+          <p>
+            Detects creator-read sponsor and self-promo segments by analyzing
+            the video transcript with AI, then skips playback past them — even
+            on brand-new uploads no database has seen. On by default.
+          </p>
+        </li>
+        <li class="card">
+          <h2>Block ads across the web</h2>
+          <p>
+            Optional filter-list ad (and tracker) blocking on every site, with a
+            per-site pause. <strong>Off by default</strong> — turn it on from the
+            toolbar popup.
+          </p>
+        </li>
+      </ol>
+
+      <section class="ai-note">
+        <h2>The sponsor-detection AI</h2>
+        <p>
+          Sponsor detection runs on <strong>Chrome's built-in AI</strong> by
+          default — free, private, on-device, no setup. It's slower on very long
+          videos. For fast, accurate analysis of anything (great for podcasts),
+          add a free
+          <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener"
+            >Google Gemini API key</a
+          >
+          in options — no credit card needed.
+        </p>
+      </section>
+
+      <div class="cta">
+        <button id="open-options" type="button">Open settings</button>
+        <button id="close" type="button" class="secondary">Start browsing</button>
+      </div>
+    </main>
+    <script type="module" src="./onboarding.ts"></script>
+  </body>
+</html>

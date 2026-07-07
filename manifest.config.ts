@@ -64,6 +64,13 @@ export default defineManifest({
     page: 'src/options/index.html',
     open_in_tab: true,
   },
+  // First-run welcome page (opened by the service worker on install).
+  web_accessible_resources: [
+    {
+      resources: ['src/onboarding/index.html'],
+      matches: ['<all_urls>'],
+    },
+  ],
   // General web ad blocking (the "Block all ads" engine). Rulesets are
   // block-only (EasyList-derived via AdGuard) and ship DISABLED — the toggle
   // enables them at runtime via updateEnabledRulesets, so we never hit the

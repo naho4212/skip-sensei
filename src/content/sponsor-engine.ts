@@ -1,3 +1,4 @@
+import { log } from '../log'
 import { LIVE_BADGE, VIDEO } from '../selectors'
 import { fetchChapters, fetchTranscript } from '../transcript'
 import type {
@@ -18,8 +19,6 @@ const AD_CHAPTER_RE =
 
 /** Sanity cap: an "ad break" chapter longer than this is probably mislabeled. */
 const CHAPTER_AD_MAX_SECONDS = 180
-
-const log = (...args: unknown[]) => console.log('[skipSensei]', ...args)
 
 const describeSegments = (segments: SponsorSegment[]) =>
   segments
