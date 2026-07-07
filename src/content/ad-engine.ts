@@ -35,6 +35,8 @@ export class AdEngine {
   private player: HTMLElement | null = null
   /** True while we're burning through the current un-skippable ad. */
   private fastForwarding = false
+  /** True if we muted the video for fast-forward and must restore it. */
+  private mutedForAd = false
   private attachRetryTimer: number | null = null
   /** check() re-fires while the skip button lingers; count one skip per ad, not per click. */
   private lastSkipButtonCountAt = 0
@@ -170,11 +172,15 @@ export class AdEngine {
     return chrome.runtime.sendMessage(message).catch(() => null)
   }
 
-  /** Restore normal playback speed once the ad is gone. */
+  /** Restore normal playback speed + audio once the ad is gone. */
   private endFastForward() {
-    if (!this.fastForwarding) return
+    if (!this.fastForwarding && !this.mutedForAd) return
     const video = document.querySelector<HTMLVideoElement>(VIDEO)
-    if (video && video.playbackRate !== 1) video.playbackRate = 1
+    if (video) {
+      if (video.playbackRate !== 1) video.playbackRate = 1
+      if (this.mutedForAd) video.muted = false
+    }
+    this.mutedForAd = false
     this.fastForwarding = false
   }
 
@@ -202,24 +208,33 @@ export class AdEngine {
   /**
    * No skip button (yet): burn through the un-skippable portion.
    *
-   * We deliberately do NOT seek to video.duration. Jumping an ad to its exact
-   * end leaves YouTube's player parked in an "ended" state that never loads the
-   * main content — a black screen only a reload clears. Instead we seek to just
-   * before the end and let the final moment play out at high speed, so the
-   * player's own natural 'ended' event fires and content resumes cleanly.
-   *
-   * Guarded so one multi-second ad counts as a single skip even though check()
-   * fires repeatedly.
+   * Seeking into UN-buffered ad content stalls the player (a multi-second
+   * black-frame freeze), and seeking to exact duration parks it in an "ended"
+   * state that never loads the main video. So we only ever seek to the end of
+   * what's already BUFFERED (instant, no stall) and otherwise rely on a high
+   * playback rate + mute to blast through the rest smoothly.
    */
   private fastForwardAd() {
     const video = document.querySelector<HTMLVideoElement>(VIDEO)
     if (!video || !Number.isFinite(video.duration) || video.duration <= 0)
       return
 
-    const target = video.duration - 0.35
-    if (target > video.currentTime + 0.5) video.currentTime = target
+    // Mute so the sped-up ad isn't an audible blip; remember to restore.
+    if (!video.muted) {
+      this.mutedForAd = true
+      video.muted = true
+    }
     video.playbackRate = AD_FAST_RATE
     if (video.paused) void video.play().catch(() => {})
+
+    // Jump to the end of the buffered range (leaving a hair so 'ended' fires
+    // naturally), but never into unbuffered territory.
+    const buffered = video.buffered
+    if (buffered.length > 0) {
+      const bufferedEnd = buffered.end(buffered.length - 1)
+      const target = Math.min(bufferedEnd - 0.1, video.duration - 0.35)
+      if (target > video.currentTime + 0.5) video.currentTime = target
+    }
 
     if (!this.fastForwarding) {
       this.fastForwarding = true
