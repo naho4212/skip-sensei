@@ -16,6 +16,7 @@ const adToggle = $<HTMLInputElement>('ad-engine-toggle')
 const sponsorToggle = $<HTMLInputElement>('sponsor-engine-toggle')
 const videoStatusEl = $('video-status')
 const segmentListEl = $<HTMLUListElement>('segment-list')
+const reloadTabEl = $<HTMLButtonElement>('reload-tab')
 
 function renderSettings(settings: Settings) {
   masterToggle.checked = settings.masterEnabled
@@ -92,6 +93,7 @@ function sponsorStatusText(status: PageStatus): string {
 }
 
 async function renderVideoStatus() {
+  reloadTabEl.hidden = true
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
   if (!tab?.id || !tab.url?.includes('youtube.com')) {
     videoStatusEl.textContent = 'Open a YouTube video to start skipping.'
@@ -112,6 +114,7 @@ async function renderVideoStatus() {
     renderSegments(status)
   } catch {
     videoStatusEl.textContent = 'Reload the YouTube tab to activate.'
+    reloadTabEl.hidden = false
     segmentListEl.replaceChildren()
   }
 }
@@ -137,6 +140,14 @@ async function main() {
   $('open-options').addEventListener('click', (event) => {
     event.preventDefault()
     void chrome.runtime.openOptionsPage()
+  })
+
+  reloadTabEl.addEventListener('click', async () => {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+    if (tab?.id) {
+      await chrome.tabs.reload(tab.id)
+      window.close()
+    }
   })
 
   void renderVideoStatus()
