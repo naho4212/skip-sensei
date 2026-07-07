@@ -1,4 +1,9 @@
-import { analyzeTranscript, builtinAvailability, resolveProvider } from './llm-client'
+import {
+  analyzeTranscript,
+  builtinAvailability,
+  findElementSelector,
+  resolveProvider,
+} from './llm-client'
 import { getBlockerState, initNetBlocker } from './net-blocker'
 import {
   getCachedAnalysis,
@@ -196,6 +201,21 @@ async function runAnalysis(
   }
 }
 
+/** Self-healing: ask the LLM for a selector when hardcoded ones break. */
+async function findSelector(
+  html: string,
+  description: string,
+): Promise<string | null> {
+  const settings = await getSettings()
+  if (!settings.aiEnhancements) return null
+  const controller = new AbortController()
+  try {
+    return await findElementSelector(html, description, settings, controller.signal)
+  } catch {
+    return null
+  }
+}
+
 function abandonAnalysis(videoId: string) {
   const entry = inflight.get(videoId)
   if (!entry) return
@@ -253,6 +273,9 @@ chrome.runtime.onMessage.addListener(
           setReloadBadge(sender.tab.id, message.needsReload)
         }
         return false
+      case 'skipSensei:findSelector':
+        void findSelector(message.html, message.description).then(sendResponse)
+        return true
       default:
         return false
     }

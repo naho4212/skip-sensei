@@ -101,6 +101,26 @@ export async function setCachedAnalysis(analysis: VideoAnalysis) {
   })
 }
 
+// ---------------------------------------------------------------------------
+// Self-healed selectors (Phase 8) — AI-discovered selectors that repair the
+// hardcoded ones when YouTube changes its DOM. Keyed by target (e.g. skipButton).
+// ---------------------------------------------------------------------------
+
+const HEALED_KEY = 'skipSensei.healedSelectors'
+
+export async function getHealedSelectors(): Promise<Record<string, string[]>> {
+  const result = await chrome.storage.local.get(HEALED_KEY)
+  return result[HEALED_KEY] ?? {}
+}
+
+export async function addHealedSelector(target: string, selector: string) {
+  const all = await getHealedSelectors()
+  const list = all[target] ?? []
+  if (!list.includes(selector)) list.unshift(selector)
+  all[target] = list.slice(0, 8) // keep a few most-recent
+  await chrome.storage.local.set({ [HEALED_KEY]: all })
+}
+
 /** Drop every cached analysis (settings, stats, and corrections survive). */
 export async function clearAnalysisCache(): Promise<number> {
   const all = await chrome.storage.local.get(null)

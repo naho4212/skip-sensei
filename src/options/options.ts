@@ -163,6 +163,12 @@ async function main() {
     save({ blockTrackers: blockTrackersEl.checked }),
   )
 
+  const aiEnhancementsEl = $<HTMLInputElement>('ai-enhancements')
+  aiEnhancementsEl.checked = (await getSettings()).aiEnhancements
+  aiEnhancementsEl.addEventListener('change', () =>
+    save({ aiEnhancements: aiEnhancementsEl.checked }),
+  )
+
   await renderAllowlist()
   const allowlistInput = $<HTMLInputElement>('allowlist-input')
   const addSite = async () => {

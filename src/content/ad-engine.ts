@@ -10,10 +10,16 @@ import {
   SKIP_BUTTONS,
   VIDEO,
 } from '../selectors'
+import { addHealedSelector, getHealedSelectors, getSettings } from '../storage'
 import type { AdSkipMethod } from '../types'
 
 /** Playback rate for burning through un-skippable ads. */
 const AD_FAST_RATE = 16
+
+/** How long an ad may play with no matching skip button before we try to self-heal. */
+const HEAL_AFTER_MS = 7000
+
+const log = (...args: unknown[]) => console.log('[skipSensei]', ...args)
 
 /**
  * Ad Engine: detects YouTube-served ads on the current watch page and
@@ -33,11 +39,25 @@ export class AdEngine {
   private attachRetryTimer: number | null = null
   /** check() re-fires while the skip button lingers; count one skip per ad, not per click. */
   private lastSkipButtonCountAt = 0
+  /** Runtime skip-button selectors = hardcoded + AI-healed ones from storage. */
+  private skipSelectors: string[] = [...SKIP_BUTTONS]
+  /** Wall-clock when the current ad started showing (for the heal timer). */
+  private adShowingSince: number | null = null
+  private healInFlight = false
 
   constructor(private onSkip: (method: AdSkipMethod) => void) {}
 
   start() {
+    void this.loadHealedSelectors()
     this.attachWhenPlayerExists()
+  }
+
+  /** Seed the runtime selector list with any selectors the AI healed earlier. */
+  private async loadHealedSelectors() {
+    const healed = (await getHealedSelectors()).skipButton ?? []
+    for (const selector of healed) {
+      if (!this.skipSelectors.includes(selector)) this.skipSelectors.push(selector)
+    }
   }
 
   stop() {
@@ -93,14 +113,62 @@ export class AdEngine {
     )
     if (!adShowing) {
       this.endFastForward()
+      this.adShowingSince = null
+      this.healInFlight = false
       return
     }
+
+    if (this.adShowingSince === null) this.adShowingSince = Date.now()
 
     if (this.clickSkipButton()) {
       this.endFastForward()
       return
     }
+    // Ad has played a while with no matching skip button — YouTube may have
+    // renamed it. Ask the AI to re-find it (once per ad), and keep burning
+    // through in the meantime.
+    if (Date.now() - this.adShowingSince > HEAL_AFTER_MS) {
+      void this.trySelfHeal()
+    }
     this.fastForwardAd()
+  }
+
+  /**
+   * Self-healing: when no known skip-button selector matches during an ad,
+   * send the player's control bar to the AI and ask which element is the skip
+   * button. If it returns a working, visible selector, cache it and add it to
+   * the runtime list so this (and future videos) skip correctly.
+   */
+  private async trySelfHeal() {
+    if (this.healInFlight || !this.player) return
+    if (!(await getSettings()).aiEnhancements) return
+    this.healInFlight = true // one attempt per ad; reset when the ad ends
+    try {
+      const controls =
+        this.player.querySelector('.ytp-chrome-bottom') ?? this.player
+      const html = controls.outerHTML
+      const selector = await this.send<string | null>({
+        type: 'skipSensei:findSelector',
+        html,
+        description:
+          'the button that skips or dismisses the currently-playing video ad (e.g. a "Skip Ad" / "Skip Ads" button)',
+      })
+      if (!selector) return
+      // Validate: the selector must match a visible, clickable element.
+      const el = this.player.querySelector<HTMLElement>(selector)
+      if (el && el.offsetParent !== null) {
+        log('self-healed skip button selector:', selector)
+        if (!this.skipSelectors.includes(selector)) this.skipSelectors.push(selector)
+        await addHealedSelector('skipButton', selector)
+        this.check() // click it now
+      }
+    } catch {
+      // invalid selector or LLM failure — nothing to do
+    }
+  }
+
+  private send<T>(message: unknown): Promise<T | null> {
+    return chrome.runtime.sendMessage(message).catch(() => null)
   }
 
   /** Restore normal playback speed once the ad is gone. */
@@ -112,8 +180,13 @@ export class AdEngine {
   }
 
   private clickSkipButton(): boolean {
-    for (const selector of SKIP_BUTTONS) {
-      const button = this.player!.querySelector<HTMLElement>(selector)
+    for (const selector of this.skipSelectors) {
+      let button: HTMLElement | null = null
+      try {
+        button = this.player!.querySelector<HTMLElement>(selector)
+      } catch {
+        continue // a bad AI-healed selector shouldn't break the loop
+      }
       if (button && button.offsetParent !== null) {
         button.click()
         const now = Date.now()

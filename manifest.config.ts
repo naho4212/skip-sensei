@@ -8,7 +8,7 @@ export default defineManifest({
   name: 'Ad Sensei',
   version: '0.1.0',
   description:
-    'Automatically skip advertisements and sponsor segments on YouTube.',
+    'Skip YouTube ads and AI-detected creator sponsor segments, and block ads & trackers across the web.',
   icons: {
     16: 'src/icons/icon-16.png',
     32: 'src/icons/icon-32.png',

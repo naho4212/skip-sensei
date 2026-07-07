@@ -40,9 +40,12 @@ Three "what to block" capabilities, each independently useful:
   boxes network blocking can't. (Adds the all-sites content-script permission.)
 - **Phase 7 — Filter-list management**: list versions/dates, manual update,
   optional extra lists.
-- **Phase 8 — AI enhancements (differentiator)**: self-healing selectors
-  (YouTube ad + transcript path), AI gap-filler for ads filter lists miss
-  (per-domain cached hiding rules), behind AI toggle.
+- **Phase 8 — AI enhancements (differentiator)** ✅ (self-healing): when no
+  known skip-button selector matches during an ad, the AI is sent the player
+  controls and re-finds the button; validated (must match a visible element),
+  cached, and added to the runtime selector list so the fix persists. Behind
+  the `aiEnhancements` toggle (default on; free on built-in AI). AI gap-filler
+  for missed web ads is still open.
 - **Phase 9 — Unify + harden + store-safe build**: one stats surface,
   onboarding, perf pass, store-safe variant (strip anti-adblock wall dismissal).
 

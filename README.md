@@ -1,8 +1,17 @@
 # skip-sensei
 
-Chrome extension (Manifest V3) that automatically skips all interruptions in
-YouTube videos: YouTube-served ads and, in Phase 2, creator-read sponsor
-segments detected by LLM analysis of the video transcript.
+Chrome extension (Manifest V3) that removes ads in three ways:
+
+1. **YouTube ads** — skips YouTube-served ads (skip-button click + fast-forward)
+   and dismisses the anti-ad-blocker wall.
+2. **Sponsor segments** — detects creator-read sponsor/self-promo segments by
+   LLM analysis of the video transcript (works on brand-new uploads with no
+   crowdsourced data) and auto-skips playback past them.
+3. **Web ads** — general ad + tracker blocking across all sites via
+   EasyList-derived `declarativeNetRequest` filter lists + cosmetic hiding.
+
+Plus **self-healing selectors**: when a YouTube DOM change breaks the hardcoded
+selectors, the AI re-finds the element and caches the fix — no manual patch.
 
 > **Naming:** the public/store name is **Ad Sensei** and appears only in
 > `manifest.config.ts` (plus store listing/assets). Everything in code —

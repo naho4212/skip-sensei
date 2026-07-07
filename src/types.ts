@@ -128,6 +128,11 @@ export type Message =
   | { type: 'skipSensei:checkBuiltinAI' } // → { availability: string }
   | { type: 'skipSensei:getBlockerState' } // → BlockerState
   | { type: 'skipSensei:tabNeedsReload'; needsReload: boolean } // badges the icon for the sender tab
+  | {
+      type: 'skipSensei:findSelector'
+      html: string
+      description: string
+    } // → string | null (AI-found CSS selector)
 
 export interface SessionStats {
   sessionAdSkips: number
