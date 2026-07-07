@@ -29,6 +29,19 @@ export async function updateSettings(
   return next
 }
 
+/** Add/remove a hostname from the "Block all ads" allowlist. Returns updated settings. */
+export async function setSiteAllowlisted(
+  hostname: string,
+  allowlisted: boolean,
+): Promise<Settings> {
+  const host = hostname.trim().toLowerCase()
+  const current = await getSettings()
+  const set = new Set(current.allowlist)
+  if (allowlisted) set.add(host)
+  else set.delete(host)
+  return updateSettings({ allowlist: [...set] })
+}
+
 export function onSettingsChanged(callback: (settings: Settings) => void) {
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area === 'local' && changes[SETTINGS_KEY]) {

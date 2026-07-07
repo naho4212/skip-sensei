@@ -12,6 +12,9 @@ import { getSettings, onSettingsChanged } from './storage'
 
 const RULESET_IDS = ['ads_base', 'ads_mobile']
 
+/** Priority for allowlist rules — must beat the static block rules (priority 1). */
+const ALLOWLIST_PRIORITY = 1_000_000
+
 export interface BlockerState {
   enabled: boolean
   active: boolean
@@ -21,8 +24,8 @@ export interface BlockerState {
 let lastError: string | undefined
 
 export async function syncNetBlocker(): Promise<BlockerState> {
-  const { blockAllAds, masterEnabled } = await getSettings()
-  const shouldEnable = masterEnabled && blockAllAds
+  const settings = await getSettings()
+  const shouldEnable = settings.masterEnabled && settings.blockAllAds
   lastError = undefined
 
   try {
@@ -41,6 +44,7 @@ export async function syncNetBlocker(): Promise<BlockerState> {
         disableRulesetIds: RULESET_IDS,
       })
     }
+    await syncAllowlist(settings.allowlist)
   } catch (error) {
     // Most likely the enabled-static-rule limit (other blockers using the pool).
     lastError =
@@ -48,6 +52,34 @@ export async function syncNetBlocker(): Promise<BlockerState> {
   }
 
   return getBlockerState()
+}
+
+/**
+ * Rebuild the dynamic allow rules from the allowlist. Each hostname gets a
+ * high-priority allowAllRequests rule that exempts the whole page (and its
+ * subframes) from the static block rules — i.e. "pause blocking on this site".
+ */
+async function syncAllowlist(hostnames: string[]) {
+  const existing = await chrome.declarativeNetRequest.getDynamicRules()
+  const addRules = hostnames
+    .map((h) => h.trim().toLowerCase())
+    .filter(Boolean)
+    .map((hostname, i) => ({
+      id: i + 1,
+      priority: ALLOWLIST_PRIORITY,
+      action: { type: 'allowAllRequests' as chrome.declarativeNetRequest.RuleActionType },
+      condition: {
+        requestDomains: [hostname],
+        resourceTypes: [
+          'main_frame',
+          'sub_frame',
+        ] as chrome.declarativeNetRequest.ResourceType[],
+      },
+    }))
+  await chrome.declarativeNetRequest.updateDynamicRules({
+    removeRuleIds: existing.map((r) => r.id),
+    addRules,
+  })
 }
 
 export async function getBlockerState(): Promise<BlockerState> {

@@ -15,7 +15,13 @@ export default defineManifest({
     48: 'src/icons/icon-48.png',
     128: 'src/icons/icon-128.png',
   },
-  permissions: ['storage', 'activeTab', 'declarativeNetRequest'],
+  permissions: [
+    'storage',
+    'activeTab',
+    'declarativeNetRequest',
+    // Lets the popup report how many ads were blocked on the current page.
+    'declarativeNetRequestFeedback',
+  ],
   host_permissions: [
     '*://*.youtube.com/*',
     // Cloud LLM providers for sponsor detection (only contacted when the user

@@ -1,4 +1,9 @@
-import { clearAnalysisCache, getSettings, updateSettings } from '../storage'
+import {
+  clearAnalysisCache,
+  getSettings,
+  setSiteAllowlisted,
+  updateSettings,
+} from '../storage'
 import type { LlmProvider, Message, Settings } from '../types'
 
 const $ = <T extends HTMLElement>(id: string) =>
@@ -89,6 +94,30 @@ async function renderBuiltinStatus() {
   }
 }
 
+async function renderAllowlist() {
+  const listEl = $<HTMLUListElement>('allowlist')
+  const { allowlist } = await getSettings()
+  if (allowlist.length === 0) {
+    listEl.innerHTML = '<li class="allowlist-empty">No sites paused.</li>'
+    return
+  }
+  listEl.replaceChildren(
+    ...[...allowlist].sort().map((host) => {
+      const li = document.createElement('li')
+      const name = document.createElement('span')
+      name.textContent = host
+      const remove = document.createElement('button')
+      remove.textContent = 'Remove'
+      remove.addEventListener('click', async () => {
+        await setSiteAllowlisted(host, false)
+        await renderAllowlist()
+      })
+      li.append(name, remove)
+      return li
+    }),
+  )
+}
+
 function debounce(fn: () => void, ms: number) {
   let timer: number | null = null
   return () => {
@@ -127,6 +156,28 @@ async function main() {
   showToastEl.addEventListener('change', () =>
     save({ showSkipToast: showToastEl.checked }),
   )
+
+  await renderAllowlist()
+  const allowlistInput = $<HTMLInputElement>('allowlist-input')
+  const addSite = async () => {
+    const raw = allowlistInput.value.trim().toLowerCase()
+    // Accept a pasted URL or a bare hostname.
+    let host = raw
+    try {
+      if (raw.includes('/')) host = new URL(raw.startsWith('http') ? raw : `https://${raw}`).hostname
+    } catch {
+      host = raw
+    }
+    host = host.replace(/^www\./, '')
+    if (!host) return
+    await setSiteAllowlisted(host, true)
+    allowlistInput.value = ''
+    await renderAllowlist()
+  }
+  $<HTMLButtonElement>('allowlist-add-btn').addEventListener('click', addSite)
+  allowlistInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') void addSite()
+  })
 
   const clearCacheEl = $<HTMLButtonElement>('clear-cache')
   const clearResultEl = $('clear-cache-result')

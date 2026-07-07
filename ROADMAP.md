@@ -27,11 +27,13 @@ Three "what to block" capabilities, each independently useful:
 - **Phase 1 — YouTube Ad Engine** (reactive skip) ✅
 - **Phase 2 — Sponsor Engine** (transcript AI) ✅
 - **Phase 3 — Polish** (options, toast, stats, icon, per-provider keys, Gemini) ✅
-- **Phase 4 — General ad blocking (MVP)**: `declarativeNetRequest` + `<all_urls>`,
-  prebuilt MV3 filter rulesets (EasyList/EasyPrivacy), "Block all ads" toggle,
-  reload-to-apply. Outcome: ~90% network ad blocking across the web.
-- **Phase 5 — Per-site control + allowlist**: current-site status, "Pause on this
-  site", managed allowlist (dynamic allow rules), per-page blocked counter.
+- **Phase 4 — General ad blocking (MVP)** ✅: `declarativeNetRequest` (no host
+  perm needed — block-only rules), prebuilt MV3 filter rulesets (AdGuard Base +
+  Mobile Ads, ~70k rules), "Block all ads" toggle, runtime enable with
+  rule-limit error handling, reload-to-apply. ~90% network ad blocking.
+- **Phase 5 — Per-site control + allowlist** ✅: current-site section in popup,
+  "Pause ad blocking here" toggle (dynamic allowAllRequests rules), managed
+  allowlist in options, per-page blocked counter (under Sponsor segments).
 - **Phase 6 — Cosmetic filtering**: content-script element hiding, extended
   selectors, optional toggle.
 - **Phase 7 — Filter-list management**: list versions/dates, manual update,

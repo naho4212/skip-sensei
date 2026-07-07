@@ -1,4 +1,10 @@
-import { getSettings, getStats, onStatsChanged, updateSettings } from '../storage'
+import {
+  getSettings,
+  getStats,
+  onStatsChanged,
+  setSiteAllowlisted,
+  updateSettings,
+} from '../storage'
 import type {
   Message,
   PageStatus,
@@ -16,6 +22,7 @@ const adToggle = $<HTMLInputElement>('ad-engine-toggle')
 const sponsorToggle = $<HTMLInputElement>('sponsor-engine-toggle')
 const blockAdsToggle = $<HTMLInputElement>('block-ads-toggle')
 const blockerNoteEl = $('blocker-note')
+const pauseSiteToggle = $<HTMLInputElement>('pause-site-toggle')
 const videoStatusEl = $('video-status')
 const segmentListEl = $<HTMLUListElement>('segment-list')
 const reloadTabEl = $<HTMLButtonElement>('reload-tab')
@@ -26,6 +33,58 @@ function renderSettings(settings: Settings) {
   sponsorToggle.checked = settings.sponsorEngineEnabled
   blockAdsToggle.checked = settings.blockAllAds
   document.body.classList.toggle('disabled', !settings.masterEnabled)
+}
+
+let currentHost: string | null = null
+
+async function renderSiteSection() {
+  const titleEl = $('site-section-title')
+  const sectionEl = $('site-section')
+  const settings = await getSettings()
+
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+  let host: string | null = null
+  try {
+    const url = tab?.url ? new URL(tab.url) : null
+    if (url && (url.protocol === 'http:' || url.protocol === 'https:')) {
+      host = url.hostname
+    }
+  } catch {
+    host = null
+  }
+  currentHost = host
+
+  // Only relevant for the general "Block all ads" engine on a real web page.
+  if (!settings.blockAllAds || !host) {
+    titleEl.hidden = true
+    sectionEl.hidden = true
+    $('page-blocked').hidden = true
+    return
+  }
+  titleEl.hidden = false
+  sectionEl.hidden = false
+
+  $('site-host').textContent = host
+  const paused = settings.allowlist.includes(host)
+  pauseSiteToggle.checked = paused
+
+  // Page-blocked count lives in the "Skipped" section (under Sponsor segments).
+  const pageBlockedEl = $('page-blocked')
+  const pageBlockedCountEl = $('page-blocked-count')
+  pageBlockedEl.hidden = false
+  if (paused) {
+    pageBlockedCountEl.textContent = '0'
+    pageBlockedEl.lastChild!.textContent = ' ads blocked (paused here)'
+  } else if (tab?.id !== undefined) {
+    try {
+      const { rulesMatchedInfo } =
+        await chrome.declarativeNetRequest.getMatchedRules({ tabId: tab.id })
+      pageBlockedCountEl.textContent = String(rulesMatchedInfo.length)
+      pageBlockedEl.lastChild!.textContent = ' ads blocked on this page'
+    } catch {
+      pageBlockedEl.hidden = true
+    }
+  }
 }
 
 async function renderBlockerState() {
@@ -187,7 +246,16 @@ async function main() {
   blockAdsToggle.addEventListener('change', async () => {
     renderSettings(await updateSettings({ blockAllAds: blockAdsToggle.checked }))
     // Give the service worker a moment to flip the rulesets, then report.
-    setTimeout(renderBlockerState, 300)
+    setTimeout(() => {
+      void renderBlockerState()
+      void renderSiteSection()
+    }, 300)
+  })
+
+  pauseSiteToggle.addEventListener('change', async () => {
+    if (!currentHost) return
+    await setSiteAllowlisted(currentHost, pauseSiteToggle.checked)
+    void renderSiteSection()
   })
 
   $('open-options').addEventListener('click', (event) => {
@@ -205,9 +273,13 @@ async function main() {
 
   void renderVideoStatus()
   void renderBlockerState()
+  void renderSiteSection()
   // Analysis finishes async while the popup is open; 1s keeps the elapsed
-  // timer ticking smoothly.
-  setInterval(renderVideoStatus, 1000)
+  // timer ticking smoothly, and the blocked-ads count fresh.
+  setInterval(() => {
+    void renderVideoStatus()
+    void renderSiteSection()
+  }, 1000)
 }
 
 void main()

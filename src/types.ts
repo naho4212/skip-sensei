@@ -8,6 +8,8 @@ export interface Settings {
   sponsorEngineEnabled: boolean
   /** General web ad blocking (declarativeNetRequest filter lists). Off by default. */
   blockAllAds: boolean
+  /** Hostnames where "Block all ads" is paused (not blocked). */
+  allowlist: string[]
   /** Segments below this confidence are never skipped. */
   confidenceThreshold: number
   showSkipToast: boolean
@@ -23,6 +25,7 @@ export const DEFAULT_SETTINGS: Settings = {
   adEngineEnabled: true,
   sponsorEngineEnabled: true,
   blockAllAds: false,
+  allowlist: [],
   confidenceThreshold: 0.7,
   showSkipToast: true,
   llmProvider: 'builtin',

@@ -118,6 +118,27 @@ body.disabled main {
   color: var(--accent);
 }
 
+.page-blocked {
+  margin: 8px 16px 0;
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.page-blocked #page-blocked-count {
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+#site-host {
+  font-weight: 500;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 180px;
+}
+
 .engines {
   padding: 4px 0;
   border-bottom: 1px solid var(--divider);

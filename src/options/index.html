@@ -64,6 +64,19 @@
       </section>
 
       <section>
+        <h2>Ad blocking allowlist</h2>
+        <p class="hint">
+          Sites where <strong>Block all ads</strong> is paused. Add sites here,
+          or use the popup's “Pause ad blocking here” toggle while on a site.
+        </p>
+        <div class="allowlist-add">
+          <input type="text" id="allowlist-input" placeholder="example.com" />
+          <button id="allowlist-add-btn" type="button">Add</button>
+        </div>
+        <ul class="allowlist" id="allowlist"></ul>
+      </section>
+
+      <section>
         <h2>Analysis cache</h2>
         <p class="hint">
           Sponsor analysis is cached per video so a re-watch never re-runs the
