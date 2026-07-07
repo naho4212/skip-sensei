@@ -49,9 +49,10 @@ Mark a segment ONLY when the creator is clearly delivering promotion:
 
 Do NOT mark:
 - Ordinary product or brand mentions that are part of the video's actual topic (a review of a product is content, not a sponsor read, even if positive).
+- Discussion, news, analysis, or opinions ABOUT companies or products (e.g. hosts debating Meta's AI spending is content, not advertising).
 - Thanks to viewers or generic "like and subscribe" moments under 5 seconds.
 
-Precision matters more than recall: when unsure, either omit the segment or give it low confidence. Never guess timestamps — use the transcript's [time] markers, and extend end to where normal content resumes.
+Most videos contain 0-3 promotional segments; many contain none. Precision matters more than recall: when unsure, either omit the segment or give it low confidence. Never guess timestamps — use the transcript's [time] markers, and extend end to where normal content resumes.
 
 Respond with ONLY this JSON, no prose, no markdown fences:
 {"segments": [{"start": <seconds>, "end": <seconds>, "type": "sponsor"|"self-promo"|"ad-read", "confidence": <0..1>}]}
@@ -97,7 +98,84 @@ export async function analyzeTranscript(
     )
   }
   onProgress?.(chunks.length, chunks.length)
-  return mergeSegments(segments)
+  return verifySegments(mergeSegments(segments), lines)
+}
+
+// ---------------------------------------------------------------------------
+// Verification layer — never trust the model blindly
+// ---------------------------------------------------------------------------
+
+/** Real ad reads virtually always contain explicit promotional language. */
+const STRONG_MARKERS = [
+  'sponsor',
+  'sponsored',
+  'brought to you by',
+  'support for the show',
+  'support for this show',
+  'support for today',
+  'supporting the show',
+  'this episode is supported',
+  'promo code',
+  'use code',
+  'discount code',
+  'coupon',
+  'free trial',
+  'free shipping',
+  'terms apply',
+  'patreon',
+  'merch',
+  'channel member',
+  'my course',
+  'thanks to today',
+]
+
+const WEAK_MARKERS = [
+  'go to',
+  'head to',
+  'check out',
+  'sign up',
+  'link in the description',
+  'link below',
+  '.com/',
+  '.ai/',
+  '% off',
+  'percent off',
+  'get started',
+  'download',
+  'subscribe to',
+]
+
+/** Longer than this is almost certainly not a single ad read. */
+const MAX_SEGMENT_SECONDS = 210
+/** More flagged segments than this means the model is hallucinating; keep the most confident. */
+const MAX_SEGMENTS = 8
+
+/**
+ * Cross-check every model-claimed segment against the transcript text it
+ * covers: keep it only if the words actually sound like promotion (≥1 strong
+ * marker, or ≥2 distinct weak ones). Protects against small-model precision
+ * collapse — a false skip that cuts real content is the worst failure mode.
+ */
+export function verifySegments(
+  segments: SponsorSegment[],
+  lines: TranscriptLine[],
+): SponsorSegment[] {
+  const verified = segments.filter((segment) => {
+    if (segment.end - segment.start > MAX_SEGMENT_SECONDS) return false
+    const text = lines
+      .filter((l) => l.end > segment.start - 2 && l.start < segment.end + 2)
+      .map((l) => l.text)
+      .join(' ')
+      .toLowerCase()
+    if (!text) return false
+    if (STRONG_MARKERS.some((m) => text.includes(m))) return true
+    const weakHits = WEAK_MARKERS.filter((m) => text.includes(m)).length
+    return weakHits >= 2
+  })
+  return verified
+    .sort((a, b) => b.confidence - a.confidence)
+    .slice(0, MAX_SEGMENTS)
+    .sort((a, b) => a.start - b.start)
 }
 
 export function resolveProvider(settings: Settings): LlmProvider {

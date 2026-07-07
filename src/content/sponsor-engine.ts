@@ -14,6 +14,14 @@ const MIN_VIDEO_SECONDS = 120
 
 const log = (...args: unknown[]) => console.log('[skipSensei]', ...args)
 
+const describeSegments = (segments: SponsorSegment[]) =>
+  segments
+    .map(
+      (s) =>
+        `${Math.round(s.start)}-${Math.round(s.end)}s ${s.type}@${s.confidence}`,
+    )
+    .join(', ') || '(none)'
+
 /**
  * Sponsor Engine: obtains sponsor segments for the current video (cache → LLM
  * via the service worker) and skips playback past them. One instance per
@@ -79,7 +87,7 @@ export class SponsorEngine {
     })
     if (this.stopped) return
     if (cached) {
-      log('using cached analysis', cached.status, cached.segments)
+      log('using cached analysis', cached.status, describeSegments(cached.segments))
       this.applyAnalysis(cached)
       return
     }
@@ -118,7 +126,12 @@ export class SponsorEngine {
       this.setStatus('error', 'Analysis did not complete')
       return
     }
-    log('analysis:', analysis.status, analysis.reason ?? '', analysis.segments)
+    log(
+      'analysis:',
+      analysis.status,
+      analysis.reason ?? '',
+      describeSegments(analysis.segments),
+    )
     this.applyAnalysis(analysis)
   }
 

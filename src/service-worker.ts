@@ -6,11 +6,12 @@ import {
   recordCorrection,
   setCachedAnalysis,
 } from './storage'
-import type {
-  Message,
-  SessionStats,
-  TranscriptLine,
-  VideoAnalysis,
+import {
+  ANALYSIS_VERSION,
+  type Message,
+  type SessionStats,
+  type TranscriptLine,
+  type VideoAnalysis,
 } from './types'
 
 /**
@@ -97,6 +98,7 @@ async function usableCachedAnalysis(
 ): Promise<VideoAnalysis | null> {
   const cached = await getCachedAnalysis(videoId)
   if (!cached) return null
+  if (cached.version !== ANALYSIS_VERSION) return null
   if (
     cached.status === 'ok' &&
     cached.segments.length === 0 &&
@@ -168,6 +170,7 @@ async function runAnalysis(
       segments,
       provider,
       analyzedAt: Date.now(),
+      version: ANALYSIS_VERSION,
     }
     await setCachedAnalysis(analysis)
     return analysis

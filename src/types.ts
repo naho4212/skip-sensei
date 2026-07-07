@@ -73,6 +73,9 @@ export type AnalysisStatus =
   | 'unavailable' // live stream, very short video, …
   | 'error'
 
+/** Bump to invalidate cached analyses produced by older pipeline logic. */
+export const ANALYSIS_VERSION = 2
+
 export interface VideoAnalysis {
   videoId: string
   status: AnalysisStatus
@@ -81,6 +84,7 @@ export interface VideoAnalysis {
   segments: SponsorSegment[]
   provider?: LlmProvider
   analyzedAt: number
+  version?: number
 }
 
 // ---------------------------------------------------------------------------
