@@ -354,18 +354,62 @@ chrome.runtime.onMessage.addListener(
   },
 )
 
-// Per-tab icon badge signalling "this page would benefit from a reload"
-// (leftover ads that loaded before blocking, or a YouTube tab that needs
-// re-activation after an extension update). Surfaces the state without the
-// popup being open.
-function setReloadBadge(tabId: number, show: boolean) {
-  chrome.action.setBadgeText({ tabId, text: show ? '↻' : '' }).catch(() => {})
-  if (show) {
+// Per-tab icon badge. Shows the number of ads/elements blocked on the tab; a
+// "↻" takes priority when the page needs a reload to activate/apply blocking.
+interface TabBadge {
+  blocked: number
+  needsReload: boolean
+}
+const tabBadges = new Map<number, TabBadge>()
+const badgeState = (tabId: number): TabBadge =>
+  tabBadges.get(tabId) ?? { blocked: 0, needsReload: false }
+
+function renderBadge(tabId: number) {
+  const { blocked, needsReload } = badgeState(tabId)
+  const text = needsReload
+    ? '↻'
+    : blocked > 0
+      ? blocked > 999
+        ? '999+'
+        : String(blocked)
+      : ''
+  chrome.action.setBadgeText({ tabId, text }).catch(() => {})
+  if (text) {
     chrome.action
       .setBadgeBackgroundColor({ tabId, color: '#7c3aed' })
       .catch(() => {})
   }
 }
+
+function setReloadBadge(tabId: number, show: boolean) {
+  const state = badgeState(tabId)
+  state.needsReload = show
+  tabBadges.set(tabId, state)
+  renderBadge(tabId)
+}
+
+// Coalesce bursts of blocks into at most one badge update per ~400ms per tab.
+const badgeRenderPending = new Set<number>()
+function bumpTabBlocked(tabId: number) {
+  const state = badgeState(tabId)
+  state.blocked += 1
+  tabBadges.set(tabId, state)
+  if (badgeRenderPending.has(tabId)) return
+  badgeRenderPending.add(tabId)
+  setTimeout(() => {
+    badgeRenderPending.delete(tabId)
+    renderBadge(tabId)
+  }, 400)
+}
+
+// Reset a tab's count when it navigates to a new page (block counts are per-load).
+chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+  if (changeInfo.status === 'loading' && changeInfo.url) {
+    tabBadges.set(tabId, { blocked: 0, needsReload: false })
+    renderBadge(tabId)
+  }
+})
+chrome.tabs.onRemoved.addListener((tabId) => tabBadges.delete(tabId))
 
 chrome.runtime.onInstalled.addListener(async (details) => {
   // First install → open the welcome page.
@@ -384,5 +428,8 @@ chrome.runtime.onInstalled.addListener(async (details) => {
   }
 })
 
-// "Block all ads" engine: enforce DNR ruleset state from settings; count blocks.
-initNetBlocker((n) => void recordWebBlocks(n))
+// "Block all ads" engine: enforce DNR ruleset state; count blocks (stats + badge).
+initNetBlocker(
+  (n) => void recordWebBlocks(n),
+  (tabId) => bumpTabBlocked(tabId),
+)

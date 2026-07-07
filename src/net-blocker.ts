@@ -146,17 +146,26 @@ function scheduleFlush(onBlocks: (n: number) => void) {
   }, 3000)
 }
 
-/** Wire up: enforce on startup, install, and whenever settings change. */
-export function initNetBlocker(onBlocks: (n: number) => void) {
+/**
+ * Wire up: enforce on startup, install, settings change.
+ * @param onBlocks   batched total block count → for the running stats
+ * @param onTabBlock per-block callback with the tab id → for the icon badge
+ */
+export function initNetBlocker(
+  onBlocks: (n: number) => void,
+  onTabBlock: (tabId: number) => void,
+) {
   chrome.runtime.onInstalled.addListener(() => void syncNetBlocker())
   chrome.runtime.onStartup.addListener(() => void syncNetBlocker())
   onSettingsChanged(() => void syncNetBlocker())
 
-  // Only counts in unpacked/dev extensions; silently absent otherwise.
+  // Only fires in unpacked/dev extensions; silently absent otherwise.
   chrome.declarativeNetRequest.onRuleMatchedDebug?.addListener((info) => {
     if (BLOCK_RULESET_IDS.has(info.rule.rulesetId)) {
       pendingBlocks++
       scheduleFlush(onBlocks)
+      const tabId = info.request.tabId
+      if (tabId !== undefined && tabId >= 0) onTabBlock(tabId)
     }
   })
 
