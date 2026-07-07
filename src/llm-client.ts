@@ -33,6 +33,13 @@ const MAX_INPUT_CHARS: Record<LlmProvider, number> = {
 
 const CHUNK_OVERLAP_LINES = 5
 
+/**
+ * Hard cap per LLM call. The built-in model in particular can grind for
+ * minutes (or hang) on constrained decoding over a large chunk; a stuck call
+ * must resolve to an error, never leave the UI at "Analyzing…" forever.
+ */
+const CHUNK_TIMEOUT_MS = 90_000
+
 const SYSTEM_PROMPT = `You analyze YouTube video transcripts to find paid promotional segments that viewers may want to skip.
 
 Mark a segment ONLY when the creator is clearly delivering promotion:
@@ -77,15 +84,19 @@ export async function analyzeTranscript(
   durationSeconds: number,
   settings: Settings,
   signal: AbortSignal,
+  onProgress?: (done: number, total: number) => void,
 ): Promise<SponsorSegment[]> {
   const provider = resolveProvider(settings)
+  const chunks = chunkLines(lines, MAX_INPUT_CHARS[provider])
   const segments: SponsorSegment[] = []
-  for (const chunk of chunkLines(lines, MAX_INPUT_CHARS[provider])) {
+  for (const [index, chunk] of chunks.entries()) {
+    onProgress?.(index, chunks.length)
     const prompt = buildPrompt(chunk, durationSeconds)
     segments.push(
       ...(await completeWithRetry(provider, prompt, durationSeconds, settings, signal)),
     )
   }
+  onProgress?.(chunks.length, chunks.length)
   return mergeSegments(segments)
 }
 
@@ -169,14 +180,40 @@ async function completeWithRetry(
   let lastError: unknown
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const raw = await complete(provider, prompt, settings, signal)
+      const raw = await withTimeout(
+        complete(provider, prompt, settings, signal),
+        CHUNK_TIMEOUT_MS,
+      )
       return parseSegments(raw, durationSeconds)
     } catch (error) {
       if (signal.aborted) throw error
+      // A timed-out model won't get faster on an immediate retry.
+      if (error instanceof TimeoutError) throw error
       lastError = error
     }
   }
   throw lastError instanceof Error ? lastError : new LlmError(String(lastError))
+}
+
+export class TimeoutError extends LlmError {}
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new TimeoutError(`LLM call timed out after ${ms / 1000}s`)),
+      ms,
+    )
+    promise.then(
+      (value) => {
+        clearTimeout(timer)
+        resolve(value)
+      },
+      (error) => {
+        clearTimeout(timer)
+        reject(error)
+      },
+    )
+  })
 }
 
 function complete(

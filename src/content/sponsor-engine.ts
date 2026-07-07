@@ -38,6 +38,14 @@ export class SponsorEngine {
     return this.segments.length
   }
 
+  /** Chunk progress from the service worker, surfaced in the popup status. */
+  noteProgress(videoId: string, done: number, total: number) {
+    if (videoId !== this.videoId || this.status !== 'analyzing') return
+    if (total > 1 && done < total) {
+      this.reason = `chunk ${done + 1} of ${total}`
+    }
+  }
+
   start() {
     void this.run()
   }

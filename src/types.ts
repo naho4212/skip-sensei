@@ -116,7 +116,14 @@ export interface SessionStats {
 // Messages: popup → content script
 // ---------------------------------------------------------------------------
 
-export type TabMessage = { type: 'skipSensei:getPageStatus' }
+export type TabMessage =
+  | { type: 'skipSensei:getPageStatus' }
+  | {
+      type: 'skipSensei:analysisProgress'
+      videoId: string
+      done: number
+      total: number
+    }
 
 export type SponsorEngineStatus =
   | 'off'

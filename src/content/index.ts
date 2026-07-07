@@ -96,6 +96,11 @@ async function main() {
     (message: TabMessage, _sender, sendResponse) => {
       if (message?.type === 'skipSensei:getPageStatus') {
         sendResponse(getPageStatus())
+      } else if (message?.type === 'skipSensei:analysisProgress') {
+        console.log(
+          `[skipSensei] analyzing chunk ${message.done}/${message.total}`,
+        )
+        sponsorEngine?.noteProgress(message.videoId, message.done, message.total)
       }
     },
   )

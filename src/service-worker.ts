@@ -52,6 +52,43 @@ interface InflightAnalysis {
 const inflight = new Map<string, InflightAnalysis>()
 
 /**
+ * MV3 terminates a service worker that looks idle — and a long await on an
+ * on-device model looks idle. Touching an extension API every 20s while an
+ * analysis is in flight resets the idle clock.
+ */
+let keepaliveTimer: ReturnType<typeof setInterval> | null = null
+
+function updateKeepalive() {
+  const active = inflight.size > 0
+  if (active && keepaliveTimer === null) {
+    keepaliveTimer = setInterval(
+      () => void chrome.runtime.getPlatformInfo(),
+      20_000,
+    )
+  } else if (!active && keepaliveTimer !== null) {
+    clearInterval(keepaliveTimer)
+    keepaliveTimer = null
+  }
+}
+
+function reportProgress(
+  tabId: number | undefined,
+  videoId: string,
+  done: number,
+  total: number,
+) {
+  if (tabId === undefined) return
+  chrome.tabs
+    .sendMessage(tabId, {
+      type: 'skipSensei:analysisProgress',
+      videoId,
+      done,
+      total,
+    })
+    .catch(() => {})
+}
+
+/**
  * Cached analysis, unless it's a zero-segment result from the weaker built-in
  * model and the user has since configured a cloud provider — then re-analyze.
  */
@@ -75,6 +112,7 @@ async function analyzeVideo(
   videoId: string,
   lines: TranscriptLine[],
   durationSeconds: number,
+  tabId: number | undefined,
 ): Promise<VideoAnalysis> {
   const cached = await usableCachedAnalysis(videoId)
   if (cached) return cached
@@ -89,13 +127,21 @@ async function analyzeVideo(
   const entry: InflightAnalysis = {
     controller,
     waiters: 1,
-    promise: runAnalysis(videoId, lines, durationSeconds, controller.signal),
+    promise: runAnalysis(
+      videoId,
+      lines,
+      durationSeconds,
+      controller.signal,
+      tabId,
+    ),
   }
   inflight.set(videoId, entry)
+  updateKeepalive()
   try {
     return await entry.promise
   } finally {
     inflight.delete(videoId)
+    updateKeepalive()
   }
 }
 
@@ -104,6 +150,7 @@ async function runAnalysis(
   lines: TranscriptLine[],
   durationSeconds: number,
   signal: AbortSignal,
+  tabId: number | undefined,
 ): Promise<VideoAnalysis> {
   const settings = await getSettings()
   const provider = resolveProvider(settings)
@@ -113,6 +160,7 @@ async function runAnalysis(
       durationSeconds,
       settings,
       signal,
+      (done, total) => reportProgress(tabId, videoId, done, total),
     )
     const analysis: VideoAnalysis = {
       videoId,
@@ -143,6 +191,7 @@ function abandonAnalysis(videoId: string) {
   if (entry.waiters <= 0) {
     entry.controller.abort()
     inflight.delete(videoId)
+    updateKeepalive()
   }
 }
 
@@ -151,7 +200,7 @@ function abandonAnalysis(videoId: string) {
 // ---------------------------------------------------------------------------
 
 chrome.runtime.onMessage.addListener(
-  (message: Message, _sender, sendResponse) => {
+  (message: Message, sender, sendResponse) => {
     switch (message?.type) {
       case 'skipSensei:adSkipped':
         void recordSkip('ad')
@@ -170,6 +219,7 @@ chrome.runtime.onMessage.addListener(
           message.videoId,
           message.lines,
           message.durationSeconds,
+          sender.tab?.id,
         ).then(sendResponse)
         return true
       case 'skipSensei:abandonAnalysis':

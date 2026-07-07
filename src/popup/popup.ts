@@ -53,7 +53,7 @@ function sponsorStatusText(status: PageStatus): string {
         ? `Transcript analyzed — ${status.segmentCount} sponsor ${plural(status.segmentCount)} found.`
         : 'Transcript analyzed — no sponsor segments found.'
     case 'analyzing':
-      return 'Analyzing transcript…'
+      return `Analyzing transcript${status.sponsorReason ? ` (${status.sponsorReason})` : ''}…`
     case 'no-transcript':
       return 'No transcript available — sponsor skipping off for this video.'
     case 'unavailable':
