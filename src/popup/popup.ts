@@ -104,17 +104,16 @@ async function renderBlockerState() {
       blockerNoteEl.hidden = false
       reloadBtn.hidden = true
     } else if (state.enabled && state.active) {
-      blockerNoteEl.className = 'blocker-note'
-      blockerNoteEl.hidden = false
-      // Only offer a reload when THIS page still has ads that loaded before
-      // blocking — so we never nag (or risk losing work) when it's not needed.
+      // Only surface the note when THIS page still has ads that loaded before
+      // blocking — otherwise stay quiet (the ⓘ tooltip explains the feature).
       const needsReload = await pageHasLoadedAds()
       if (needsReload) {
+        blockerNoteEl.className = 'blocker-note'
         textEl.textContent = 'Ads loaded before blocking — reload to clear them.'
         reloadBtn.hidden = false
+        blockerNoteEl.hidden = false
       } else {
-        textEl.textContent = 'Blocking ads across the web.'
-        reloadBtn.hidden = true
+        blockerNoteEl.hidden = true
       }
     } else {
       blockerNoteEl.hidden = true
@@ -292,6 +291,14 @@ async function main() {
     event.preventDefault()
     void chrome.runtime.openOptionsPage()
   })
+
+  // Clicking an ⓘ shouldn't toggle the switch it sits inside — hover only.
+  document.querySelectorAll('.info').forEach((el) =>
+    el.addEventListener('click', (e) => {
+      e.preventDefault()
+      e.stopPropagation()
+    }),
+  )
 
   const shareBtn = $<HTMLButtonElement>('share-btn')
   shareBtn.addEventListener('click', async () => {

@@ -110,6 +110,49 @@ section {
   cursor: pointer;
 }
 
+/* Info tooltip (ⓘ) */
+.info {
+  position: relative;
+  margin-left: 6px;
+  font-size: 13px;
+  color: var(--text-2);
+  cursor: help;
+}
+
+.info:hover,
+.info:focus {
+  color: var(--link);
+  outline: none;
+}
+
+.info::after {
+  content: attr(data-tip);
+  position: absolute;
+  left: 0;
+  top: 150%;
+  width: max-content;
+  max-width: 300px;
+  background: var(--snackbar-bg);
+  color: var(--snackbar-text);
+  padding: 8px 11px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.4;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  opacity: 0;
+  transform: translateY(-2px);
+  pointer-events: none;
+  transition: opacity 0.12s, transform 0.12s;
+  z-index: 20;
+}
+
+.info:hover::after,
+.info:focus::after {
+  opacity: 1;
+  transform: translateY(0);
+}
+
 input[type='text'],
 input[type='password'],
 select {

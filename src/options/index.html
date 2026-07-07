@@ -57,10 +57,14 @@
       <section>
         <h2>Skipping behavior</h2>
         <label class="field">
-          <span>
-            Confidence threshold
-            <em>(only skip segments the AI is at least this sure about)</em>
-          </span>
+          <span
+            >Confidence threshold<span
+              class="info"
+              tabindex="0"
+              data-tip="Only skip sponsor segments the AI is at least this confident about. Higher = fewer false skips, but may miss some."
+              >ⓘ</span
+            ></span
+          >
           <span class="slider-row">
             <input type="range" id="threshold" min="0.5" max="0.95" step="0.05" />
             <output id="threshold-value">0.70</output>
@@ -72,17 +76,25 @@
         </label>
         <label class="field checkbox">
           <input type="checkbox" id="ai-enhancements" />
-          <span>
-            AI enhancements
-            <em>(auto-repair YouTube skipping when the layout changes, and catch web ads the filter lists miss)</em>
-          </span>
+          <span
+            >AI enhancements<span
+              class="info"
+              tabindex="0"
+              data-tip="Lets the AI auto-repair YouTube skipping when the layout changes, catch web ads the filter lists miss, review popups, and auto-answer cookie prompts. Free on built-in AI."
+              >ⓘ</span
+            ></span
+          >
         </label>
         <label class="field checkbox">
           <input type="checkbox" id="debug-logging" />
-          <span>
-            Debug logging
-            <em>(print [skipSensei] diagnostics to the console)</em>
-          </span>
+          <span
+            >Debug logging<span
+              class="info"
+              tabindex="0"
+              data-tip="Prints [skipSensei] diagnostics to the browser console. For troubleshooting; leave off for normal use."
+              >ⓘ</span
+            ></span
+          >
         </label>
       </section>
 
@@ -94,39 +106,47 @@
         </p>
         <label class="field checkbox">
           <input type="checkbox" id="block-trackers" />
-          <span>
-            Block trackers &amp; analytics
-            <em>(TikTok, Snapchat, Google Tag Manager, etc.)</em>
-          </span>
+          <span
+            >Block trackers &amp; analytics<span
+              class="info"
+              tabindex="0"
+              data-tip="Blocks tracking/analytics pixels (TikTok, Snapchat, Google Tag Manager, etc.) — a larger ruleset."
+              >ⓘ</span
+            ></span
+          >
         </label>
         <label class="field checkbox">
           <input type="checkbox" id="block-cookie-notices" />
-          <span>
-            Handle cookie-consent notices
-            <em
-              >— hides the “we value your privacy” banners; with AI enhancements
-              on, also clicks “Reject all / necessary only” so your choice is
-              actually registered.</em
-            >
-          </span>
+          <span
+            >Handle cookie-consent notices<span
+              class="info"
+              tabindex="0"
+              data-tip="Hides the “we value your privacy” banners. With AI enhancements on, also clicks “Reject all / necessary only” so your choice is actually registered."
+              >ⓘ</span
+            ></span
+          >
         </label>
         <label class="field checkbox">
           <input type="checkbox" id="block-social" />
-          <span>
-            Block social-media widgets &amp; tracking
-            <em>(share buttons, embedded like/follow trackers)</em>
-          </span>
+          <span
+            >Block social-media widgets &amp; tracking<span
+              class="info"
+              tabindex="0"
+              data-tip="Blocks share buttons and embedded like/follow widgets that track you across sites."
+              >ⓘ</span
+            ></span
+          >
         </label>
         <label class="field checkbox">
           <input type="checkbox" id="block-popups" />
-          <span>
-            Block popup &amp; overlay ads <em>(AI-reviewed)</em>
-            <em
-              >— blocks intrusive popup/overlay ads; with AI enhancements on,
-              the AI reviews each overlay and keeps useful ones (logins, consent
-              dialogs), hiding only annoyances (newsletter walls, promos).</em
-            >
-          </span>
+          <span
+            >Block popup &amp; overlay ads<span
+              class="info"
+              tabindex="0"
+              data-tip="Blocks intrusive popup/overlay ads. With AI enhancements on, the AI reviews each overlay and keeps useful ones (logins, consent dialogs), hiding only annoyances (newsletter walls, promos)."
+              >ⓘ</span
+            ></span
+          >
         </label>
         <p class="hint">
           Sites where ad blocking is paused. Add sites here, or use the popup's

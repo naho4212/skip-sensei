@@ -175,6 +175,14 @@ async function main() {
   render(await getSettings())
   void renderBuiltinStatus()
 
+  // Clicking an ⓘ shouldn't toggle the checkbox it sits inside — hover only.
+  document.querySelectorAll('.info').forEach((el) =>
+    el.addEventListener('click', (e) => {
+      e.preventDefault()
+      e.stopPropagation()
+    }),
+  )
+
   providerEl.addEventListener('change', () =>
     save({ llmProvider: providerEl.value as LlmProvider }),
   )
