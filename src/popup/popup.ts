@@ -296,6 +296,35 @@ async function main() {
     void chrome.runtime.openOptionsPage()
   })
 
+  const shareBtn = $<HTMLButtonElement>('share-btn')
+  shareBtn.addEventListener('click', async () => {
+    // Placeholder link — swap for the Chrome Web Store URL once published.
+    const shareUrl = '' // TODO: store listing URL
+    const shareText =
+      'Skip YouTube ads & creator sponsor segments, and block ads across the web with Ad Sensei.'
+    const nav = navigator as Navigator & {
+      share?: (data: ShareData) => Promise<void>
+    }
+    if (nav.share) {
+      try {
+        await nav.share({ title: 'Ad Sensei', text: shareText, url: shareUrl })
+        return
+      } catch {
+        // user cancelled or share unavailable — fall through to copy
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(
+        shareUrl ? `${shareText} ${shareUrl}` : shareText,
+      )
+      const original = shareBtn.textContent
+      shareBtn.textContent = '✓ Copied'
+      setTimeout(() => (shareBtn.textContent = original), 1500)
+    } catch {
+      // clipboard blocked — nothing more to do
+    }
+  })
+
   reloadTabEl.addEventListener('click', async () => {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
     if (tab?.id) {
