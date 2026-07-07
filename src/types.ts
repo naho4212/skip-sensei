@@ -76,7 +76,7 @@ export type AnalysisStatus =
   | 'error'
 
 /** Bump to invalidate cached analyses produced by older pipeline logic. */
-export const ANALYSIS_VERSION = 2
+export const ANALYSIS_VERSION = 3
 
 export interface VideoAnalysis {
   videoId: string

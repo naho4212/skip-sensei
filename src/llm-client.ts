@@ -135,8 +135,16 @@ export async function analyzeTranscript(
 // Verification layer — never trust the model blindly
 // ---------------------------------------------------------------------------
 
-/** Real ad reads virtually always contain explicit promotional language. */
+/**
+ * Real ad reads virtually always contain explicit promotional language. Any
+ * single strong marker in the covered text passes the segment. Includes
+ * legal-disclaimer and app/betting-ad phrasing (e.g. "gambling problem",
+ * "21 and over") — these almost never appear in normal content, so they're a
+ * near-zero-false-positive tell for the ad reads that lack classic
+ * "sponsored by" vocabulary.
+ */
 const STRONG_MARKERS = [
+  // Classic sponsor reads
   'sponsor',
   'sponsored',
   'brought to you by',
@@ -148,15 +156,38 @@ const STRONG_MARKERS = [
   'promo code',
   'use code',
   'discount code',
+  'with code',
   'coupon',
   'free trial',
   'free shipping',
-  'terms apply',
   'patreon',
   'merch',
   'channel member',
   'my course',
   'thanks to today',
+  // App / retail / betting reads
+  'new customers',
+  'new user',
+  'sign up with',
+  'available in all 50',
+  'download the app',
+  'in the app store',
+  'on the app store',
+  'google play',
+  // Legal disclaimers — essentially ad-exclusive
+  'terms and conditions',
+  'terms apply',
+  'gambling problem',
+  'gambler',
+  '21 and over',
+  '21+',
+  'void where prohibited',
+  'void in',
+  'message and data rates',
+  'msg and data rates',
+  'restrictions apply',
+  'see terms',
+  'terms at',
 ]
 
 const WEAK_MARKERS = [
@@ -168,6 +199,7 @@ const WEAK_MARKERS = [
   'link below',
   '.com/',
   '.ai/',
+  '.co/',
   '% off',
   'percent off',
   'get started',
