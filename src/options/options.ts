@@ -1,10 +1,17 @@
 import {
   clearAnalysisCache,
+  getApiUsage,
   getSettings,
+  resetApiUsage,
   setSiteAllowlisted,
   updateSettings,
 } from '../storage'
-import type { LlmProvider, Message, Settings } from '../types'
+import {
+  FREE_TIER_DAILY_LIMIT,
+  type LlmProvider,
+  type Message,
+  type Settings,
+} from '../types'
 
 const $ = <T extends HTMLElement>(id: string) =>
   document.getElementById(id) as T
@@ -66,6 +73,44 @@ function render(settings: Settings) {
     apiKeyLinkEl.href = link
     apiKeyLinkEl.textContent =
       provider === 'gemini' ? 'Get a free key →' : 'Get a key →'
+  }
+  void renderUsage(provider)
+}
+
+const fmt = (n: number) =>
+  n >= 1_000_000
+    ? `${(n / 1_000_000).toFixed(1)}M`
+    : n >= 1000
+      ? `${(n / 1000).toFixed(1)}K`
+      : String(n)
+
+async function renderUsage(provider: LlmProvider) {
+  const box = $('usage-box')
+  if (provider === 'builtin') {
+    box.hidden = true
+    return
+  }
+  box.hidden = false
+  const usage = await getApiUsage()
+  const m = usage.monthly[provider]
+  const requests = m?.requests ?? 0
+  const tokens = (m?.inputTokens ?? 0) + (m?.outputTokens ?? 0)
+  $('usage-monthly').innerHTML = `This month: <b>${requests}</b> ${requests === 1 ? 'request' : 'requests'} · <b>${fmt(tokens)}</b> tokens`
+
+  const limit = FREE_TIER_DAILY_LIMIT[provider]
+  const dailyEl = $('usage-daily')
+  const noteEl = $('usage-note')
+  if (limit) {
+    const used = usage.dailyRequests[provider] ?? 0
+    const pct = Math.min(100, Math.round((used / limit) * 100))
+    dailyEl.innerHTML = `Today: <b>~${used} / ${limit}</b> free requests (~${pct}%)`
+    noteEl.textContent =
+      'Daily figure is an estimate of this extension’s own calls; resets ~midnight Pacific. Most videos/sites are cached, so usage stays low.'
+    dailyEl.hidden = false
+  } else {
+    dailyEl.hidden = true
+    noteEl.textContent =
+      'Counts this extension’s calls to your key. Most videos/sites are cached, so usage stays low.'
   }
 }
 
@@ -156,6 +201,11 @@ async function main() {
   showToastEl.addEventListener('change', () =>
     save({ showSkipToast: showToastEl.checked }),
   )
+
+  $<HTMLButtonElement>('usage-reset').addEventListener('click', async () => {
+    await resetApiUsage()
+    void renderUsage(currentSettings.llmProvider)
+  })
 
   const extraLists: [string, keyof Settings][] = [
     ['block-trackers', 'blockTrackers'],

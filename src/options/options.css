@@ -190,6 +190,40 @@ button:disabled {
   cursor: default;
 }
 
+/* API usage */
+.usage {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--divider);
+  border-radius: 10px;
+  max-width: 400px;
+}
+
+.usage-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 600;
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+
+.usage-reset {
+  height: 26px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.usage-line {
+  margin: 3px 0;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.usage-line b {
+  font-weight: 600;
+}
+
 /* Allowlist */
 .allowlist-add {
   display: flex;

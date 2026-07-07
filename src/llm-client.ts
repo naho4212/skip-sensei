@@ -1,4 +1,5 @@
 import { warn } from './log'
+import { recordApiUsage } from './storage'
 import type {
   LlmProvider,
   Settings,
@@ -101,6 +102,9 @@ export async function analyzeTranscript(
       )
     } catch (error) {
       if (signal.aborted) throw error
+      // Rate limit: stop immediately so the caller re-runs the whole analysis
+      // on the built-in model (chunked correctly for it).
+      if (error instanceof RateLimitError) throw error
       // One slow/failed chunk shouldn't discard the whole video's analysis —
       // that section just loses its segments (a possible late/missed skip).
       failures++
@@ -248,12 +252,8 @@ export async function findElementSelector(
   settings: Settings,
   signal: AbortSignal,
 ): Promise<string | null> {
-  const provider = resolveProvider(settings)
   const prompt = `Find this element: ${description}\n\nHTML fragment:\n${html.slice(0, 8000)}`
-  const raw = await withTimeout(
-    complete(provider, SELECTOR_SYSTEM_PROMPT, prompt, settings, signal),
-    CHUNK_TIMEOUT_MS[provider],
-  )
+  const raw = await completeSmart(SELECTOR_SYSTEM_PROMPT, prompt, settings, signal)
   const cleaned = raw
     .trim()
     .replace(/^```(?:json)?\s*/i, '')
@@ -281,12 +281,8 @@ export async function findAdSelectors(
   settings: Settings,
   signal: AbortSignal,
 ): Promise<string[]> {
-  const provider = resolveProvider(settings)
   const prompt = `Page ad-like fragment:\n${html.slice(0, 9000)}`
-  const raw = await withTimeout(
-    complete(provider, GAPFILL_SYSTEM_PROMPT, prompt, settings, signal),
-    CHUNK_TIMEOUT_MS[provider],
-  )
+  const raw = await completeSmart(GAPFILL_SYSTEM_PROMPT, prompt, settings, signal)
   const cleaned = raw
     .trim()
     .replace(/^```(?:json)?\s*/i, '')
@@ -314,10 +310,11 @@ export async function reviewPopup(
   settings: Settings,
   signal: AbortSignal,
 ): Promise<boolean> {
-  const provider = resolveProvider(settings)
-  const raw = await withTimeout(
-    complete(provider, POPUP_SYSTEM_PROMPT, `Overlay HTML:\n${html.slice(0, 4000)}`, settings, signal),
-    CHUNK_TIMEOUT_MS[provider],
+  const raw = await completeSmart(
+    POPUP_SYSTEM_PROMPT,
+    `Overlay HTML:\n${html.slice(0, 4000)}`,
+    settings,
+    signal,
   )
   const cleaned = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '')
   const first = cleaned.indexOf('{')
@@ -338,10 +335,11 @@ export async function findConsentReject(
   settings: Settings,
   signal: AbortSignal,
 ): Promise<string | null> {
-  const provider = resolveProvider(settings)
-  const raw = await withTimeout(
-    complete(provider, CONSENT_SYSTEM_PROMPT, `Banner HTML:\n${html.slice(0, 5000)}`, settings, signal),
-    CHUNK_TIMEOUT_MS[provider],
+  const raw = await completeSmart(
+    CONSENT_SYSTEM_PROMPT,
+    `Banner HTML:\n${html.slice(0, 5000)}`,
+    settings,
+    signal,
   )
   const cleaned = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '')
   const first = cleaned.indexOf('{')
@@ -355,9 +353,35 @@ export async function findConsentReject(
   }
 }
 
+/** Thrown when a provider returns a rate-limit / quota-exhausted status. */
+export class RateLimitError extends LlmError {}
+
+/** Providers in cooldown after hitting a limit → epoch ms until we try them again. */
+const cooldownUntil = new Map<LlmProvider, number>()
+
+function inCooldown(provider: LlmProvider): boolean {
+  const until = cooldownUntil.get(provider)
+  return until !== undefined && Date.now() < until
+}
+
+/** Mark a provider rate-limited. Longer for daily-quota errors than per-minute ones. */
+function setCooldown(provider: LlmProvider, dailyQuota: boolean, retryAfterSec?: number) {
+  const ms = retryAfterSec
+    ? retryAfterSec * 1000
+    : dailyQuota
+      ? 60 * 60 * 1000 // ~1h for daily quota exhaustion
+      : 90 * 1000 // short, for per-minute rate limits
+  cooldownUntil.set(provider, Date.now() + ms)
+  warn(`${provider} rate-limited — falling back to built-in AI for ~${Math.round(ms / 1000)}s`)
+}
+
 export function resolveProvider(settings: Settings): LlmProvider {
   const provider = settings.llmProvider
-  if (provider !== 'builtin' && settings.apiKeys[provider]?.trim()) {
+  if (
+    provider !== 'builtin' &&
+    settings.apiKeys[provider]?.trim() &&
+    !inCooldown(provider) // fall back to built-in while rate-limited
+  ) {
     return provider
   }
   return 'builtin'
@@ -445,6 +469,8 @@ async function completeWithRetry(
       if (signal.aborted) throw error
       // A timed-out model won't get faster on an immediate retry.
       if (error instanceof TimeoutError) throw error
+      // Rate limit → bail out so the whole analysis re-runs on the built-in model.
+      if (error instanceof RateLimitError) throw error
       lastError = error
     }
   }
@@ -452,6 +478,35 @@ async function completeWithRetry(
 }
 
 export class TimeoutError extends LlmError {}
+
+/**
+ * Resolve the provider, run one completion, and — if a cloud provider is
+ * rate-limited — transparently retry on the built-in model. Used by the small
+ * single-shot AI helpers (selector heal, gap-fill, popup review, consent).
+ */
+async function completeSmart(
+  system: string,
+  prompt: string,
+  settings: Settings,
+  signal: AbortSignal,
+): Promise<string> {
+  const provider = resolveProvider(settings)
+  try {
+    return await withTimeout(
+      complete(provider, system, prompt, settings, signal),
+      CHUNK_TIMEOUT_MS[provider],
+    )
+  } catch (error) {
+    if (error instanceof RateLimitError && provider !== 'builtin') {
+      // Cooldown is set; fall back to on-device AI for this call.
+      return await withTimeout(
+        complete('builtin', system, prompt, settings, signal),
+        CHUNK_TIMEOUT_MS.builtin,
+      )
+    }
+    throw error
+  }
+}
 
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -579,11 +634,18 @@ async function completeAnthropic(
     }),
   })
   if (!response.ok) {
-    throw new LlmError(`Anthropic API ${response.status}: ${await safeText(response)}`)
+    const body = await safeText(response)
+    throwForStatus('anthropic', response, body)
+    throw new LlmError(`Anthropic API ${response.status}: ${body}`)
   }
   const data = await response.json()
   const text = data?.content?.[0]?.text
   if (typeof text !== 'string') throw new LlmError('Empty Anthropic response')
+  void recordApiUsage(
+    'anthropic',
+    Number(data?.usage?.input_tokens) || 0,
+    Number(data?.usage?.output_tokens) || 0,
+  )
   return text
 }
 
@@ -614,12 +676,19 @@ async function completeOpenAiCompatible(
     }),
   })
   if (!response.ok) {
+    const body = await safeText(response)
+    throwForStatus(provider, response, body)
     const label = provider === 'gemini' ? 'Gemini' : 'OpenAI'
-    throw new LlmError(`${label} API ${response.status}: ${await safeText(response)}`)
+    throw new LlmError(`${label} API ${response.status}: ${body}`)
   }
   const data = await response.json()
   const text = data?.choices?.[0]?.message?.content
   if (typeof text !== 'string') throw new LlmError('Empty API response')
+  void recordApiUsage(
+    provider,
+    Number(data?.usage?.prompt_tokens) || 0,
+    Number(data?.usage?.completion_tokens) || 0,
+  )
   return text
 }
 
@@ -654,5 +723,24 @@ async function safeText(response: Response): Promise<string> {
     return (await response.text()).slice(0, 300)
   } catch {
     return ''
+  }
+}
+
+/**
+ * If the response is a rate-limit / quota error, mark the provider for cooldown
+ * and throw RateLimitError so callers fall back to the built-in model.
+ */
+function throwForStatus(
+  provider: LlmProvider,
+  response: Response,
+  body: string,
+) {
+  const quotaHint = /quota|exhausted|per day|daily limit|insufficient_quota/i.test(
+    body,
+  )
+  if (response.status === 429 || (response.status === 403 && quotaHint)) {
+    const retryAfter = Number(response.headers.get('retry-after')) || undefined
+    setCooldown(provider, quotaHint, retryAfter)
+    throw new RateLimitError(`${provider} rate limit / quota reached`)
   }
 }

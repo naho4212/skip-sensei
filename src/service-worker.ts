@@ -4,6 +4,7 @@ import {
   findAdSelectors,
   findConsentReject,
   findElementSelector,
+  RateLimitError,
   resolveProvider,
   reviewPopup,
 } from './llm-client'
@@ -173,20 +174,40 @@ async function runAnalysis(
   tabId: number | undefined,
 ): Promise<VideoAnalysis> {
   const settings = await getSettings()
-  const provider = resolveProvider(settings)
+  const onProgress = (done: number, total: number) =>
+    reportProgress(tabId, videoId, done, total)
   try {
-    const segments = await analyzeTranscript(
-      lines,
-      durationSeconds,
-      settings,
-      signal,
-      (done, total) => reportProgress(tabId, videoId, done, total),
-    )
+    let segments
+    try {
+      segments = await analyzeTranscript(
+        lines,
+        durationSeconds,
+        settings,
+        signal,
+        onProgress,
+      )
+    } catch (error) {
+      // Cloud provider hit its rate limit / quota — it's now in cooldown, so a
+      // retry resolves to the built-in model (re-chunked correctly for it).
+      if (error instanceof RateLimitError && !signal.aborted) {
+        segments = await analyzeTranscript(
+          lines,
+          durationSeconds,
+          settings,
+          signal,
+          onProgress,
+        )
+      } else {
+        throw error
+      }
+    }
     const analysis: VideoAnalysis = {
       videoId,
       status: 'ok',
       segments,
-      provider,
+      // Record which provider actually produced the result (may be built-in
+      // after a fallback).
+      provider: resolveProvider(settings),
       analyzedAt: Date.now(),
       version: ANALYSIS_VERSION,
     }
@@ -199,7 +220,7 @@ async function runAnalysis(
       status: 'error',
       reason: error instanceof Error ? error.message : String(error),
       segments: [],
-      provider,
+      provider: resolveProvider(settings),
       analyzedAt: Date.now(),
     }
   }

@@ -1,6 +1,8 @@
 import {
   DEFAULT_SETTINGS,
   DEFAULT_STATS,
+  type ApiUsage,
+  type LlmProvider,
   type Settings,
   type Stats,
   type VideoAnalysis,
@@ -8,6 +10,7 @@ import {
 
 const SETTINGS_KEY = 'skipSensei.settings'
 const STATS_KEY = 'skipSensei.stats'
+const USAGE_KEY = 'skipSensei.apiUsage'
 const CACHE_PREFIX = 'skipSensei.cache.'
 const CACHE_INDEX_KEY = 'skipSensei.cacheIndex'
 const CORRECTIONS_KEY = 'skipSensei.corrections'
@@ -154,6 +157,63 @@ export async function addGapfillSelectors(domain: string, selectors: string[]) {
     }
   }
   await chrome.storage.local.set({ [GAPFILL_KEY]: all })
+}
+
+// ---------------------------------------------------------------------------
+// Cloud LLM usage tracking — monthly tokens/requests + daily request count.
+// ---------------------------------------------------------------------------
+
+function monthTag(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+
+/** Pacific-time date tag — providers' free-tier daily quotas reset ~midnight PT. */
+function pacificDayTag(): string {
+  // en-CA gives YYYY-MM-DD.
+  return new Date().toLocaleDateString('en-CA', {
+    timeZone: 'America/Los_Angeles',
+  })
+}
+
+function freshUsage(): ApiUsage {
+  return { month: monthTag(), monthly: {}, day: pacificDayTag(), dailyRequests: {} }
+}
+
+export async function getApiUsage(): Promise<ApiUsage> {
+  const result = await chrome.storage.local.get(USAGE_KEY)
+  let usage: ApiUsage = { ...freshUsage(), ...(result[USAGE_KEY] ?? {}) }
+  // Roll over monthly / daily buckets when the period changes.
+  if (usage.month !== monthTag()) {
+    usage = { ...usage, month: monthTag(), monthly: {} }
+  }
+  if (usage.day !== pacificDayTag()) {
+    usage = { ...usage, day: pacificDayTag(), dailyRequests: {} }
+  }
+  return usage
+}
+
+export async function recordApiUsage(
+  provider: LlmProvider,
+  inputTokens: number,
+  outputTokens: number,
+): Promise<void> {
+  const usage = await getApiUsage() // handles rollover
+  const m = usage.monthly[provider] ?? {
+    requests: 0,
+    inputTokens: 0,
+    outputTokens: 0,
+  }
+  m.requests += 1
+  m.inputTokens += inputTokens
+  m.outputTokens += outputTokens
+  usage.monthly[provider] = m
+  usage.dailyRequests[provider] = (usage.dailyRequests[provider] ?? 0) + 1
+  await chrome.storage.local.set({ [USAGE_KEY]: usage })
+}
+
+export async function resetApiUsage(): Promise<void> {
+  await chrome.storage.local.set({ [USAGE_KEY]: freshUsage() })
 }
 
 /** Drop every cached analysis (settings, stats, and corrections survive). */

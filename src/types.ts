@@ -57,6 +57,27 @@ export interface Stats {
   allTimeWebAdsBlocked: number
 }
 
+/** Cloud LLM usage tracking (built-in on-device AI is free/untracked). */
+export interface ProviderUsage {
+  requests: number
+  inputTokens: number
+  outputTokens: number
+}
+
+export interface ApiUsage {
+  /** Local month tag "YYYY-MM" the monthly totals belong to. */
+  month: string
+  monthly: Partial<Record<LlmProvider, ProviderUsage>>
+  /** Pacific date tag "YYYY-MM-DD" the daily counts belong to (providers reset ~midnight PT). */
+  day: string
+  dailyRequests: Partial<Record<LlmProvider, number>>
+}
+
+/** Approximate free-tier daily request cap, for the usage estimate. */
+export const FREE_TIER_DAILY_LIMIT: Partial<Record<LlmProvider, number>> = {
+  gemini: 1500,
+}
+
 export const DEFAULT_STATS: Stats = {
   allTimeAdSkips: 0,
   allTimeSponsorSkips: 0,
