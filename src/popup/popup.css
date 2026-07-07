@@ -56,19 +56,11 @@ header {
 }
 
 .brand-icon {
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
   border-radius: 6px;
-  background: var(--red);
-  display: grid;
-  place-items: center;
   flex-shrink: 0;
-}
-
-.brand-icon svg {
-  width: 15px;
-  height: 15px;
-  fill: #fff;
+  object-fit: cover;
 }
 
 h1 {

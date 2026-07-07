@@ -9,6 +9,12 @@ export default defineManifest({
   version: '0.1.0',
   description:
     'Automatically skip advertisements and sponsor segments on YouTube.',
+  icons: {
+    16: 'src/icons/icon-16.png',
+    32: 'src/icons/icon-32.png',
+    48: 'src/icons/icon-48.png',
+    128: 'src/icons/icon-128.png',
+  },
   permissions: ['storage', 'activeTab'],
   host_permissions: [
     '*://*.youtube.com/*',
@@ -34,6 +40,10 @@ export default defineManifest({
   action: {
     default_popup: 'src/popup/index.html',
     default_title: 'Ad Sensei',
+    default_icon: {
+      16: 'src/icons/icon-16.png',
+      32: 'src/icons/icon-32.png',
+    },
   },
   options_ui: {
     page: 'src/options/index.html',
