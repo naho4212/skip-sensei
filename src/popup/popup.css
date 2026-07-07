@@ -1,7 +1,7 @@
 /* YouTube-style theme */
 :root {
   color-scheme: light dark;
-  --red: #f03;
+  --accent: #7c3aed;
   --bg: #fff;
   --text: #0f0f0f;
   --text-2: #606060;
@@ -58,9 +58,8 @@ header {
 .brand-icon {
   width: 28px;
   height: 28px;
-  border-radius: 6px;
   flex-shrink: 0;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 h1 {
@@ -182,7 +181,7 @@ body.disabled main {
   background: var(--divider);
 }
 
-/* Analysis progress (YouTube-style thin red bar) */
+/* Analysis progress (thin accent bar) */
 .progress {
   height: 3px;
   margin: 2px 16px 8px;
@@ -195,7 +194,7 @@ body.disabled main {
   height: 100%;
   width: 0%;
   border-radius: 2px;
-  background: var(--red);
+  background: var(--accent);
   transition: width 0.4s ease;
 }
 
@@ -298,12 +297,12 @@ footer {
 }
 
 .switch input:checked + .slider {
-  background: color-mix(in srgb, var(--red) 50%, transparent);
+  background: color-mix(in srgb, var(--accent) 50%, transparent);
 }
 
 .switch input:checked + .slider::before {
   transform: translateX(18px);
-  background: var(--red);
+  background: var(--accent);
 }
 
 .switch input:focus-visible + .slider::before {
