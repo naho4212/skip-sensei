@@ -48,6 +48,24 @@ const TYPE_LABELS: Record<string, string> = {
   'ad-read': 'ad read',
 }
 
+function renderProgress(status: PageStatus | null) {
+  const wrap = $('analysis-progress')
+  const bar = $('analysis-bar')
+  if (!status || status.sponsorStatus !== 'analyzing') {
+    wrap.hidden = true
+    return
+  }
+  wrap.hidden = false
+  if (status.progressTotal && status.progressTotal > 0) {
+    bar.classList.remove('indeterminate')
+    bar.style.width = `${Math.max(6, (100 * (status.progressDone ?? 0)) / status.progressTotal)}%`
+  } else {
+    // No chunk info yet (transcript still downloading, or single fast call).
+    bar.classList.add('indeterminate')
+    bar.style.width = '35%'
+  }
+}
+
 function renderSegments(status: PageStatus) {
   segmentListEl.replaceChildren(
     ...status.segments.map((segment) => {
@@ -79,8 +97,12 @@ function sponsorStatusText(status: PageStatus): string {
       return status.segmentCount > 0
         ? `Transcript analyzed — ${status.segmentCount} sponsor ${plural(status.segmentCount)} found.`
         : 'Transcript analyzed — no sponsor segments found.'
-    case 'analyzing':
-      return `Analyzing transcript${status.sponsorReason ? ` (${status.sponsorReason})` : ''}…`
+    case 'analyzing': {
+      const elapsed = status.analyzingSince
+        ? ` · ${formatTime((Date.now() - status.analyzingSince) / 1000)}`
+        : ''
+      return `Analyzing transcript${status.sponsorReason ? ` (${status.sponsorReason})` : ''}…${elapsed}`
+    }
     case 'no-transcript':
       return 'No transcript available — sponsor skipping off for this video.'
     case 'unavailable':
@@ -105,17 +127,20 @@ async function renderVideoStatus() {
     if (!status.isWatchPage) {
       videoStatusEl.textContent = 'Not watching a video.'
       segmentListEl.replaceChildren()
+      renderProgress(null)
       return
     }
     const adText = status.adEngineActive
       ? 'Watching for ads.'
       : 'Ad skipping is off.'
     videoStatusEl.textContent = `${adText} ${sponsorStatusText(status)}`
+    renderProgress(status)
     renderSegments(status)
   } catch {
     videoStatusEl.textContent = 'Reload the YouTube tab to activate.'
     reloadTabEl.hidden = false
     segmentListEl.replaceChildren()
+    renderProgress(null)
   }
 }
 
@@ -151,8 +176,9 @@ async function main() {
   })
 
   void renderVideoStatus()
-  // Analysis finishes async while the popup is open; keep the status fresh.
-  setInterval(renderVideoStatus, 1500)
+  // Analysis finishes async while the popup is open; 1s keeps the elapsed
+  // timer ticking smoothly.
+  setInterval(renderVideoStatus, 1000)
 }
 
 void main()

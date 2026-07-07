@@ -147,4 +147,9 @@ export interface PageStatus {
   segmentCount: number
   /** Segments that will actually be skipped (above threshold, not dismissed). */
   segments: SponsorSegment[]
+  /** Epoch ms when analysis began — popup renders an elapsed timer from it. */
+  analyzingSince?: number
+  /** Chunk progress while analyzing (absent until the first chunk starts). */
+  progressDone?: number
+  progressTotal?: number
 }

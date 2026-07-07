@@ -37,6 +37,9 @@ const describeSegments = (segments: SponsorSegment[]) =>
 export class SponsorEngine {
   status: SponsorEngineStatus = 'analyzing'
   reason: string | undefined
+  analyzingSince = Date.now()
+  progressDone: number | undefined
+  progressTotal: number | undefined
   private segments: SponsorSegment[] = []
   private chapterSegments: SponsorSegment[] = []
   private stopped = false
@@ -69,6 +72,8 @@ export class SponsorEngine {
   /** Chunk progress from the service worker, surfaced in the popup status. */
   noteProgress(videoId: string, done: number, total: number) {
     if (videoId !== this.videoId || this.status !== 'analyzing') return
+    this.progressDone = done
+    this.progressTotal = total
     if (total > 1 && done < total) {
       this.reason = `chunk ${done + 1} of ${total}`
     }

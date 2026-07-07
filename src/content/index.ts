@@ -80,6 +80,9 @@ function getPageStatus(): PageStatus {
     sponsorReason: sponsorEngine?.reason,
     segmentCount: sponsorEngine?.segmentCount ?? 0,
     segments: sponsorEngine?.activeSegments ?? [],
+    analyzingSince: sponsorEngine?.analyzingSince,
+    progressDone: sponsorEngine?.progressDone,
+    progressTotal: sponsorEngine?.progressTotal,
   }
 }
 
