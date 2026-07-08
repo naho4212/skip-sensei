@@ -35,6 +35,13 @@ export interface Settings {
   showSkipToast: boolean
   /** Let the AI auto-repair YouTube selectors when a DOM change breaks them. */
   aiEnhancements: boolean
+  /**
+   * Aggressive YouTube ad blocking: strip ad slots from player responses in
+   * the page world (uBO-style json-prune) so most ads never start. Most
+   * likely feature to be detected by YouTube — off by default, and the ad
+   * engine auto-disables it after repeated enforcement walls.
+   */
+  aggressivePruning: boolean
   /** Emit [skipSensei] diagnostics to the console. Off by default. */
   debugLogging: boolean
   /** Anonymous sanitized error reports (no usage tracking — CWS stats cover that). On by default, disclosed in options. */
@@ -61,6 +68,7 @@ export const DEFAULT_SETTINGS: Settings = {
   confidenceThreshold: 0.7,
   showSkipToast: true,
   aiEnhancements: true,
+  aggressivePruning: false,
   debugLogging: false,
   telemetryEnabled: true,
   llmProvider: 'builtin',
@@ -112,6 +120,7 @@ export type AdSkipMethod =
   | 'skip-button'
   | 'fast-forward'
   | 'stuck-recovery'
+  | 'pruned'
   | 'overlay-removed'
   | 'pause-overlay-dismissed'
 

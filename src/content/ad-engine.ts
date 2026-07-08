@@ -16,7 +16,9 @@ import {
   addHealedSelector,
   getHealedSelectors,
   getSettings,
+  recordActivity,
   setHealedSelectors,
+  updateSettings,
 } from '../storage'
 import type { AdSkipMethod } from '../types'
 
@@ -78,6 +80,13 @@ const CLICK_RETRY_MS = 500
 /** Ad playback frozen this long → try to unwedge the player. */
 const STUCK_AFTER_MS = 3000
 const MAX_STUCK_RECOVERIES = 3
+
+/**
+ * Circuit breaker for aggressive pruning: enforcement walls this many times
+ * in one page session → YouTube has likely detected the pruning. Turn it
+ * off (reactive skipping continues) rather than escalate.
+ */
+const WALLS_BEFORE_BREAKER = 2
 
 /**
  * Cloak: opaque cover over the player while an ad is being neutralized, so
@@ -147,6 +156,9 @@ export class AdEngine {
   private ffLastAdvanceAt = 0
   private stuckRecoveries = 0
   private cloak: HTMLElement | null = null
+  /** Enforcement walls dismissed this session (aggressive-mode circuit breaker). */
+  private wallsSeen = 0
+  private breakerTripped = false
   /** AI-healed skip-button selectors (kept apart from the trusted hardcoded
    * list: healed matches must additionally pass looksLikeSkipControl). */
   private healedSkipSelectors: string[] = []
@@ -556,6 +568,9 @@ export class AdEngine {
       return
     }
 
+    this.wallsSeen++
+    void this.maybeTripAggressiveBreaker()
+
     document.querySelectorAll(POPUP_DIALOG).forEach((dialog) => {
       if (dialog.querySelector(ENFORCEMENT_MESSAGE)) dialog.remove()
     })
@@ -568,6 +583,29 @@ export class AdEngine {
     document.body.style.overflow = ''
     const video = document.querySelector<HTMLVideoElement>(VIDEO)
     if (video && video.paused) void video.play().catch(() => {})
+  }
+
+  /**
+   * Aggressive-pruning circuit breaker: repeated enforcement walls mean
+   * YouTube has likely detected the response pruning. Auto-disable it —
+   * reactive skipping (this engine) keeps working — and say so in the
+   * activity log so the user knows why ads are visible-then-skipped again.
+   */
+  private async maybeTripAggressiveBreaker() {
+    if (this.breakerTripped || this.wallsSeen < WALLS_BEFORE_BREAKER) return
+    this.breakerTripped = true
+    try {
+      if (!(await getSettings()).aggressivePruning) return
+      await updateSettings({ aggressivePruning: false })
+      await recordActivity(
+        'Aggressive ad blocking',
+        `auto-disabled after ${this.wallsSeen} YouTube ad-blocker warnings (reactive skipping still on)`,
+        'youtube.com',
+      )
+      log('aggressive pruning auto-disabled by circuit breaker')
+    } catch {
+      // storage failure — leave the setting as-is
+    }
   }
 
   /**

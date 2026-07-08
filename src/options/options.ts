@@ -393,6 +393,7 @@ async function main() {
   })
 
   const extraLists: [string, keyof Settings][] = [
+    ['aggressive-pruning', 'aggressivePruning'],
     ['block-trackers', 'blockTrackers'],
     ['block-cookie-notices', 'blockCookieNotices'],
     ['block-social', 'blockSocial'],

@@ -21,6 +21,8 @@ export default defineManifest({
     'declarativeNetRequest',
     // Lets the popup report how many ads were blocked on the current page.
     'declarativeNetRequestFeedback',
+    // Runtime (un)registration of the MAIN-world aggressive-mode pruner.
+    'scripting',
   ],
   host_permissions: [
     '*://*.youtube.com/*',
@@ -47,6 +49,16 @@ export default defineManifest({
       matches: ['*://*.youtube.com/*'],
       js: ['src/content/index.ts'],
       run_at: 'document_idle',
+    },
+    {
+      // Aggressive-mode controller (isolated world): keeps the localStorage
+      // flag in sync with the setting and relays pruning reports to the
+      // activity log. The actual MAIN-world pruner (public/prune-main.js) is
+      // registered/unregistered at runtime by the service worker via
+      // chrome.scripting, so it only runs when the setting is on.
+      matches: ['*://*.youtube.com/*'],
+      js: ['src/content/prune-loader.ts'],
+      run_at: 'document_start',
     },
     {
       // Cosmetic filtering for "Block all ads": hide ad containers on every

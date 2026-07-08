@@ -42,6 +42,7 @@ const SETTING_LABELS: Partial<Record<keyof Settings | string, string>> = {
   confidenceThreshold: 'Confidence threshold',
   showSkipToast: 'Skip toast',
   aiEnhancements: 'AI enhancements',
+  aggressivePruning: 'Aggressive YouTube ad blocking',
   debugLogging: 'Debug logging',
   telemetryEnabled: 'Anonymous error reports',
   llmProvider: 'AI provider',

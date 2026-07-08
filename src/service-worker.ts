@@ -9,6 +9,7 @@ import {
   reviewPopup,
 } from './llm-client'
 import { getBlockerState, initNetBlocker } from './net-blocker'
+import { initPruneRegistration } from './prune-register'
 import { initErrorReporting, reportError } from './error-reporting'
 import {
   addGapfillSelectors,
@@ -349,6 +350,7 @@ const AD_SKIP_DESCRIPTIONS: Record<string, string> = {
   'skip-button': 'clicked the Skip button on an ad',
   'fast-forward': 'fast-forwarded an unskippable ad',
   'stuck-recovery': 'recovered a stuck ad player',
+  pruned: 'blocked ads before they could load (aggressive)',
   'overlay-removed': 'removed an overlay ad',
   'pause-overlay-dismissed': 'dismissed a pause-screen ad',
 }
@@ -517,6 +519,10 @@ initNetBlocker(
   (n) => void recordWebBlocks(n),
   (tabId) => bumpTabBlocked(tabId),
 )
+
+// Aggressive-mode YouTube pruner: (un)register the MAIN-world content script
+// to match the aggressivePruning setting.
+initPruneRegistration()
 
 // Sanitized crash reporting for anything nobody caught (usage analytics come
 // from Chrome Web Store stats, not from the extension).
