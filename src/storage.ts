@@ -14,6 +14,7 @@ const USAGE_KEY = 'skipSensei.apiUsage'
 const CACHE_PREFIX = 'skipSensei.cache.'
 const CACHE_INDEX_KEY = 'skipSensei.cacheIndex'
 const CORRECTIONS_KEY = 'skipSensei.corrections'
+const SETTINGS_LOG_KEY = 'skipSensei.settingsLog'
 
 /** Most recent videoIds kept in the analysis cache. */
 const CACHE_MAX_ENTRIES = 200
@@ -27,9 +28,88 @@ export async function getSettings(): Promise<Settings> {
 export async function updateSettings(
   patch: Partial<Settings>,
 ): Promise<Settings> {
-  const next = { ...(await getSettings()), ...patch }
+  const current = await getSettings()
+  const next = { ...current, ...patch }
   await chrome.storage.local.set({ [SETTINGS_KEY]: next })
+  void appendSettingsLog(diffSettings(current, patch))
   return next
+}
+
+// ---------------------------------------------------------------------------
+// Settings change history — every option toggle/edit, newest last. API keys
+// are never stored in the log (redacted to set/cleared).
+// ---------------------------------------------------------------------------
+
+export interface SettingsLogEntry {
+  at: number
+  /** Settings key, or dotted sub-key like "apiKeys.gemini". */
+  key: string
+  from: string
+  to: string
+}
+
+const SETTINGS_LOG_MAX = 500
+
+/** Render a settings value for the log (display-safe, short). */
+function logValue(value: unknown): string {
+  if (value === undefined || value === null || value === '') return '(default)'
+  if (typeof value === 'boolean') return value ? 'on' : 'off'
+  if (Array.isArray(value)) return value.length === 0 ? '(none)' : value.join(', ')
+  return String(value)
+}
+
+function diffSettings(
+  current: Settings,
+  patch: Partial<Settings>,
+): SettingsLogEntry[] {
+  const at = Date.now()
+  const entries: SettingsLogEntry[] = []
+  for (const key of Object.keys(patch) as (keyof Settings)[]) {
+    if (key === 'apiKeys') {
+      // Redact: record only that a key was set or cleared, never the value.
+      const before = current.apiKeys
+      const after = patch.apiKeys ?? {}
+      for (const provider of new Set([
+        ...Object.keys(before),
+        ...Object.keys(after),
+      ]) as Set<keyof typeof after>) {
+        const had = !!before[provider]?.trim()
+        const has = !!after[provider]?.trim()
+        if (had !== has) {
+          entries.push({
+            at,
+            key: `apiKeys.${provider}`,
+            from: had ? 'key set' : 'no key',
+            to: has ? 'key set' : 'no key',
+          })
+        }
+      }
+      continue
+    }
+    const from = logValue(current[key])
+    const to = logValue(patch[key])
+    if (from !== to) entries.push({ at, key, from, to })
+  }
+  return entries
+}
+
+async function appendSettingsLog(entries: SettingsLogEntry[]) {
+  if (entries.length === 0) return
+  const result = await chrome.storage.local.get(SETTINGS_LOG_KEY)
+  const log: SettingsLogEntry[] = result[SETTINGS_LOG_KEY] ?? []
+  log.push(...entries)
+  await chrome.storage.local.set({
+    [SETTINGS_LOG_KEY]: log.slice(-SETTINGS_LOG_MAX),
+  })
+}
+
+export async function getSettingsLog(): Promise<SettingsLogEntry[]> {
+  const result = await chrome.storage.local.get(SETTINGS_LOG_KEY)
+  return result[SETTINGS_LOG_KEY] ?? []
+}
+
+export async function clearSettingsLog(): Promise<void> {
+  await chrome.storage.local.remove(SETTINGS_LOG_KEY)
 }
 
 /** Add/remove a hostname from the "Block all ads" allowlist. Returns updated settings. */
@@ -214,6 +294,60 @@ export async function recordApiUsage(
 
 export async function resetApiUsage(): Promise<void> {
   await chrome.storage.local.set({ [USAGE_KEY]: freshUsage() })
+}
+
+export interface CacheEntryStat {
+  videoId: string
+  status: string
+  segments: number
+  provider?: string
+  analyzedAt: number
+  bytes: number
+}
+
+export interface CacheStats {
+  entries: CacheEntryStat[]
+  /** Bytes used by the analysis cache (entries + index). */
+  cacheBytes: number
+  /** Bytes used by ALL of this extension's chrome.storage.local data. */
+  totalBytes: number
+}
+
+/** Approximate stored size of one storage entry (Chrome counts key + JSON value). */
+function entryBytes(key: string, value: unknown): number {
+  return key.length + (JSON.stringify(value)?.length ?? 0)
+}
+
+/** Per-video cache sizes + totals, for the log page / options cache section. */
+export async function getCacheStats(): Promise<CacheStats> {
+  const all = await chrome.storage.local.get(null)
+  let cacheBytes = 0
+  const entries: CacheEntryStat[] = []
+  for (const [key, value] of Object.entries(all)) {
+    if (key === CACHE_INDEX_KEY) {
+      cacheBytes += entryBytes(key, value)
+      continue
+    }
+    if (!key.startsWith(CACHE_PREFIX)) continue
+    const bytes = entryBytes(key, value)
+    cacheBytes += bytes
+    const analysis = value as VideoAnalysis
+    entries.push({
+      videoId: analysis.videoId ?? key.slice(CACHE_PREFIX.length),
+      status: analysis.status ?? 'unknown',
+      segments: analysis.segments?.length ?? 0,
+      provider: analysis.provider,
+      analyzedAt: analysis.analyzedAt ?? 0,
+      bytes,
+    })
+  }
+  entries.sort((a, b) => b.analyzedAt - a.analyzedAt)
+  const totalBytes = await chrome.storage.local
+    .getBytesInUse(null)
+    .catch(() =>
+      Object.entries(all).reduce((sum, [k, v]) => sum + entryBytes(k, v), 0),
+    )
+  return { entries, cacheBytes, totalBytes }
 }
 
 /** Drop every cached analysis (settings, stats, and corrections survive). */

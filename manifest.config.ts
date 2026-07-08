@@ -64,10 +64,11 @@ export default defineManifest({
     page: 'src/options/index.html',
     open_in_tab: true,
   },
-  // First-run welcome page (opened by the service worker on install).
+  // First-run welcome page (opened by the service worker on install) and the
+  // settings-history / cache log page (opened from the options page).
   web_accessible_resources: [
     {
-      resources: ['src/onboarding/index.html'],
+      resources: ['src/onboarding/index.html', 'src/log/index.html'],
       matches: ['<all_urls>'],
     },
   ],

@@ -338,6 +338,31 @@ button:disabled {
   padding: 8px 0;
 }
 
+/* Analysis cache / logs */
+.button-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 10px 0 4px;
+}
+
+.dim {
+  color: var(--text-3);
+  font-weight: 400;
+}
+
+.log-link {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 14px;
+  color: var(--link);
+  text-decoration: none;
+}
+
+.log-link:hover {
+  text-decoration: underline;
+}
+
 /* Footer */
 .footer {
   margin-top: 24px;

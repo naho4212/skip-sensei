@@ -356,6 +356,58 @@ export async function findConsentReject(
 /** Thrown when a provider returns a rate-limit / quota-exhausted status. */
 export class RateLimitError extends LlmError {}
 
+// ---------------------------------------------------------------------------
+// Client-side request pacing — Gemini's free tier allows only ~5 requests per
+// minute, and AI-enhancement helper calls (popup review, gap-fill, consent)
+// can easily burst past that. Space our own calls so we rarely see a 429 at
+// all, instead of hitting one and losing the provider to cooldown.
+// ---------------------------------------------------------------------------
+
+/** Self-imposed requests-per-minute cap (rolling 60s window), per provider. */
+const RPM_SELF_CAP: Partial<Record<LlmProvider, number>> = {
+  gemini: 4, // free tier is 5 RPM; stay one under for other tabs/devices
+}
+
+const recentCallTimes = new Map<LlmProvider, number[]>()
+
+function abortableSleep(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal.aborted) return reject(new LlmError('Aborted'))
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort)
+      resolve()
+    }, ms)
+    const onAbort = () => {
+      clearTimeout(timer)
+      reject(new LlmError('Aborted'))
+    }
+    signal.addEventListener('abort', onAbort, { once: true })
+  })
+}
+
+/** Wait (abortably) until the provider has a free slot in its RPM window. */
+async function paceRequests(
+  provider: LlmProvider,
+  signal: AbortSignal,
+): Promise<void> {
+  const cap = RPM_SELF_CAP[provider]
+  if (!cap) return
+  for (;;) {
+    const now = Date.now()
+    const times = (recentCallTimes.get(provider) ?? []).filter(
+      (t) => now - t < 60_000,
+    )
+    if (times.length < cap) {
+      times.push(now)
+      recentCallTimes.set(provider, times)
+      return
+    }
+    const waitMs = 60_000 - (now - times[0]) + 500
+    warn(`${provider} pacing: waiting ${Math.round(waitMs / 1000)}s to stay under ${cap}/min`)
+    await abortableSleep(waitMs, signal)
+  }
+}
+
 /** Providers in cooldown after hitting a limit → epoch ms until we try them again. */
 const cooldownUntil = new Map<LlmProvider, number>()
 
@@ -460,6 +512,8 @@ async function completeWithRetry(
   let lastError: unknown
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
+      // Pace BEFORE starting the timeout clock — a rate-limit wait isn't a hang.
+      await paceRequests(provider, signal)
       const raw = await withTimeout(
         complete(provider, SYSTEM_PROMPT, prompt, settings, signal),
         CHUNK_TIMEOUT_MS[provider],
@@ -492,6 +546,7 @@ async function completeSmart(
 ): Promise<string> {
   const provider = resolveProvider(settings)
   try {
+    await paceRequests(provider, signal)
     return await withTimeout(
       complete(provider, system, prompt, settings, signal),
       CHUNK_TIMEOUT_MS[provider],

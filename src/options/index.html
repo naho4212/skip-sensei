@@ -20,7 +20,8 @@
         <h2>Sponsor detection AI</h2>
         <p class="hint">
           Transcripts of the videos you watch are sent to the selected AI for
-          analysis. Nothing else is collected or stored outside your browser.
+          analysis. Beyond that, only the anonymous error reports described
+          under Privacy below ever leave your browser.
         </p>
         <label class="field">
           <span>Provider</span>
@@ -43,7 +44,13 @@
           </label>
           <label class="field">
             <span>Model <em>(optional override)</em></span>
-            <input type="text" id="model" placeholder="provider default" />
+            <select id="model-select"></select>
+            <input
+              type="text"
+              id="model"
+              placeholder="custom model id"
+              hidden
+            />
           </label>
           <p class="hint">
             Your key is stored locally in this browser and sent only to the
@@ -172,13 +179,55 @@
           Sponsor analysis is cached per video so a re-watch never re-runs the
           AI. Clear it to force fresh analysis (e.g. after changing provider).
         </p>
-        <button id="clear-cache" type="button">Clear analysis cache</button>
+        <p class="hint" id="cache-stats">Measuring cache…</p>
+        <div class="button-row">
+          <button id="clear-cache" type="button">Clear analysis cache</button>
+          <button id="cache-refresh" type="button" title="Recalculate sizes">
+            ↻ Refresh
+          </button>
+        </div>
         <span class="hint" id="clear-cache-result"></span>
+      </section>
+
+      <section>
+        <h2>Privacy</h2>
+        <label class="field checkbox">
+          <input type="checkbox" id="telemetry" />
+          <span
+            >Share anonymous error reports<span
+              class="info"
+              tabindex="0"
+              data-tip="Only when something breaks: sends the error type, a scrubbed message and stack trace, extension version, provider name, and Chrome version. Never URLs, video titles, API keys, device IDs, or anything personal."
+              >ⓘ</span
+            ></span
+          >
+        </label>
+        <p class="hint">
+          Error reports are the only data Ad Sensei ever sends home.
+          Transcripts go only to the AI provider you chose above, and
+          everything else stays in this browser.
+        </p>
+      </section>
+
+      <section>
+        <h2>History &amp; logs</h2>
+        <p class="hint">
+          Every settings change is recorded locally, and the log page also
+          lists each cached video with its size on disk.
+        </p>
+        <a id="open-log" class="log-link" href="#" target="_blank"
+          >Open settings history &amp; cache log →</a
+        >
       </section>
 
       <p class="saved" id="saved-note" hidden>Saved ✓</p>
 
       <footer class="footer">
+        Questions, bugs, or ideas?
+        <a id="contact-link" href="mailto:info@singlefinmedia.com"
+          >info@singlefinmedia.com</a
+        >
+        <br />
         Enjoying Ad Sensei?
         <a
           href="https://buymeacoffee.com/singlefin"

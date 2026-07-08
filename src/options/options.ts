@@ -1,6 +1,7 @@
 import {
   clearAnalysisCache,
   getApiUsage,
+  getCacheStats,
   getSettings,
   resetApiUsage,
   setSiteAllowlisted,
@@ -20,6 +21,7 @@ const providerEl = $<HTMLSelectElement>('provider')
 const providerInfoEl = $('provider-info')
 const cloudFieldsEl = $('cloud-fields')
 const apiKeyEl = $<HTMLInputElement>('api-key')
+const modelSelectEl = $<HTMLSelectElement>('model-select')
 const modelEl = $<HTMLInputElement>('model')
 const thresholdEl = $<HTMLInputElement>('threshold')
 const thresholdValueEl = $<HTMLOutputElement>('threshold-value')
@@ -38,6 +40,77 @@ const KEY_LINKS: Record<Exclude<LlmProvider, 'builtin'>, string> = {
   openai: 'https://platform.openai.com/api-keys',
 }
 
+/** Sentinel select value that reveals the free-text model field. */
+const CUSTOM_MODEL = '__custom__'
+
+/** Selectable models per provider ('' = provider default). Testing aid — the
+ * "Custom…" choice still accepts any model id. */
+const MODEL_OPTIONS: Record<
+  Exclude<LlmProvider, 'builtin'>,
+  { value: string; label: string }[]
+> = {
+  gemini: [
+    { value: '', label: 'Provider default — gemini-2.5-flash' },
+    {
+      value: 'gemini-2.5-flash-lite',
+      label: 'gemini-2.5-flash-lite · fastest, biggest free quota',
+    },
+    { value: 'gemini-2.5-flash', label: 'gemini-2.5-flash' },
+    {
+      value: 'gemini-2.5-pro',
+      label: 'gemini-2.5-pro · smartest, tiny free quota',
+    },
+    {
+      value: 'gemini-flash-latest',
+      label: 'gemini-flash-latest · auto-updates',
+    },
+    {
+      value: 'gemini-flash-lite-latest',
+      label: 'gemini-flash-lite-latest · auto-updates',
+    },
+  ],
+  anthropic: [
+    { value: '', label: 'Provider default — claude-haiku-4-5' },
+    { value: 'claude-haiku-4-5', label: 'claude-haiku-4-5 · fast, cheap' },
+    { value: 'claude-sonnet-4-5', label: 'claude-sonnet-4-5' },
+    { value: 'claude-sonnet-5', label: 'claude-sonnet-5' },
+    { value: 'claude-opus-4-8', label: 'claude-opus-4-8 · most capable' },
+  ],
+  openai: [
+    { value: '', label: 'Provider default — gpt-5-mini' },
+    { value: 'gpt-5-nano', label: 'gpt-5-nano · fastest, cheapest' },
+    { value: 'gpt-5-mini', label: 'gpt-5-mini' },
+    { value: 'gpt-5', label: 'gpt-5' },
+    { value: 'gpt-5.1', label: 'gpt-5.1' },
+  ],
+}
+
+/** Rebuild the model dropdown for the active provider and reflect settings. */
+function renderModelPicker(provider: LlmProvider, model: string) {
+  if (provider === 'builtin') return
+  const options = [
+    ...MODEL_OPTIONS[provider],
+    { value: CUSTOM_MODEL, label: 'Custom…' },
+  ]
+  modelSelectEl.replaceChildren(
+    ...options.map(({ value, label }) => {
+      const option = document.createElement('option')
+      option.value = value
+      option.textContent = label
+      return option
+    }),
+  )
+  // Don't yank the custom field away mid-typing (e.g. "gpt-5" on the way to
+  // "gpt-5.2" matches a listed model when the debounced save fires).
+  const editing = document.activeElement === modelEl
+  const isListed =
+    !editing &&
+    (model === '' || MODEL_OPTIONS[provider].some((o) => o.value === model))
+  modelSelectEl.value = isListed ? model : CUSTOM_MODEL
+  modelEl.hidden = isListed
+  modelEl.value = isListed ? '' : model
+}
+
 function flashSaved() {
   savedNoteEl.hidden = false
   if (savedTimer !== null) clearTimeout(savedTimer)
@@ -48,7 +121,7 @@ const PROVIDER_INFO: Record<LlmProvider, string> = {
   builtin:
     'Analysis time: runs on your device — roughly 30–60 seconds per 20 minutes of video, so an hour-long podcast can take ~5 minutes on first watch. Each video is analyzed once, then cached; re-watches are instant. Free and fully private.',
   gemini:
-    'Recommended free option. Fast and accurate, and its huge context analyzes even a 3-hour video in one pass — no chunking. Free tier needs no credit card (1,500 videos/day). Get a free key at aistudio.google.com/apikey. Each video is analyzed once, then cached.',
+    'Recommended free option. Fast and accurate, and its huge context analyzes even a 3-hour video in one pass — no chunking. Free tier needs no credit card (~250 videos/day, ~5 requests/min — Ad Sensei paces its calls and falls back to on-device AI if the limit is hit). Get a free key at aistudio.google.com/apikey. Each video is analyzed once, then cached.',
   anthropic:
     'Analysis time: a few seconds, regardless of video length. Uses your Anthropic API key (default model claude-haiku-4-5); typical cost is well under 1¢ per video. Each video is analyzed once, then cached.',
   openai:
@@ -60,7 +133,7 @@ function render(settings: Settings) {
   const provider = settings.llmProvider
   providerEl.value = provider
   providerInfoEl.textContent = PROVIDER_INFO[provider]
-  modelEl.value = settings.model
+  renderModelPicker(provider, settings.model)
   thresholdEl.value = String(settings.confidenceThreshold)
   thresholdValueEl.value = settings.confidenceThreshold.toFixed(2)
   showToastEl.checked = settings.showSkipToast
@@ -83,6 +156,21 @@ const fmt = (n: number) =>
     : n >= 1000
       ? `${(n / 1000).toFixed(1)}K`
       : String(n)
+
+const fmtBytes = (n: number) =>
+  n >= 1_048_576
+    ? `${(n / 1_048_576).toFixed(1)} MB`
+    : n >= 1024
+      ? `${(n / 1024).toFixed(1)} KB`
+      : `${n} B`
+
+async function renderCacheStats() {
+  const el = $('cache-stats')
+  const { entries, cacheBytes, totalBytes } = await getCacheStats()
+  el.innerHTML =
+    `<b>${entries.length}</b> ${entries.length === 1 ? 'video' : 'videos'} cached · ` +
+    `<b>${fmtBytes(cacheBytes)}</b> <span class="dim">(all extension storage: ${fmtBytes(totalBytes)})</span>`
+}
 
 async function renderUsage(provider: LlmProvider) {
   const box = $('usage-box')
@@ -196,9 +284,19 @@ async function main() {
       })
     }, 400),
   )
+  modelSelectEl.addEventListener('change', () => {
+    if (modelSelectEl.value === CUSTOM_MODEL) {
+      // Reveal the free-text field; nothing saved until an id is typed.
+      modelEl.hidden = false
+      modelEl.focus()
+      return
+    }
+    modelEl.hidden = true
+    void save({ model: modelSelectEl.value })
+  })
   modelEl.addEventListener(
     'input',
-    debounce(() => void save({ model: modelEl.value }), 400),
+    debounce(() => void save({ model: modelEl.value.trim() }), 400),
   )
   thresholdEl.addEventListener('input', () => {
     thresholdValueEl.value = Number(thresholdEl.value).toFixed(2)
@@ -220,6 +318,7 @@ async function main() {
     ['block-cookie-notices', 'blockCookieNotices'],
     ['block-social', 'blockSocial'],
     ['block-popups', 'blockPopups'],
+    ['telemetry', 'telemetryEnabled'],
   ]
   const loaded = await getSettings()
   for (const [elId, key] of extraLists) {
@@ -262,6 +361,20 @@ async function main() {
     if (e.key === 'Enter') void addSite()
   })
 
+  void renderCacheStats()
+  $<HTMLButtonElement>('cache-refresh').addEventListener('click', () =>
+    void renderCacheStats(),
+  )
+  $<HTMLAnchorElement>('open-log').href = chrome.runtime.getURL(
+    'src/log/index.html',
+  )
+
+  // Prefill the support email with version context (mailto = no backend, no
+  // spam surface; swap for an embedded form once an email API is wired up).
+  const { version } = chrome.runtime.getManifest()
+  $<HTMLAnchorElement>('contact-link').href =
+    `mailto:info@singlefinmedia.com?subject=${encodeURIComponent(`Ad Sensei v${version} — feedback`)}`
+
   const clearCacheEl = $<HTMLButtonElement>('clear-cache')
   const clearResultEl = $('clear-cache-result')
   clearCacheEl.addEventListener('click', async () => {
@@ -269,6 +382,7 @@ async function main() {
     const count = await clearAnalysisCache()
     clearResultEl.textContent = `Cleared ${count} cached ${count === 1 ? 'video' : 'videos'}.`
     clearCacheEl.disabled = false
+    void renderCacheStats()
   })
 }
 

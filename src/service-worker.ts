@@ -9,6 +9,7 @@ import {
   reviewPopup,
 } from './llm-client'
 import { getBlockerState, initNetBlocker } from './net-blocker'
+import { initErrorReporting, reportError } from './error-reporting'
 import {
   addGapfillSelectors,
   getCachedAnalysis,
@@ -214,6 +215,10 @@ async function runAnalysis(
     await setCachedAnalysis(analysis)
     return analysis
   } catch (error) {
+    // Rate limits are expected operating conditions, not defects.
+    if (!signal.aborted && !(error instanceof RateLimitError)) {
+      void reportError('analyze-video', error)
+    }
     // Errors (including aborts) are NOT cached — a re-watch retries.
     return {
       videoId,
@@ -436,3 +441,7 @@ initNetBlocker(
   (n) => void recordWebBlocks(n),
   (tabId) => bumpTabBlocked(tabId),
 )
+
+// Sanitized crash reporting for anything nobody caught (usage analytics come
+// from Chrome Web Store stats, not from the extension).
+initErrorReporting()

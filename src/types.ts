@@ -25,6 +25,8 @@ export interface Settings {
   aiEnhancements: boolean
   /** Emit [skipSensei] diagnostics to the console. Off by default. */
   debugLogging: boolean
+  /** Anonymous sanitized error reports (no usage tracking — CWS stats cover that). On by default, disclosed in options. */
+  telemetryEnabled: boolean
   llmProvider: LlmProvider
   /** Per-provider API keys, so switching providers never reuses the wrong key. */
   apiKeys: Partial<Record<Exclude<LlmProvider, 'builtin'>, string>>
@@ -46,6 +48,7 @@ export const DEFAULT_SETTINGS: Settings = {
   showSkipToast: true,
   aiEnhancements: true,
   debugLogging: false,
+  telemetryEnabled: true,
   llmProvider: 'builtin',
   apiKeys: {},
   model: '',
@@ -73,9 +76,10 @@ export interface ApiUsage {
   dailyRequests: Partial<Record<LlmProvider, number>>
 }
 
-/** Approximate free-tier daily request cap, for the usage estimate. */
+/** Approximate free-tier daily request cap, for the usage estimate.
+ * Gemini free tier (2.5 Flash) is ~250 requests/day and only ~5/minute. */
 export const FREE_TIER_DAILY_LIMIT: Partial<Record<LlmProvider, number>> = {
-  gemini: 1500,
+  gemini: 250,
 }
 
 export const DEFAULT_STATS: Stats = {
