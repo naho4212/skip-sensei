@@ -1,10 +1,12 @@
-// Ad Sensei error-report reader: newest-first JSON list of the reports that
-// /api/error persisted to Vercel Blob.
+// Ad Sensei report reader: newest-first JSON list of the records that
+// /api/error and /api/event persisted to Vercel Blob.
 //
-//   GET /api/errors?key=<ERROR_LOG_READ_KEY>[&limit=50]
+//   GET /api/errors?key=<ERROR_LOG_READ_KEY>[&limit=50][&type=errors|events]
 //
-// Gated by the ERROR_LOG_READ_KEY env var so scrubbed-but-internal error
-// details aren't world-readable. The key lives in the Vercel project env.
+// `type=errors` (default) reads crash reports; `type=events` reads
+// operational events (self-heals, gapfills, aggressive-mode breaker trips).
+// Gated by the ERROR_LOG_READ_KEY env var so these details aren't
+// world-readable. The key lives in the Vercel project env.
 
 const MAX_LIMIT = 200
 
@@ -19,12 +21,13 @@ module.exports = async (req, res) => {
     parseInt(String(req.query.limit ?? '50'), 10) || 50,
     MAX_LIMIT,
   )
+  const prefix = req.query.type === 'events' ? 'events/' : 'errors/'
 
   const { list } = await import('@vercel/blob')
   const blobs = []
   let cursor
   do {
-    const page = await list({ prefix: 'errors/', cursor, limit: 1000 })
+    const page = await list({ prefix, cursor, limit: 1000 })
     blobs.push(...page.blobs)
     cursor = page.cursor
   } while (cursor)

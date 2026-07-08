@@ -602,6 +602,13 @@ export class AdEngine {
         `auto-disabled after ${this.wallsSeen} YouTube ad-blocker warnings (reactive skipping still on)`,
         'youtube.com',
       )
+      // Detection signal: how often aggressive pruning gets caught in the
+      // wild tells us whether it's worth keeping / how to harden it.
+      void this.send({
+        type: 'skipSensei:event',
+        kind: 'aggressive_breaker',
+        fields: { walls: String(this.wallsSeen) },
+      })
       log('aggressive pruning auto-disabled by circuit breaker')
     } catch {
       // storage failure — leave the setting as-is

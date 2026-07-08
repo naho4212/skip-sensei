@@ -176,6 +176,12 @@ export interface VideoAnalysis {
 export type Message =
   | { type: 'skipSensei:adSkipped'; method: AdSkipMethod }
   | { type: 'skipSensei:sponsorSkipped'; videoId: string }
+  // Content-side operational telemetry → forwarded to reportEvent.
+  | {
+      type: 'skipSensei:event'
+      kind: string
+      fields?: Record<string, string>
+    }
   | { type: 'skipSensei:getSessionStats' }
   | { type: 'skipSensei:getAnalysis'; videoId: string } // → VideoAnalysis | null
   | {

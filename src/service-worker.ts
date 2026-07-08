@@ -10,7 +10,7 @@ import {
 } from './llm-client'
 import { getBlockerState, initNetBlocker } from './net-blocker'
 import { initPruneRegistration } from './prune-register'
-import { initErrorReporting, reportError } from './error-reporting'
+import { initErrorReporting, reportError, reportEvent } from './error-reporting'
 import {
   addGapfillSelectors,
   getCachedAnalysis,
@@ -267,6 +267,16 @@ async function findSelector(
         `self-healed a broken selector → ${selector}`,
         host,
       )
+      // High-value improvement signal: a self-heal means our hardcoded
+      // selectors went stale and the AI found a replacement. Reporting the
+      // selector (+ what it was for) lets us fold good ones into the
+      // shipped list. NOTE: this is the AI's *proposed* selector; the
+      // content script still validates it before use.
+      void reportEvent('self_heal', {
+        description: description.slice(0, 120),
+        selector,
+        host: host ?? '',
+      })
     }
     return selector
   } catch {
@@ -320,6 +330,12 @@ async function findAds(html: string, domain: string): Promise<string[]> {
         `found ${selectors.length} ad element(s) the filter lists missed`,
         domain,
       )
+      // Signals which sites the filter lists miss + what the AI matched, so
+      // recurring patterns can be promoted into shipped rules.
+      void reportEvent('gapfill', {
+        domain,
+        selectors: selectors.slice(0, 5).join(' , '),
+      })
     }
     return selectors
   } catch {
@@ -365,6 +381,12 @@ chrome.runtime.onMessage.addListener(
           AD_SKIP_DESCRIPTIONS[message.method] ?? 'neutralized an ad',
           senderHost(sender),
         )
+        return false
+      case 'skipSensei:event':
+        void reportEvent(message.kind, {
+          ...(message.fields ?? {}),
+          host: senderHost(sender) ?? '',
+        })
         return false
       case 'skipSensei:sponsorSkipped':
         void recordSkip('sponsor')
