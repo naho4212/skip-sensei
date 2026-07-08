@@ -120,6 +120,53 @@ body.disabled main {
   pointer-events: none;
 }
 
+/* "What's new" banner. Lives outside <main> so the master toggle's
+   disabled-dimming never touches it. */
+.update-banner {
+  position: relative;
+  margin: 10px 12px 4px;
+  padding: 10px 30px 10px 12px;
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent) 12%, var(--panel));
+}
+.update-title {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+.update-list {
+  margin: 0;
+  padding-left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.update-list li {
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--text-2);
+}
+.update-dismiss {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+.update-dismiss:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
 /* Menu-style rows */
 .row {
   position: relative;

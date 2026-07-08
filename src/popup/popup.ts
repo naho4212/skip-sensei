@@ -1,7 +1,10 @@
+import { changesSince } from '../changelog'
 import {
+  getLastSeenVersion,
   getSettings,
   getStats,
   onStatsChanged,
+  setLastSeenVersion,
   setSiteAllowlisted,
   updateSettings,
 } from '../storage'
@@ -253,7 +256,55 @@ function wireToggle(input: HTMLInputElement, key: keyof Settings) {
   })
 }
 
+/**
+ * "What's new" banner. Triggered purely by a version change — no dependency
+ * on onInstalled firing — so it works for Web Store auto-updates and manual
+ * ZIP reloads alike. First run adopts the current version silently (no
+ * changelog for the version that introduced changelogs).
+ */
+async function renderUpdateBanner() {
+  const current = chrome.runtime.getManifest().version
+  const lastSeen = await getLastSeenVersion()
+
+  if (lastSeen === undefined || lastSeen === current) {
+    if (lastSeen === undefined) await setLastSeenVersion(current)
+    return
+  }
+
+  const entries = changesSince(lastSeen)
+  if (entries.length === 0) {
+    // Updated, but nothing user-facing was logged — adopt silently.
+    await setLastSeenVersion(current)
+    return
+  }
+
+  $('update-title').textContent =
+    entries.length === 1
+      ? `What's new in ${entries[0].version}`
+      : "What's new"
+  $<HTMLUListElement>('update-list').replaceChildren(
+    ...entries
+      .flatMap((entry) => entry.items)
+      .map((item) => {
+        const li = document.createElement('li')
+        li.textContent = item
+        return li
+      }),
+  )
+  const banner = $('update-banner')
+  banner.hidden = false
+  $('update-dismiss').addEventListener(
+    'click',
+    () => {
+      banner.hidden = true
+      void setLastSeenVersion(current)
+    },
+    { once: true },
+  )
+}
+
 async function main() {
+  void renderUpdateBanner()
   renderSettings(await getSettings())
   renderStats(await getStats(), await fetchSessionStats())
   onStatsChanged((stats) => {

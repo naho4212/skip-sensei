@@ -1,0 +1,44 @@
+/**
+ * User-facing "what's new" entries, newest first. The popup shows every entry
+ * strictly newer than the version the user last acknowledged (see
+ * getLastSeenVersion), so on each release: bump the version in
+ * manifest.config.ts AND add an entry here with the user-visible changes.
+ *
+ * Keep items short and benefit-oriented — this is release notes for a viewer,
+ * not a commit log. Omit purely internal changes.
+ */
+export interface ChangelogEntry {
+  version: string
+  date: string
+  items: string[]
+}
+
+export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '0.1.0',
+    date: '2026-07-08',
+    items: [
+      'Reliably skips back-to-back "ad pods", not just the first ad',
+      'Smoother skips: the player is briefly covered while ads are removed',
+      'Experimental Aggressive mode: block most YouTube ads before they even start (Settings)',
+      'Recovers automatically if the player ever gets stuck on an ad',
+    ],
+  },
+]
+
+/** Compare dotted numeric versions. Returns -1 | 0 | 1 (a vs b). */
+export function compareVersions(a: string, b: string): number {
+  const pa = a.split('.').map((n) => parseInt(n, 10) || 0)
+  const pb = b.split('.').map((n) => parseInt(n, 10) || 0)
+  const len = Math.max(pa.length, pb.length)
+  for (let i = 0; i < len; i++) {
+    const diff = (pa[i] ?? 0) - (pb[i] ?? 0)
+    if (diff !== 0) return diff < 0 ? -1 : 1
+  }
+  return 0
+}
+
+/** Changelog entries strictly newer than `sinceVersion`, newest first. */
+export function changesSince(sinceVersion: string): ChangelogEntry[] {
+  return CHANGELOG.filter((e) => compareVersions(e.version, sinceVersion) > 0)
+}

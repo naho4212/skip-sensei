@@ -15,6 +15,7 @@ const CACHE_PREFIX = 'skipSensei.cache.'
 const CACHE_INDEX_KEY = 'skipSensei.cacheIndex'
 const CORRECTIONS_KEY = 'skipSensei.corrections'
 const SETTINGS_LOG_KEY = 'skipSensei.settingsLog'
+const LAST_SEEN_VERSION_KEY = 'skipSensei.lastSeenVersion'
 
 /** Most recent videoIds kept in the analysis cache. */
 const CACHE_MAX_ENTRIES = 200
@@ -110,6 +111,23 @@ export async function getSettingsLog(): Promise<SettingsLogEntry[]> {
 
 export async function clearSettingsLog(): Promise<void> {
   await chrome.storage.local.remove(SETTINGS_LOG_KEY)
+}
+
+// ---------------------------------------------------------------------------
+// "What's new" tracking — the last extension version the user acknowledged in
+// the popup. Undefined until first set; the popup adopts the current version
+// silently on first run so it never shows a changelog for the version that
+// introduced changelogs.
+// ---------------------------------------------------------------------------
+
+export async function getLastSeenVersion(): Promise<string | undefined> {
+  const result = await chrome.storage.local.get(LAST_SEEN_VERSION_KEY)
+  const value = result[LAST_SEEN_VERSION_KEY]
+  return typeof value === 'string' ? value : undefined
+}
+
+export async function setLastSeenVersion(version: string): Promise<void> {
+  await chrome.storage.local.set({ [LAST_SEEN_VERSION_KEY]: version })
 }
 
 // ---------------------------------------------------------------------------
