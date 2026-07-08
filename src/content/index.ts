@@ -9,6 +9,7 @@ import type {
 } from '../types'
 import { AdEngine } from './ad-engine'
 import { SponsorEngine } from './sponsor-engine'
+import { initYouTubeAnnoyances } from './youtube-annoyances'
 
 /**
  * Content-script entry. Runs on all youtube.com pages (YouTube is an SPA, so
@@ -112,6 +113,10 @@ async function main() {
 
   // YouTube fires this on every SPA navigation, including autoplay/next.
   document.addEventListener('yt-navigate-finish', onNavigate)
+
+  // YouTube annoyance removers (Shorts, end cards, autoplay, idle prompt) —
+  // each gated on its own setting; harmless when all are off.
+  initYouTubeAnnoyances()
 
   chrome.runtime.onMessage.addListener(
     (message: TabMessage, _sender, sendResponse) => {

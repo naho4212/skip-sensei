@@ -394,6 +394,9 @@ async function main() {
 
   const extraLists: [string, keyof Settings][] = [
     ['aggressive-pruning', 'aggressivePruning'],
+    ['yt-hide-shorts', 'ytHideShorts'],
+    ['yt-disable-endcards', 'ytDisableEndCards'],
+    ['yt-dismiss-stillwatching', 'ytDismissStillWatching'],
     ['block-trackers', 'blockTrackers'],
     ['block-cookie-notices', 'blockCookieNotices'],
     ['block-social', 'blockSocial'],
