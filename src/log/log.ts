@@ -1,6 +1,8 @@
 import {
+  clearActivityLog,
   clearAnalysisCache,
   clearSettingsLog,
+  getActivityLog,
   getCacheStats,
   getSettingsLog,
 } from '../storage'
@@ -54,6 +56,25 @@ function cell(text: string, className?: string): HTMLTableCellElement {
   td.textContent = text
   if (className) td.className = className
   return td
+}
+
+async function renderActivity() {
+  const entries = await getActivityLog()
+  const body = $<HTMLTableSectionElement>('activity-body')
+  $('activity-empty').hidden = entries.length > 0
+  $('activity-table').hidden = entries.length === 0
+  body.replaceChildren(
+    ...[...entries].reverse().map((entry) => {
+      const tr = document.createElement('tr')
+      tr.append(
+        cell(fmtWhen(entry.at), 'when'),
+        cell(entry.feature),
+        cell(entry.action),
+        cell(entry.site ?? '—', 'site'),
+      )
+      return tr
+    }),
+  )
 }
 
 async function renderSettingsLog() {
@@ -116,13 +137,17 @@ async function renderCache() {
 }
 
 async function renderAll() {
-  await Promise.all([renderSettingsLog(), renderCache()])
+  await Promise.all([renderActivity(), renderSettingsLog(), renderCache()])
 }
 
 function main() {
   $<HTMLButtonElement>('reload').addEventListener('click', () =>
     location.reload(),
   )
+  $<HTMLButtonElement>('clear-activity').addEventListener('click', async () => {
+    await clearActivityLog()
+    await renderActivity()
+  })
   $<HTMLButtonElement>('clear-log').addEventListener('click', async () => {
     await clearSettingsLog()
     await renderSettingsLog()

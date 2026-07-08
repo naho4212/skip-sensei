@@ -112,6 +112,47 @@ export async function clearSettingsLog(): Promise<void> {
   await chrome.storage.local.remove(SETTINGS_LOG_KEY)
 }
 
+// ---------------------------------------------------------------------------
+// Feature activity log — what the features actually DID (ad skipped, popup
+// hidden, cookie banner answered, selector healed…), newest last. Written by
+// the service worker only, so entries never race each other.
+// ---------------------------------------------------------------------------
+
+const ACTIVITY_LOG_KEY = 'skipSensei.activityLog'
+const ACTIVITY_LOG_MAX = 300
+
+export interface ActivityEntry {
+  at: number
+  /** Which feature acted (matches the option labels where possible). */
+  feature: string
+  /** What actually happened, human-readable. */
+  action: string
+  /** Hostname or video id it happened on. */
+  site?: string
+}
+
+export async function recordActivity(
+  feature: string,
+  action: string,
+  site?: string,
+): Promise<void> {
+  const result = await chrome.storage.local.get(ACTIVITY_LOG_KEY)
+  const entries: ActivityEntry[] = result[ACTIVITY_LOG_KEY] ?? []
+  entries.push({ at: Date.now(), feature, action, ...(site ? { site } : {}) })
+  await chrome.storage.local.set({
+    [ACTIVITY_LOG_KEY]: entries.slice(-ACTIVITY_LOG_MAX),
+  })
+}
+
+export async function getActivityLog(): Promise<ActivityEntry[]> {
+  const result = await chrome.storage.local.get(ACTIVITY_LOG_KEY)
+  return result[ACTIVITY_LOG_KEY] ?? []
+}
+
+export async function clearActivityLog(): Promise<void> {
+  await chrome.storage.local.remove(ACTIVITY_LOG_KEY)
+}
+
 /** Add/remove a hostname from the "Block all ads" allowlist. Returns updated settings. */
 export async function setSiteAllowlisted(
   hostname: string,

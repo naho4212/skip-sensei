@@ -30,6 +30,33 @@
 
       <section>
         <div class="section-head">
+          <h2>Feature activity</h2>
+          <button id="clear-activity" type="button">Clear activity</button>
+        </div>
+        <p class="hint">
+          What the features actually did — ads skipped, popups reviewed,
+          cookie banners answered, selectors self-healed, videos analyzed.
+          Newest first, last 300 events, stored only in this browser.
+        </p>
+        <table class="log-table" id="activity-table">
+          <thead>
+            <tr>
+              <th>When</th>
+              <th>Feature</th>
+              <th>What happened</th>
+              <th>Where</th>
+            </tr>
+          </thead>
+          <tbody id="activity-body"></tbody>
+        </table>
+        <p class="hint empty" id="activity-empty" hidden>
+          Nothing yet — events appear here as the features act (skip an ad,
+          visit a site with a cookie banner, analyze a video…).
+        </p>
+      </section>
+
+      <section>
+        <div class="section-head">
           <h2>Settings history</h2>
           <button id="clear-log" type="button">Clear history</button>
         </div>

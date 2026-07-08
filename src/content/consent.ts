@@ -86,11 +86,21 @@ async function handleConsent() {
   if (!banner) return
   handled = true
 
+  const logClick = () =>
+    void chrome.runtime
+      .sendMessage({
+        type: 'skipSensei:logActivity',
+        feature: 'Handle cookie-consent notices',
+        action: 'answered the cookie banner with “reject non-essential”',
+      })
+      .catch(() => {})
+
   // Cached reject selector for this domain → click instantly, no AI call.
   const cached = await getGapfillSelectors(cacheKey())
   for (const sel of cached) {
     if (clickReject(banner, sel)) {
       log('consent: clicked cached reject')
+      logClick()
       return
     }
   }
@@ -103,6 +113,7 @@ async function handleConsent() {
     .catch(() => null)
   if (selector && clickReject(banner, selector)) {
     log('consent: AI found & clicked reject:', selector)
+    logClick()
     await addGapfillSelectors(cacheKey(), [selector])
   }
 }

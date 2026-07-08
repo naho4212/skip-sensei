@@ -177,6 +177,7 @@ export type Message =
       domain: string
     } // → string[] (AI-found ad selectors, also cached for the domain)
   | { type: 'skipSensei:reviewPopup'; html: string } // → boolean (hide this overlay?)
+  | { type: 'skipSensei:logActivity'; feature: string; action: string } // content-script action → activity log
   | { type: 'skipSensei:findConsentReject'; html: string } // → string | null (reject-button selector)
 
 export interface SessionStats {

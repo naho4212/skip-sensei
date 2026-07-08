@@ -15,6 +15,7 @@ import {
   getCachedAnalysis,
   getSettings,
   incrementStat,
+  recordActivity,
   recordCorrection,
   setCachedAnalysis,
 } from './storage'
@@ -213,11 +214,23 @@ async function runAnalysis(
       version: ANALYSIS_VERSION,
     }
     await setCachedAnalysis(analysis)
+    void recordActivity(
+      'Sponsor detection AI',
+      `analyzed a video — ${segments.length} sponsor segment(s) found (${analysis.provider})`,
+      videoId,
+    )
     return analysis
   } catch (error) {
     // Rate limits are expected operating conditions, not defects.
     if (!signal.aborted && !(error instanceof RateLimitError)) {
       void reportError('analyze-video', error)
+    }
+    if (!signal.aborted) {
+      void recordActivity(
+        'Sponsor detection AI',
+        `analysis failed — ${error instanceof Error ? error.message.slice(0, 120) : 'unknown error'}`,
+        videoId,
+      )
     }
     // Errors (including aborts) are NOT cached — a re-watch retries.
     return {
@@ -235,12 +248,26 @@ async function runAnalysis(
 async function findSelector(
   html: string,
   description: string,
+  host?: string,
 ): Promise<string | null> {
   const settings = await getSettings()
   if (!settings.aiEnhancements) return null
   const controller = new AbortController()
   try {
-    return await findElementSelector(html, description, settings, controller.signal)
+    const selector = await findElementSelector(
+      html,
+      description,
+      settings,
+      controller.signal,
+    )
+    if (selector) {
+      void recordActivity(
+        'AI enhancements',
+        `self-healed a broken selector → ${selector}`,
+        host,
+      )
+    }
+    return selector
   } catch {
     return null
   }
@@ -259,12 +286,20 @@ async function findConsent(html: string): Promise<string | null> {
 }
 
 /** AI popup review: is this overlay an intrusive annoyance (hide) or functional (keep)? */
-async function reviewPopupMsg(html: string): Promise<boolean> {
+async function reviewPopupMsg(html: string, host?: string): Promise<boolean> {
   const settings = await getSettings()
   if (!settings.aiEnhancements) return false
   const controller = new AbortController()
   try {
-    return await reviewPopup(html, settings, controller.signal)
+    const hide = await reviewPopup(html, settings, controller.signal)
+    void recordActivity(
+      'Block popup & overlay ads',
+      hide
+        ? 'reviewed a popup — hid it (intrusive)'
+        : 'reviewed a popup — kept it (looks functional)',
+      host,
+    )
+    return hide
   } catch {
     return false // on any failure, keep the overlay (never break functionality)
   }
@@ -277,7 +312,14 @@ async function findAds(html: string, domain: string): Promise<string[]> {
   const controller = new AbortController()
   try {
     const selectors = await findAdSelectors(html, settings, controller.signal)
-    if (selectors.length > 0) await addGapfillSelectors(domain, selectors)
+    if (selectors.length > 0) {
+      await addGapfillSelectors(domain, selectors)
+      void recordActivity(
+        'AI enhancements',
+        `found ${selectors.length} ad element(s) the filter lists missed`,
+        domain,
+      )
+    }
     return selectors
   } catch {
     return []
@@ -299,14 +341,35 @@ function abandonAnalysis(videoId: string) {
 // Message routing
 // ---------------------------------------------------------------------------
 
+/** Hostname of the tab a message came from, for the activity log. */
+const senderHost = (sender: chrome.runtime.MessageSender): string | undefined =>
+  sender.tab?.url ? new URL(sender.tab.url).hostname.replace(/^www\./, '') : undefined
+
+const AD_SKIP_DESCRIPTIONS: Record<string, string> = {
+  'skip-button': 'clicked the Skip button on an ad',
+  'fast-forward': 'fast-forwarded an unskippable ad',
+  'overlay-removed': 'removed an overlay ad',
+  'pause-overlay-dismissed': 'dismissed a pause-screen ad',
+}
+
 chrome.runtime.onMessage.addListener(
   (message: Message, sender, sendResponse) => {
     switch (message?.type) {
       case 'skipSensei:adSkipped':
         void recordSkip('ad')
+        void recordActivity(
+          'Skip YouTube ads',
+          AD_SKIP_DESCRIPTIONS[message.method] ?? 'neutralized an ad',
+          senderHost(sender),
+        )
         return false
       case 'skipSensei:sponsorSkipped':
         void recordSkip('sponsor')
+        void recordActivity(
+          'Skip sponsor segments',
+          'skipped a sponsor segment',
+          message.videoId,
+        )
         return false
       case 'skipSensei:getSessionStats':
         void getSessionStats().then(sendResponse)
@@ -327,6 +390,14 @@ chrome.runtime.onMessage.addListener(
         return false
       case 'skipSensei:reportCorrection':
         void recordCorrection(message.videoId, message.start, message.end)
+        void recordActivity(
+          'Corrections',
+          `you flagged a wrong skip (${Math.round(message.start)}s–${Math.round(message.end)}s)`,
+          message.videoId,
+        )
+        return false
+      case 'skipSensei:logActivity':
+        void recordActivity(message.feature, message.action, senderHost(sender))
         return false
       case 'skipSensei:checkBuiltinAI':
         void builtinAvailability().then((availability) =>
@@ -345,13 +416,17 @@ chrome.runtime.onMessage.addListener(
         sendResponse(badgeState(message.tabId).blocked)
         return false
       case 'skipSensei:findSelector':
-        void findSelector(message.html, message.description).then(sendResponse)
+        void findSelector(
+          message.html,
+          message.description,
+          senderHost(sender),
+        ).then(sendResponse)
         return true
       case 'skipSensei:findAdSelectors':
         void findAds(message.html, message.domain).then(sendResponse)
         return true
       case 'skipSensei:reviewPopup':
-        void reviewPopupMsg(message.html).then(sendResponse)
+        void reviewPopupMsg(message.html, senderHost(sender)).then(sendResponse)
         return true
       case 'skipSensei:findConsentReject':
         void findConsent(message.html).then(sendResponse)
