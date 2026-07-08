@@ -245,6 +245,13 @@ export async function addHealedSelector(target: string, selector: string) {
   await chrome.storage.local.set({ [HEALED_KEY]: all })
 }
 
+/** Replace a healed-selector list wholesale (used to purge unsafe entries). */
+export async function setHealedSelectors(target: string, selectors: string[]) {
+  const all = await getHealedSelectors()
+  all[target] = selectors
+  await chrome.storage.local.set({ [HEALED_KEY]: all })
+}
+
 // ---------------------------------------------------------------------------
 // AI gap-filler (Phase 8b) — per-domain CSS selectors the AI found for ads
 // the filter lists missed. Applied as cosmetic hiding on future visits.

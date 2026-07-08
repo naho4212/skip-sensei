@@ -12,8 +12,29 @@ import {
   VIDEO,
 } from '../selectors'
 import { log } from '../log'
-import { addHealedSelector, getHealedSelectors, getSettings } from '../storage'
+import {
+  addHealedSelector,
+  getHealedSelectors,
+  getSettings,
+  setHealedSelectors,
+} from '../storage'
 import type { AdSkipMethod } from '../types'
+
+/**
+ * Guard against over-generic AI-healed selectors: the LLM once answered with
+ * literally `button`, which matches ANY player button — every video then
+ * looked like an ad forever (permanent cloak, rogue clicks). A healed
+ * selector must carry at least one class/id/attribute constraint.
+ */
+function isSaneHealedSelector(selector: string): boolean {
+  return /[.#[]/.test(selector) && !/^[a-z*\s>+~]+$/i.test(selector)
+}
+
+/** And whatever a healed selector matches must actually read as a skip control. */
+function looksLikeSkipControl(el: HTMLElement): boolean {
+  const text = `${el.textContent ?? ''} ${el.getAttribute('aria-label') ?? ''}`
+  return /skip/i.test(text)
+}
 
 /** Playback rate for burning through un-skippable ads. */
 const AD_FAST_RATE = 16
@@ -126,8 +147,9 @@ export class AdEngine {
   private ffLastAdvanceAt = 0
   private stuckRecoveries = 0
   private cloak: HTMLElement | null = null
-  /** Runtime skip-button selectors = hardcoded + AI-healed ones from storage. */
-  private skipSelectors: string[] = [...SKIP_BUTTONS]
+  /** AI-healed skip-button selectors (kept apart from the trusted hardcoded
+   * list: healed matches must additionally pass looksLikeSkipControl). */
+  private healedSkipSelectors: string[] = []
   /** AI-healed selectors for the anti-adblock enforcement modal. */
   private wallSelectors: string[] = []
   private wallHealInFlight = false
@@ -142,13 +164,21 @@ export class AdEngine {
     this.attachWhenPlayerExists()
   }
 
-  /** Seed the runtime selector lists with any selectors the AI healed earlier. */
+  /** Seed the runtime selector lists with any selectors the AI healed earlier,
+   * dropping (and purging from storage) any that fail the sanity check. */
   private async loadHealedSelectors() {
     const healed = await getHealedSelectors()
-    for (const selector of healed.skipButton ?? []) {
-      if (!this.skipSelectors.includes(selector)) this.skipSelectors.push(selector)
+    const storedSkip = healed.skipButton ?? []
+    this.healedSkipSelectors = storedSkip.filter(isSaneHealedSelector)
+    if (this.healedSkipSelectors.length !== storedSkip.length) {
+      log('purged unsafe healed skip selectors:', storedSkip)
+      void setHealedSelectors('skipButton', this.healedSkipSelectors)
     }
-    this.wallSelectors = healed.enforcementWall ?? []
+    const storedWall = healed.enforcementWall ?? []
+    this.wallSelectors = storedWall.filter(isSaneHealedSelector)
+    if (this.wallSelectors.length !== storedWall.length) {
+      void setHealedSelectors('enforcementWall', this.wallSelectors)
+    }
   }
 
   stop() {
@@ -279,12 +309,15 @@ export class AdEngine {
         description:
           'the button that skips or dismisses the currently-playing video ad (e.g. a "Skip Ad" / "Skip Ads" button)',
       })
-      if (!selector) return
-      // Validate: the selector must match a visible, clickable element.
+      if (!selector || !isSaneHealedSelector(selector)) return
+      // Validate: must match a visible element that actually reads as a
+      // skip control. (The LLM once returned bare `button` — caching that
+      // made every video register as an ad.)
       const el = this.player.querySelector<HTMLElement>(selector)
-      if (el && el.offsetParent !== null) {
+      if (el && el.offsetParent !== null && looksLikeSkipControl(el)) {
         log('self-healed skip button selector:', selector)
-        if (!this.skipSelectors.includes(selector)) this.skipSelectors.push(selector)
+        if (!this.healedSkipSelectors.includes(selector))
+          this.healedSkipSelectors.push(selector)
         await addHealedSelector('skipButton', selector)
         this.check() // click it now
       }
@@ -362,14 +395,21 @@ export class AdEngine {
   }
 
   private findSkipButton(): HTMLElement | null {
-    for (const selector of this.skipSelectors) {
+    for (const selector of SKIP_BUTTONS) {
+      const button = this.player!.querySelector<HTMLElement>(selector)
+      if (button && button.offsetParent !== null) return button
+    }
+    for (const selector of this.healedSkipSelectors) {
       let button: HTMLElement | null = null
       try {
         button = this.player!.querySelector<HTMLElement>(selector)
       } catch {
         continue // a bad AI-healed selector shouldn't break the loop
       }
-      if (button && button.offsetParent !== null) return button
+      // Healed matches are only trusted if the element reads as a skip
+      // control — a generic selector must never turn "ad showing" on.
+      if (button && button.offsetParent !== null && looksLikeSkipControl(button))
+        return button
     }
     // Last resort, survives class renames: any visible player button whose
     // label is exactly "Skip" / "Skip Ad(s)". Kept strict so nothing else
@@ -552,7 +592,7 @@ export class AdEngine {
         description:
           'the YouTube ad-blocker enforcement message that says video playback will be blocked (the modal to remove), if present',
       })
-      if (!selector) return
+      if (!selector || !isSaneHealedSelector(selector)) return
       let el: Element | null = null
       try {
         el = document.querySelector(selector)
