@@ -13,7 +13,7 @@ type BuiltinAiAvailability =
 interface BuiltinAiSession {
   prompt(
     input: string,
-    options?: { responseConstraint?: object },
+    options?: { responseConstraint?: object; signal?: AbortSignal },
   ): Promise<string>
   destroy(): void
 }
@@ -21,9 +21,12 @@ interface BuiltinAiSession {
 interface BuiltinAiLanguageModel {
   availability(): Promise<BuiltinAiAvailability>
   create(options?: {
+    /** @deprecated Chrome deprecated this create() option; use model defaults. */
     temperature?: number
+    /** @deprecated Chrome deprecated this create() option; use model defaults. */
     topK?: number
     monitor?: (m: EventTarget) => void
+    signal?: AbortSignal
   }): Promise<BuiltinAiSession>
 }
 

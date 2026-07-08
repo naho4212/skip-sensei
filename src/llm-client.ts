@@ -864,11 +864,16 @@ async function completeBuiltin(
       'Built-in Chrome AI is unavailable on this device. Add an API key in Ad Sensei options.',
     )
   }
-  // 'downloadable'/'downloading': create() kicks off / waits for the model download.
-  const session = await LanguageModel.create({ temperature: 0.1, topK: 3 })
+  // 'downloadable'/'downloading': create() kicks off / waits for the model
+  // download. We used to pass { temperature: 0.1, topK: 3 } for
+  // near-deterministic output, but Chrome deprecated those create() options
+  // (they warn now and may be removed); the model defaults are fine since
+  // sponsor-detection output is validated/parsed downstream. Pass the abort
+  // signal so an in-flight prompt is cancelled on navigation.
+  const session = await LanguageModel.create({ signal })
   try {
     if (signal.aborted) throw new LlmError('Aborted')
-    return await session.prompt(`${system}\n\n${prompt}`)
+    return await session.prompt(`${system}\n\n${prompt}`, { signal })
   } finally {
     session.destroy()
   }
