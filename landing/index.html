@@ -8,11 +8,31 @@
       name="description"
       content="Skip YouTube ads and creator sponsor segments, and block ads & trackers across the web. AI-powered, private, and free — everything runs in your browser."
     />
+    <meta name="theme-color" content="#212121" />
+    <meta name="robots" content="index,follow" />
+    <link rel="canonical" href="https://landing-beta-three-23.vercel.app/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Ad Sensei" />
+    <meta property="og:title" content="Ad Sensei — Zero interruptions" />
+    <meta
+      property="og:description"
+      content="Skip YouTube ads and creator sponsor segments, and block ads & trackers across the web. AI-powered, private, and free — everything runs in your browser."
+    />
+    <meta property="og:url" content="https://landing-beta-three-23.vercel.app/" />
+    <meta property="og:image" content="https://landing-beta-three-23.vercel.app/icon.png" />
+    <meta property="og:image:alt" content="Ad Sensei logo" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="Ad Sensei — Zero interruptions" />
+    <meta
+      name="twitter:description"
+      content="Skip YouTube ads and creator sponsor segments, and block ads & trackers across the web. AI-powered, private, and free — everything runs in your browser."
+    />
+    <meta name="twitter:image" content="https://landing-beta-three-23.vercel.app/icon.png" />
     <link rel="icon" href="./icon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&family=Roboto+Mono:wght@400;500&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&family=Roboto+Mono:wght@400;500&display=swap"
       rel="stylesheet"
     />
     <style>
@@ -65,7 +85,7 @@
 
       /* hero */
       header.hero {
-        text-align: center; padding: 96px 0 88px;
+        text-align: center; padding: 72px 0 64px;
         background: radial-gradient(
             1100px 520px at 50% -6%,
             rgba(124, 58, 237, 0.24),
@@ -73,25 +93,37 @@
           ),
           var(--bg);
       }
-      .hero svg.mark {
-        width: 128px; height: 128px;
+      /* 16:9 to match the animation's 1920×1080 stage — no dead space around it */
+      .hero-mark {
+        position: relative;
+        width: min(92vw, 760px);
+        aspect-ratio: 16 / 9;
+        margin: 0 auto;
         filter: drop-shadow(0 0 44px rgba(124, 58, 237, 0.5));
+      }
+      /* static fallback sized/positioned to match the animation's final logo frame */
+      .hero-mark svg.mark {
+        position: absolute;
+        left: 50%; top: 42.6%;
+        width: 34.7%;
+        transform: translate(-50%, -50%);
+        display: block;
       }
       .hero h1 {
         font-weight: 900; letter-spacing: -0.03em; line-height: 1.02;
-        font-size: clamp(42px, 8vw, 80px); margin: 34px 0 0;
+        font-size: clamp(42px, 8vw, 80px); margin: 22px 0 0;
       }
       .hero h1 .grad {
         background: linear-gradient(90deg, #a78bfa, #7c3aed);
         -webkit-background-clip: text; background-clip: text; color: transparent;
       }
       .hero p.tag {
-        margin: 26px auto 0; font-size: 19px; color: var(--text-2);
+        margin: 18px auto 0; font-size: 19px; color: var(--text-2);
         max-width: 560px; line-height: 1.6;
       }
       .hero p.tag b { color: var(--text); font-weight: 500; }
       .cta-row {
-        margin-top: 40px; display: flex; gap: 14px; justify-content: center;
+        margin-top: 28px; display: flex; gap: 14px; justify-content: center;
         flex-wrap: wrap;
       }
       .btn {
@@ -103,7 +135,7 @@
       .btn.ghost { background: rgba(255, 255, 255, 0.07); color: var(--text); }
       .btn.ghost:hover { background: rgba(255, 255, 255, 0.12); }
       .kicker {
-        margin-top: 34px; font-size: 12px; color: var(--text-3);
+        margin-top: 24px; font-size: 12px; color: var(--text-3);
         text-transform: uppercase; letter-spacing: 0.16em; font-family: var(--mono);
       }
       .kicker b { color: var(--accent); }
@@ -181,8 +213,6 @@
       footer .lockup .wm { font-size: 15px; }
       footer .mono { font-family: var(--mono); }
       footer a:hover { color: var(--text-2); }
-
-      svg defs { position: absolute; }
     </style>
   </head>
   <body>
@@ -199,18 +229,20 @@
         <svg viewBox="0 0 24 17"><path d="M0 1.5l6 7-6 7v-14zm7.5 0l6 7-6 7v-14zm8.5 0h2.4v14H16v-14z" /></svg>
         <span class="wm"><span class="ad">AD</span> SENSEI</span>
       </div>
-      <a class="cta-sm" href="#get">Add to Chrome</a>
+      <a class="cta-sm" href="./ad-sensei.zip" download>Add to Chrome</a>
     </nav>
 
     <header class="hero">
       <div class="wrap">
-        <svg class="mark" viewBox="0 0 120 120" aria-label="Ad Sensei">
-          <g fill="#7c3aed" transform="translate(10.8,14.1) scale(5.4)">
-            <path d="M7.5 1.5l6 7-6 7v-14zm8.5 0h2.4v14H16v-14z" />
-            <g clip-path="url(#cutL)"><path d="M0 1.5l6 7-6 7v-14z" /></g>
-            <g clip-path="url(#cutU)" transform="translate(0.55 -0.65)"><path d="M0 1.5l6 7-6 7v-14z" /></g>
-          </g>
-        </svg>
+        <div class="hero-mark" id="hero-animation" role="img" aria-label="Ad Sensei">
+          <svg class="mark" viewBox="0 0 120 120" aria-hidden="true">
+            <g fill="#7c3aed" transform="translate(10.8,14.1) scale(5.4)">
+              <path d="M7.5 1.5l6 7-6 7v-14zm8.5 0h2.4v14H16v-14z" />
+              <g clip-path="url(#cutL)"><path d="M0 1.5l6 7-6 7v-14z" /></g>
+              <g clip-path="url(#cutU)" transform="translate(0.55 -0.65)"><path d="M0 1.5l6 7-6 7v-14z" /></g>
+            </g>
+          </svg>
+        </div>
         <h1>Zero <span class="grad">interruptions</span>.</h1>
         <p class="tag">
           Skip YouTube ads and creator sponsor reads, and block ads &amp;
@@ -218,7 +250,7 @@
           noise so you don't have to.</b>
         </p>
         <div class="cta-row" id="get">
-          <a class="btn primary" href="#">Add to Chrome</a>
+          <a class="btn primary" href="./ad-sensei.zip" download>Add to Chrome</a>
           <a class="btn ghost" href="#how">See how it works</a>
         </div>
         <div class="kicker"><b>Free</b> · Private · No account · Runs in your browser</div>
@@ -300,9 +332,9 @@
         <h2>Take back the quiet.</h2>
         <p class="lede" style="margin: 14px auto 0">Add Ad Sensei and never think about an ad again.</p>
         <div class="cta-row">
-          <a class="btn primary" href="#">Add to Chrome</a>
+          <a class="btn primary" href="./ad-sensei.zip" download>Add to Chrome</a>
         </div>
-        <div class="kicker">Chrome · Manifest V3 · Coming to the Chrome Web Store</div>
+        <div class="kicker">Downloads the unpacked build · Chrome → Extensions → Load unpacked</div>
       </div>
     </section>
 
@@ -315,5 +347,53 @@
         <div class="mono">Zero interruptions · #7C3AED</div>
       </div>
     </footer>
+    <script crossorigin src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+    <!-- precompiled from anim/*.jsx — see the header comment in animations.js to rebuild -->
+    <script src="./anim/animations.js"></script>
+    <script src="./anim/play-slice-scene.js"></script>
+    <script>
+      (() => {
+        const mount = document.getElementById('hero-animation');
+        if (!mount || !window.React || !window.ReactDOM) return;
+        if (typeof window.PlaySliceScene !== 'function') return;
+
+        let root = null;
+        let hasLeftViewport = false;
+
+        const renderScene = () => {
+          if (!root) {
+            mount.innerHTML = '';
+            root = window.ReactDOM.createRoot(mount);
+          }
+          root.render(
+            window.React.createElement(window.PlaySliceScene, {
+              showWordmark: false,
+              loop: false,
+              autoplay: true,
+            })
+          );
+        };
+
+        const teardownScene = () => {
+          if (!root) return;
+          root.unmount();
+          root = null;
+          hasLeftViewport = true;
+        };
+
+        renderScene();
+
+        const observer = new IntersectionObserver(([entry]) => {
+          if (entry.isIntersecting) {
+            if (hasLeftViewport) renderScene();
+            return;
+          }
+          teardownScene();
+        }, { threshold: 0.2 });
+
+        observer.observe(mount);
+      })();
+    </script>
   </body>
 </html>
