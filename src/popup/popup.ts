@@ -278,14 +278,16 @@ async function main() {
     void renderSiteSection()
   })
 
-  $('blocker-reload').addEventListener('click', async () => {
-    // Only the current tab — reloading others could lose work in progress.
+  // Only ever the current tab — reloading others could lose work in progress.
+  const reloadActiveTab = async () => {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
     if (tab?.id) {
       await chrome.tabs.reload(tab.id)
       window.close()
     }
-  })
+  }
+  $('blocker-reload').addEventListener('click', () => void reloadActiveTab())
+  $('reload-page').addEventListener('click', () => void reloadActiveTab())
 
   $('open-options').addEventListener('click', (event) => {
     event.preventDefault()
@@ -329,13 +331,7 @@ async function main() {
     }
   })
 
-  reloadTabEl.addEventListener('click', async () => {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
-    if (tab?.id) {
-      await chrome.tabs.reload(tab.id)
-      window.close()
-    }
-  })
+  reloadTabEl.addEventListener('click', () => void reloadActiveTab())
 
   void renderVideoStatus()
   void renderBlockerState()
