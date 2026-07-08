@@ -44,6 +44,21 @@ const HEAL_AFTER_MS = 7000
 const SKIP_CLICK_GRACE_MS = 1500
 
 /**
+ * Floor between check() runs. The MutationObserver fires for every player
+ * DOM mutation, and check() itself mutates (event dispatch, seeks) — without
+ * a floor that feeds back into a mutation storm that pegs the main thread.
+ * The 1s fallback interval still guarantees forward progress.
+ */
+const CHECK_THROTTLE_MS = 250
+
+/** Floor between synthetic click sequences on the same lingering button. */
+const CLICK_RETRY_MS = 500
+
+/** Ad playback frozen this long → try to unwedge the player. */
+const STUCK_AFTER_MS = 3000
+const MAX_STUCK_RECOVERIES = 3
+
+/**
  * Ad Engine: detects YouTube-served ads on the current watch page and
  * neutralizes them. One instance per watch page; SPA navigation tears it
  * down and creates a fresh one.
@@ -69,6 +84,12 @@ export class AdEngine {
    * (and its own skip count).
    */
   private skipClickedAt: number | null = null
+  private lastCheckAt = 0
+  private lastClickDispatchAt = 0
+  /** Stuck-ad watchdog: last observed playback position and when it moved. */
+  private ffLastTime = -1
+  private ffLastAdvanceAt = 0
+  private stuckRecoveries = 0
   /** Runtime skip-button selectors = hardcoded + AI-healed ones from storage. */
   private skipSelectors: string[] = [...SKIP_BUTTONS]
   /** AI-healed selectors for the anti-adblock enforcement modal. */
@@ -146,6 +167,10 @@ export class AdEngine {
     }
     if (!this.player) return
 
+    const now = Date.now()
+    if (now - this.lastCheckAt < CHECK_THROTTLE_MS) return
+    this.lastCheckAt = now
+
     this.dismissEnforcementWall()
     this.removeOverlayAds()
     this.dismissPauseOverlays()
@@ -156,6 +181,8 @@ export class AdEngine {
       this.adShowingSince = null
       this.skipClickedAt = null
       this.healInFlight = false
+      this.ffLastTime = -1
+      this.stuckRecoveries = 0
       return
     }
 
@@ -278,9 +305,15 @@ export class AdEngine {
   private clickSkipButton(): boolean {
     const button = this.findSkipButton()
     if (!button) return false
-    this.dispatchRealisticClick(button)
+    // Rate-limit the event bursts: a button that lingers (ignored click)
+    // would otherwise be re-clicked on every mutation-driven check.
+    const now = Date.now()
+    if (now - this.lastClickDispatchAt >= CLICK_RETRY_MS) {
+      this.lastClickDispatchAt = now
+      this.dispatchRealisticClick(button)
+    }
     if (this.skipClickedAt === null) {
-      this.skipClickedAt = Date.now()
+      this.skipClickedAt = now
       this.onSkip('skip-button')
     }
     return true
@@ -325,13 +358,38 @@ export class AdEngine {
     if (!video || !Number.isFinite(video.duration) || video.duration <= 0)
       return
 
+    // Stuck-ad watchdog. Two known wedge states: the ad reaches 'ended' but
+    // YouTube never transitions away (parked), or a seek stalls playback
+    // indefinitely. Either way currentTime stops moving while the ad UI
+    // stays up — rewind a hair at normal speed so YouTube's own
+    // end-of-ad transition can fire, instead of pushing harder.
+    const now = Date.now()
+    if (video.currentTime !== this.ffLastTime) {
+      this.ffLastTime = video.currentTime
+      this.ffLastAdvanceAt = now
+    } else if (
+      now - this.ffLastAdvanceAt > STUCK_AFTER_MS &&
+      this.stuckRecoveries < MAX_STUCK_RECOVERIES
+    ) {
+      this.stuckRecoveries++
+      this.ffLastAdvanceAt = now
+      log('ad player looks stuck; recovery attempt', this.stuckRecoveries)
+      video.playbackRate = 1
+      video.currentTime = Math.max(0, video.duration - 1)
+      void video.play().catch(() => {})
+      this.onSkip('stuck-recovery')
+      return
+    }
+
     // Mute so the sped-up ad isn't an audible blip; remember to restore.
     if (!video.muted) {
       this.mutedForAd = true
       video.muted = true
     }
     video.playbackRate = AD_FAST_RATE
-    if (video.paused) void video.play().catch(() => {})
+    // Never play() an 'ended' video: that restarts it from 0 and loops the
+    // ad forever. Ended-but-parked is the watchdog's job above.
+    if (video.paused && !video.ended) void video.play().catch(() => {})
 
     // Jump to the end of the buffered range (leaving a hair so 'ended' fires
     // naturally), but never into unbuffered territory.

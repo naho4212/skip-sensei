@@ -348,6 +348,7 @@ const senderHost = (sender: chrome.runtime.MessageSender): string | undefined =>
 const AD_SKIP_DESCRIPTIONS: Record<string, string> = {
   'skip-button': 'clicked the Skip button on an ad',
   'fast-forward': 'fast-forwarded an unskippable ad',
+  'stuck-recovery': 'recovered a stuck ad player',
   'overlay-removed': 'removed an overlay ad',
   'pause-overlay-dismissed': 'dismissed a pause-screen ad',
 }

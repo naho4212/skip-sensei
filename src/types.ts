@@ -111,6 +111,7 @@ export const DEFAULT_STATS: Stats = {
 export type AdSkipMethod =
   | 'skip-button'
   | 'fast-forward'
+  | 'stuck-recovery'
   | 'overlay-removed'
   | 'pause-overlay-dismissed'
 
