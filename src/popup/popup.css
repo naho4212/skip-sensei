@@ -448,6 +448,35 @@ body.disabled main {
   color: var(--text-2);
 }
 
+.seg-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* source badge: which detector found the segment */
+.segment-src {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 5px;
+  line-height: 1;
+}
+.segment-src.src-sponsorblock {
+  color: #3ea6ff;
+  background: rgba(62, 166, 255, 0.14);
+}
+.segment-src.src-llm {
+  color: var(--accent-bright);
+  background: rgba(124, 58, 237, 0.16);
+}
+.segment-src.src-chapter {
+  color: #4ade80;
+  background: rgba(74, 222, 128, 0.14);
+}
+
 /* Footer */
 footer {
   padding: 7px 16px;

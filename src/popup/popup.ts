@@ -175,16 +175,36 @@ function renderProgress(status: PageStatus | null) {
   }
 }
 
+/** Where a segment came from → short badge label + title. */
+const SOURCE_LABELS: Record<string, { label: string; title: string }> = {
+  sponsorblock: { label: 'SB', title: 'SponsorBlock (community database)' },
+  llm: { label: 'AI', title: 'AI transcript analysis' },
+  chapter: { label: 'chapter', title: 'Creator “Ad Break” chapter' },
+}
+
 function renderSegments(status: PageStatus) {
   segmentListEl.replaceChildren(
     ...status.segments.map((segment) => {
       const li = document.createElement('li')
       const range = document.createElement('span')
       range.textContent = `${formatTime(segment.start)} → ${formatTime(segment.end)}`
+
+      const meta = document.createElement('span')
+      meta.className = 'seg-meta'
+      const src = SOURCE_LABELS[segment.source ?? 'llm']
+      if (src) {
+        const badge = document.createElement('span')
+        badge.className = `segment-src src-${segment.source ?? 'llm'}`
+        badge.textContent = src.label
+        badge.title = src.title
+        meta.append(badge)
+      }
       const type = document.createElement('span')
       type.className = 'segment-type'
       type.textContent = TYPE_LABELS[segment.type] ?? segment.type
-      li.append(range, type)
+      meta.append(type)
+
+      li.append(range, meta)
       return li
     }),
   )
