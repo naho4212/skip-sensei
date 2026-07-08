@@ -2,22 +2,29 @@
 :root {
   color-scheme: light dark;
   --accent: #7c3aed;
+  --accent-bright: #8b5cf6;
+  --accent-deep: #6d28d9;
   --bg: #fff;
+  --panel: #f6f6f7;
   --text: #0f0f0f;
   --text-2: #606060;
+  --text-3: #8a8a8a;
   --divider: rgba(0, 0, 0, 0.1);
   --hover: rgba(0, 0, 0, 0.05);
   --link: #3ea6ff;
   --field-bg: rgba(0, 0, 0, 0.03);
   --snackbar-bg: #212121;
   --snackbar-text: #f1f1f1;
+  --mono: 'Roboto Mono', ui-monospace, 'SF Mono', Menlo, monospace;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #0f0f0f;
+    --panel: #191919;
     --text: #f1f1f1;
     --text-2: #aaa;
+    --text-3: #7a7a7a;
     --divider: rgba(255, 255, 255, 0.12);
     --hover: rgba(255, 255, 255, 0.08);
     --field-bg: rgba(255, 255, 255, 0.05);
@@ -46,10 +53,34 @@ main {
   padding: 32px 24px 64px;
 }
 
-h1 {
-  font-size: 20px;
+h1.wordmark {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  margin: 0 0 24px;
+  color: var(--text);
+}
+
+h1.wordmark svg {
+  width: 30px;
+  height: 21px;
+  fill: var(--accent);
+}
+
+h1.wordmark .ad {
+  color: var(--accent);
+}
+
+h1.wordmark .sub {
   font-weight: 500;
-  margin: 0 0 4px;
+  font-size: 15px;
+  letter-spacing: 0;
+  color: var(--text-3);
+  align-self: flex-end;
+  margin-bottom: 2px;
 }
 
 h2 {

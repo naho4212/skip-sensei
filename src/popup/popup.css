@@ -2,21 +2,28 @@
 :root {
   color-scheme: light dark;
   --accent: #7c3aed;
+  --accent-bright: #8b5cf6;
+  --accent-deep: #6d28d9;
   --bg: #fff;
+  --panel: #f6f6f7;
   --text: #0f0f0f;
   --text-2: #606060;
+  --text-3: #8a8a8a;
   --divider: rgba(0, 0, 0, 0.1);
   --hover: rgba(0, 0, 0, 0.05);
   --link: #065fd4;
   --track: rgba(0, 0, 0, 0.25);
   --knob: #fff;
+  --mono: 'Roboto Mono', ui-monospace, 'SF Mono', Menlo, monospace;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #212121;
+    --panel: #191919;
     --text: #f1f1f1;
     --text-2: #aaa;
+    --text-3: #7a7a7a;
     --divider: rgba(255, 255, 255, 0.12);
     --hover: rgba(255, 255, 255, 0.08);
     --link: #3ea6ff;
@@ -55,18 +62,23 @@ header {
   gap: 10px;
 }
 
-.brand-icon {
-  width: 28px;
-  height: 28px;
+.brand-mark {
+  width: 26px;
+  height: 18px;
   flex-shrink: 0;
-  object-fit: contain;
+  fill: var(--accent);
 }
 
-h1 {
+h1.wordmark {
   margin: 0;
-  font-size: 16px;
-  font-weight: 500;
-  letter-spacing: -0.2px;
+  font-size: 17px;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+h1.wordmark .ad {
+  color: var(--accent);
 }
 
 main {
@@ -182,7 +194,7 @@ body.disabled main {
 }
 
 .mini-btn:hover {
-  filter: brightness(1.1);
+  background: var(--accent-bright);
 }
 
 .site {
@@ -246,6 +258,10 @@ body.disabled main {
   padding: 3px 16px;
   text-align: right;
   font-variant-numeric: tabular-nums;
+}
+
+.stats-table tbody td:not(:first-child) {
+  font-family: var(--mono);
 }
 
 .stats-table th {
