@@ -37,6 +37,13 @@ export function playerShowsAd(
 const HEAL_AFTER_MS = 7000
 
 /**
+ * How long after clicking a skip button we wait for the ad to actually end
+ * before concluding the click was ignored (YouTube's newer skip button
+ * intermittently drops synthetic clicks) and burning through instead.
+ */
+const SKIP_CLICK_GRACE_MS = 1500
+
+/**
  * Ad Engine: detects YouTube-served ads on the current watch page and
  * neutralizes them. One instance per watch page; SPA navigation tears it
  * down and creates a fresh one.
@@ -54,8 +61,14 @@ export class AdEngine {
   /** True if we muted the video for fast-forward and must restore it. */
   private mutedForAd = false
   private attachRetryTimer: number | null = null
-  /** check() re-fires while the skip button lingers; count one skip per ad, not per click. */
-  private lastSkipButtonCountAt = 0
+  /**
+   * When we first clicked the current ad's skip button. Clicking can silently
+   * fail, so this also gates the fallback: an ad that outlives the click by
+   * more than the grace period gets fast-forwarded instead. Reset whenever the
+   * button disappears or the ad ends, so each ad in a pod gets its own click
+   * (and its own skip count).
+   */
+  private skipClickedAt: number | null = null
   /** Runtime skip-button selectors = hardcoded + AI-healed ones from storage. */
   private skipSelectors: string[] = [...SKIP_BUTTONS]
   /** AI-healed selectors for the anti-adblock enforcement modal. */
@@ -90,6 +103,7 @@ export class AdEngine {
     this.attachRetryTimer = null
     this.player = null
     this.fastForwarding = false
+    this.skipClickedAt = null
   }
 
   get isActive(): boolean {
@@ -133,6 +147,7 @@ export class AdEngine {
     if (!adShowing) {
       this.endFastForward()
       this.adShowingSince = null
+      this.skipClickedAt = null
       this.healInFlight = false
       return
     }
@@ -140,10 +155,18 @@ export class AdEngine {
     if (this.adShowingSince === null) this.adShowingSince = Date.now()
 
     if (this.clickSkipButton()) {
-      this.endFastForward()
-      return
+      // Give the click a moment to take effect — but no longer. YouTube's
+      // skip button sometimes ignores synthetic clicks; an ad that survives
+      // the click (the 2nd ad of a pod, typically) must not park here at
+      // normal speed, so past the grace period we fall through and burn it.
+      if (Date.now() - this.skipClickedAt! <= SKIP_CLICK_GRACE_MS) {
+        this.endFastForward()
+        return
+      }
+    } else {
+      this.skipClickedAt = null
     }
-    // Ad has played a while with no matching skip button — YouTube may have
+    // Ad has played a while with no working skip button — YouTube may have
     // renamed it. Ask the AI to re-find it (once per ad), and keep burning
     // through in the meantime.
     if (Date.now() - this.adShowingSince > HEAL_AFTER_MS) {
@@ -242,13 +265,37 @@ export class AdEngine {
   private clickSkipButton(): boolean {
     const button = this.findSkipButton()
     if (!button) return false
-    button.click()
-    const now = Date.now()
-    if (now - this.lastSkipButtonCountAt > 3000) {
-      this.lastSkipButtonCountAt = now
+    this.dispatchRealisticClick(button)
+    if (this.skipClickedAt === null) {
+      this.skipClickedAt = Date.now()
       this.onSkip('skip-button')
     }
     return true
+  }
+
+  /**
+   * A bare .click() is not always enough: YouTube's newer skip button listens
+   * for pointer/mouse events and can ignore the synthetic click alone. Send
+   * the full sequence a real tap produces, aimed at the button's center.
+   */
+  private dispatchRealisticClick(el: HTMLElement) {
+    const rect = el.getBoundingClientRect()
+    const opts = {
+      bubbles: true,
+      cancelable: true,
+      view: window,
+      clientX: rect.left + rect.width / 2,
+      clientY: rect.top + rect.height / 2,
+    }
+    el.dispatchEvent(
+      new PointerEvent('pointerdown', { ...opts, pointerId: 1, isPrimary: true }),
+    )
+    el.dispatchEvent(new MouseEvent('mousedown', opts))
+    el.dispatchEvent(
+      new PointerEvent('pointerup', { ...opts, pointerId: 1, isPrimary: true }),
+    )
+    el.dispatchEvent(new MouseEvent('mouseup', opts))
+    el.click()
   }
 
   /**
