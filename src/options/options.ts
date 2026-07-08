@@ -439,6 +439,24 @@ async function main() {
     })
   }
 
+  // URL-tracking stripping needs broad host access to rewrite URLs — request
+  // it at the moment the user turns the toggle on (a user gesture), and revert
+  // the toggle if they decline.
+  const urlTrackingEl = $<HTMLInputElement>('block-url-tracking')
+  urlTrackingEl.checked = loaded.blockUrlTracking
+  urlTrackingEl.addEventListener('change', async () => {
+    if (urlTrackingEl.checked) {
+      const granted = await chrome.permissions
+        .request({ origins: ['*://*/*'] })
+        .catch(() => false)
+      if (!granted) {
+        urlTrackingEl.checked = false
+        return
+      }
+    }
+    await save({ blockUrlTracking: urlTrackingEl.checked })
+  })
+
   // Local-only mode overrides the provider, diagnostics, and SponsorBlock —
   // grey those out while it's on so the override is visible.
   const localOnlyEl = $<HTMLInputElement>('local-only')

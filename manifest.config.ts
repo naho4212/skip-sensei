@@ -105,6 +105,15 @@ export default defineManifest({
       { id: 'cookies', enabled: false, path: 'rulesets/cookies.json' },
       { id: 'social', enabled: false, path: 'rulesets/social.json' },
       { id: 'popups', enabled: false, path: 'rulesets/popups.json' },
+      {
+        id: 'url_tracking',
+        enabled: false,
+        path: 'rulesets/url_tracking.json',
+      },
     ],
   },
+  // URL-tracking-param stripping uses redirect rules, which require host
+  // access to the sites they act on. Requested at runtime (from the options
+  // toggle) so the base install keeps minimal permissions.
+  optional_host_permissions: ['*://*/*'],
 })

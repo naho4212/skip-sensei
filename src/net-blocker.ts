@@ -53,6 +53,15 @@ export async function syncNetBlocker(): Promise<BlockerState> {
     master && settings.blockAllAds && settings.blockPopups,
     'popup blocking',
   )
+  // URL-tracking stripping is a standalone privacy feature — it does NOT
+  // require "Block all ads". Needs host access (granted via the options
+  // toggle) to actually rewrite URLs, but enabling the ruleset without it is
+  // a harmless no-op.
+  await setRulesets(
+    ['url_tracking'],
+    master && settings.blockUrlTracking,
+    'URL tracking protection',
+  )
 
   try {
     await syncAllowlist(settings.allowlist)
