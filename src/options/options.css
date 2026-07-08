@@ -1,4 +1,12 @@
 /* YouTube-style theme */
+
+/* The `hidden` attribute must win over element/class `display` rules below
+ * (e.g. `.field { display: flex }`), otherwise JS-hidden fields like the
+ * OpenClaw Gateway URL box stay visible for every provider. */
+[hidden] {
+  display: none !important;
+}
+
 :root {
   color-scheme: light dark;
   --accent: #7c3aed;
