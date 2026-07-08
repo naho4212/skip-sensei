@@ -90,3 +90,7 @@ src/
 - Phase 2 rule: the Sponsor Engine is strictly downstream of a validated JSON
   contract. If the LLM response doesn't parse, degrade to ad-skipping only —
   never break playback.
+
+## License
+
+MIT — see [LICENSE](LICENSE). Bundled ad/tracker filter data is generated at build time from AdGuard's DNR rulesets and retains its own upstream license.
