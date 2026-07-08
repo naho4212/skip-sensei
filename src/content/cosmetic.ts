@@ -97,6 +97,9 @@ const YOUTUBE_SELECTORS = [
   // ytd-engagement-panel-section-list-renderer also holds chapters/transcript.
   'ytd-ads-engagement-panel-content-renderer',
   'ytd-engagement-panel-section-list-renderer:has(ytd-ads-engagement-panel-content-renderer)',
+  // Cards the heuristic badge-scanner tags (see scanForAdBadges): a new ad
+  // format with no known renderer tag but a "Sponsored" badge in an ad slot.
+  '.skip-sensei-adcard',
 ]
 
 function isYouTube(): boolean {
@@ -168,6 +171,97 @@ async function apply() {
   style.textContent = buildCss(selectors)
   if (!existing) (document.head ?? document.documentElement).appendChild(style)
   if (genericOn) void applyGapfill() // hide anything the AI found on prior visits
+
+  if (ytOn) startAdBadgeScanner()
+  else stopAdBadgeScanner()
+}
+
+// ---------------------------------------------------------------------------
+// Heuristic ad-badge scanner (YouTube). YouTube rotates ad renderers, so a
+// new format can slip past the structural selectors above. As a fallback,
+// find an ad-disclosure badge — YouTube's ad-specific <ad-badge-view-model>,
+// or a badge whose EXACT text is "Sponsored" — and tag the card that contains
+// it so the stylesheet's `.skip-sensei-adcard` rule hides it.
+//
+// The exact-text match is deliberate: real videos carry badges like "4K" /
+// "New" / "Live", never a standalone "Sponsored". And we never look inside the
+// player, comments, description, watch metadata, or live chat, where
+// "Sponsored" / "paid promotion" text is legitimate content.
+// ---------------------------------------------------------------------------
+
+const AD_CARD_CLASS = 'skip-sensei-adcard'
+/** Badge text that unambiguously marks an ad (exact match only). */
+const AD_BADGE_TEXT = /^sponsored$/i
+/** Containers we're willing to hide when they hold an ad badge. */
+const AD_CARD_ANCESTORS = [
+  'ytd-rich-item-renderer',
+  'ytd-ad-slot-renderer',
+  'ytd-companion-slot-renderer',
+  'ytd-engagement-panel-section-list-renderer',
+  'ytd-compact-video-renderer',
+  'ytd-video-renderer',
+  'yt-lockup-view-model',
+  'ytd-rich-section-renderer',
+]
+/** Legit "Sponsored"/"paid promotion" text lives here — never touch it. */
+const PROTECTED_ANCESTORS =
+  '#movie_player, ytd-comments, #comments, ytd-comment-thread-renderer, ' +
+  'ytd-watch-metadata, #description, #description-inner, ' +
+  'ytd-live-chat-frame, #chat, ytd-video-description-header-renderer'
+
+function isAdBadge(el: Element): boolean {
+  if (el.tagName.toLowerCase() === 'ad-badge-view-model') return true
+  if (/ad-badge/i.test(String(el.className))) return true
+  return AD_BADGE_TEXT.test((el.textContent ?? '').trim())
+}
+
+function scanForAdBadges() {
+  const badges = document.querySelectorAll(
+    '.ytBadgeShapeText, ad-badge-view-model, [class*="ad-badge" i]',
+  )
+  for (const badge of badges) {
+    if (!isAdBadge(badge)) continue
+    if (badge.closest(PROTECTED_ANCESTORS)) continue
+    let card: Element | null = null
+    for (const sel of AD_CARD_ANCESTORS) {
+      card = badge.closest(sel)
+      if (card) break
+    }
+    if (card && !card.classList.contains(AD_CARD_CLASS)) {
+      card.classList.add(AD_CARD_CLASS)
+      log('heuristic: tagged ad card via "Sponsored" badge —', card.tagName.toLowerCase())
+    }
+  }
+}
+
+let badgeObserver: MutationObserver | null = null
+let scanScheduled = false
+
+function scheduleScan() {
+  if (scanScheduled) return
+  scanScheduled = true
+  setTimeout(() => {
+    scanScheduled = false
+    scanForAdBadges()
+  }, 500)
+}
+
+function startAdBadgeScanner() {
+  if (badgeObserver) return
+  scanForAdBadges()
+  badgeObserver = new MutationObserver(() => scheduleScan())
+  badgeObserver.observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+  })
+}
+
+function stopAdBadgeScanner() {
+  badgeObserver?.disconnect()
+  badgeObserver = null
+  document
+    .querySelectorAll(`.${AD_CARD_CLASS}`)
+    .forEach((el) => el.classList.remove(AD_CARD_CLASS))
 }
 
 /** Apply this domain's AI-discovered ad selectors (from prior visits). */
