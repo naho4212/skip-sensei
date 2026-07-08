@@ -81,6 +81,58 @@
       </section>
 
       <section>
+        <h2>SponsorBlock</h2>
+        <p class="hint">
+          Use the community-run
+          <a href="https://sponsor.ajay.app" target="_blank" rel="noopener"
+            >SponsorBlock</a
+          >
+          database for instant, exact segment skipping on videos others have
+          already marked. The AI above only runs when SponsorBlock has nothing.
+          Privacy-preserving: your video is looked up by a hashed prefix, so the
+          server never learns which video you watched.
+        </p>
+        <label class="field checkbox">
+          <input type="checkbox" id="sponsorblock-enabled" />
+          <span>Use SponsorBlock segments</span>
+        </label>
+        <div id="sponsorblock-categories">
+          <label class="field checkbox">
+            <input type="checkbox" data-sbcat="sponsor" />
+            <span>Sponsor</span>
+          </label>
+          <label class="field checkbox">
+            <input type="checkbox" data-sbcat="selfpromo" />
+            <span>Unpaid / self-promotion</span>
+          </label>
+          <label class="field checkbox">
+            <input type="checkbox" data-sbcat="interaction" />
+            <span>Interaction reminders (like &amp; subscribe)</span>
+          </label>
+          <label class="field checkbox">
+            <input type="checkbox" data-sbcat="intro" />
+            <span>Intro / intermission</span>
+          </label>
+          <label class="field checkbox">
+            <input type="checkbox" data-sbcat="outro" />
+            <span>Outro / endcards</span>
+          </label>
+          <label class="field checkbox">
+            <input type="checkbox" data-sbcat="preview" />
+            <span>Preview / recap</span>
+          </label>
+          <label class="field checkbox">
+            <input type="checkbox" data-sbcat="filler" />
+            <span>Filler / tangents</span>
+          </label>
+          <label class="field checkbox">
+            <input type="checkbox" data-sbcat="music_offtopic" />
+            <span>Non-music section (music videos)</span>
+          </label>
+        </div>
+      </section>
+
+      <section>
         <h2>Skipping behavior</h2>
         <label class="field">
           <span

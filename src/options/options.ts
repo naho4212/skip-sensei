@@ -413,6 +413,29 @@ async function main() {
     save({ aiEnhancements: aiEnhancementsEl.checked }),
   )
 
+  // SponsorBlock enable + per-category checkboxes.
+  const sbEnabledEl = $<HTMLInputElement>('sponsorblock-enabled')
+  const sbCatEls = Array.from(
+    document.querySelectorAll<HTMLInputElement>('[data-sbcat]'),
+  )
+  const syncSbUi = (settings: Settings) => {
+    sbEnabledEl.checked = settings.sponsorBlockEnabled
+    const set = new Set(settings.sponsorBlockCategories)
+    for (const el of sbCatEls) el.checked = set.has(el.dataset.sbcat!)
+    $('sponsorblock-categories').hidden = !settings.sponsorBlockEnabled
+  }
+  syncSbUi(loaded)
+  sbEnabledEl.addEventListener('change', async () => {
+    await save({ sponsorBlockEnabled: sbEnabledEl.checked })
+    $('sponsorblock-categories').hidden = !sbEnabledEl.checked
+  })
+  for (const el of sbCatEls) {
+    el.addEventListener('change', () => {
+      const cats = sbCatEls.filter((e) => e.checked).map((e) => e.dataset.sbcat!)
+      void save({ sponsorBlockCategories: cats })
+    })
+  }
+
   const debugLoggingEl = $<HTMLInputElement>('debug-logging')
   debugLoggingEl.checked = (await getSettings()).debugLogging
   debugLoggingEl.addEventListener('change', () =>

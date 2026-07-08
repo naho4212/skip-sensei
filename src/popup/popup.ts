@@ -149,6 +149,12 @@ const TYPE_LABELS: Record<string, string> = {
   sponsor: 'sponsor',
   'self-promo': 'self-promo',
   'ad-read': 'ad read',
+  interaction: 'reminder',
+  intro: 'intro',
+  outro: 'outro',
+  preview: 'preview',
+  filler: 'filler',
+  'music-offtopic': 'off-topic',
 }
 
 function renderProgress(status: PageStatus | null) {

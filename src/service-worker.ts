@@ -10,6 +10,7 @@ import {
 } from './llm-client'
 import { getBlockerState, initNetBlocker } from './net-blocker'
 import { initPruneRegistration } from './prune-register'
+import { fetchSponsorBlockSegments } from './sponsorblock'
 import { initErrorReporting, reportError, reportEvent } from './error-reporting'
 import {
   addGapfillSelectors,
@@ -438,6 +439,25 @@ chrome.runtime.onMessage.addListener(
         return true
       case 'skipSensei:findConsentReject':
         void findConsent(message.html).then(sendResponse)
+        return true
+      case 'skipSensei:fetchSponsorBlock':
+        void (async () => {
+          const settings = await getSettings()
+          if (
+            !settings.sponsorBlockEnabled ||
+            settings.localOnlyMode ||
+            settings.sponsorBlockCategories.length === 0
+          ) {
+            sendResponse([])
+            return
+          }
+          sendResponse(
+            await fetchSponsorBlockSegments(
+              message.videoId,
+              settings.sponsorBlockCategories,
+            ),
+          )
+        })()
         return true
       default:
         return false

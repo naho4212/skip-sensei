@@ -117,7 +117,39 @@ export class SponsorEngine {
       log('ad chapters:', describeSegments(this.chapterSegments))
     }
 
+    // SponsorBlock: crowd-sourced, instant, exact. If it has segments for this
+    // video, use them and skip the AI entirely (no transcript, no LLM call).
+    // The AI only runs for videos with no SponsorBlock submissions.
+    const sbSegments =
+      (await this.send<SponsorSegment[]>({
+        type: 'skipSensei:fetchSponsorBlock',
+        videoId: this.videoId,
+      })) ?? []
+    if (this.stopped) return
+    if (sbSegments.length > 0) {
+      this.segments = this.mergeExternal(sbSegments)
+      log('SponsorBlock:', describeSegments(sbSegments))
+      this.setStatus(
+        'ready',
+        `SponsorBlock — ${sbSegments.length} segment${sbSegments.length === 1 ? '' : 's'}`,
+      )
+      return
+    }
+
     await this.analyze(video)
+  }
+
+  /** Merge external (SponsorBlock) segments on top of chapter segments;
+   * chapter segments win any overlap. */
+  private mergeExternal(external: SponsorSegment[]): SponsorSegment[] {
+    const merged = [...this.chapterSegments]
+    for (const seg of external) {
+      const overlaps = merged.some(
+        (m) => seg.start < m.end && seg.end > m.start,
+      )
+      if (!overlaps) merged.push(seg)
+    }
+    return merged.sort((a, b) => a.start - b.start)
   }
 
   private async loadChapterSegments(

@@ -26,6 +26,9 @@ export default defineManifest({
   ],
   host_permissions: [
     '*://*.youtube.com/*',
+    // SponsorBlock crowd-sourced segment database (privacy-preserving hash
+    // prefix lookup; only contacted when SponsorBlock is enabled).
+    'https://sponsor.ajay.app/*',
     // Cloud LLM providers for sponsor detection (only contacted when the user
     // configures an API key; default is Chrome's on-device AI).
     'https://generativelanguage.googleapis.com/*',

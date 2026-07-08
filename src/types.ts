@@ -32,6 +32,11 @@ export interface Settings {
   allowlist: string[]
   /** Segments below this confidence are never skipped. */
   confidenceThreshold: number
+  /** Use the SponsorBlock crowd-sourced database as an instant, deterministic
+   * segment source (AI only runs when it returns nothing). On by default. */
+  sponsorBlockEnabled: boolean
+  /** Which SponsorBlock categories to skip (their API category ids). */
+  sponsorBlockCategories: string[]
   showSkipToast: boolean
   /** Let the AI auto-repair YouTube selectors when a DOM change breaks them. */
   aiEnhancements: boolean
@@ -42,6 +47,20 @@ export interface Settings {
    * engine auto-disables it after repeated enforcement walls.
    */
   aggressivePruning: boolean
+  /** General web URL-tracking-parameter stripping (AdGuard URL Tracking list).
+   * Needs broad host access, so it's requested as an optional permission when
+   * enabled. Off by default. */
+  blockUrlTracking: boolean
+  /** YouTube annoyance removers (cosmetic). All off by default. */
+  ytHideShorts: boolean
+  ytDismissStillWatching: boolean
+  ytDisableEndCards: boolean
+  /**
+   * Local-only mode: force built-in on-device AI, disable telemetry, and make
+   * ZERO external network calls (no cloud LLM, no SponsorBlock, no error
+   * reports). A hard privacy guarantee. Off by default.
+   */
+  localOnlyMode: boolean
   /** Emit [skipSensei] diagnostics to the console. Off by default. */
   debugLogging: boolean
   /** Anonymous sanitized error reports (no usage tracking — CWS stats cover that). On by default, disclosed in options. */
@@ -66,9 +85,16 @@ export const DEFAULT_SETTINGS: Settings = {
   blockPopups: false,
   allowlist: [],
   confidenceThreshold: 0.7,
+  sponsorBlockEnabled: true,
+  sponsorBlockCategories: ['sponsor', 'selfpromo', 'interaction'],
   showSkipToast: true,
   aiEnhancements: true,
   aggressivePruning: false,
+  blockUrlTracking: false,
+  ytHideShorts: false,
+  ytDismissStillWatching: false,
+  ytDisableEndCards: false,
+  localOnlyMode: false,
   debugLogging: false,
   telemetryEnabled: true,
   llmProvider: 'builtin',
@@ -135,7 +161,17 @@ export interface TranscriptLine {
   text: string
 }
 
-export type SegmentType = 'sponsor' | 'self-promo' | 'ad-read'
+export type SegmentType =
+  | 'sponsor'
+  | 'self-promo'
+  | 'ad-read'
+  // Additional SponsorBlock categories (only used when their toggle is on).
+  | 'interaction'
+  | 'intro'
+  | 'outro'
+  | 'preview'
+  | 'filler'
+  | 'music-offtopic'
 
 export interface SponsorSegment {
   start: number
@@ -145,8 +181,9 @@ export interface SponsorSegment {
   confidence: number
   /** Set when the user hit "unskip / that was wrong". Never auto-skipped again. */
   dismissed?: boolean
-  /** 'chapter' = derived from a creator chapter titled "Ad Break"/"Sponsor"/…. */
-  source?: 'llm' | 'chapter'
+  /** Where the segment came from. 'chapter' = creator "Ad Break" chapter;
+   * 'sponsorblock' = SponsorBlock crowd-sourced database; 'llm' = AI. */
+  source?: 'llm' | 'chapter' | 'sponsorblock'
 }
 
 export type AnalysisStatus =
@@ -191,6 +228,7 @@ export type Message =
       durationSeconds: number
     } // → VideoAnalysis
   | { type: 'skipSensei:abandonAnalysis'; videoId: string }
+  | { type: 'skipSensei:fetchSponsorBlock'; videoId: string } // → SponsorSegment[]
   | {
       type: 'skipSensei:reportCorrection'
       videoId: string
