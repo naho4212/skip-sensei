@@ -249,7 +249,6 @@ async function runAnalysis(
 async function findSelector(
   html: string,
   description: string,
-  host?: string,
 ): Promise<string | null> {
   const settings = await getSettings()
   if (!settings.aiEnhancements) return null
@@ -261,23 +260,11 @@ async function findSelector(
       settings,
       controller.signal,
     )
-    if (selector) {
-      void recordActivity(
-        'AI enhancements',
-        `self-healed a broken selector → ${selector}`,
-        host,
-      )
-      // High-value improvement signal: a self-heal means our hardcoded
-      // selectors went stale and the AI found a replacement. Reporting the
-      // selector (+ what it was for) lets us fold good ones into the
-      // shipped list. NOTE: this is the AI's *proposed* selector; the
-      // content script still validates it before use.
-      void reportEvent('self_heal', {
-        description: description.slice(0, 120),
-        selector,
-        host: host ?? '',
-      })
-    }
+    // NOTE: we deliberately do NOT log or report the heal here. This is the
+    // AI's *proposed* selector; the content script validates it before use
+    // and, only if it passes, writes the activity-log entry and fires the
+    // self_heal telemetry (see AdEngine.recordHeal). That keeps both signals
+    // to confirmed-working selectors.
     return selector
   } catch {
     return null
@@ -441,11 +428,7 @@ chrome.runtime.onMessage.addListener(
         sendResponse(badgeState(message.tabId).blocked)
         return false
       case 'skipSensei:findSelector':
-        void findSelector(
-          message.html,
-          message.description,
-          senderHost(sender),
-        ).then(sendResponse)
+        void findSelector(message.html, message.description).then(sendResponse)
         return true
       case 'skipSensei:findAdSelectors':
         void findAds(message.html, message.domain).then(sendResponse)

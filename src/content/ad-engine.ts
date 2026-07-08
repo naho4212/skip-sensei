@@ -331,11 +331,31 @@ export class AdEngine {
         if (!this.healedSkipSelectors.includes(selector))
           this.healedSkipSelectors.push(selector)
         await addHealedSelector('skipButton', selector)
+        this.recordHeal('skipButton', selector)
         this.check() // click it now
       }
     } catch {
       // invalid selector or LLM failure — nothing to do
     }
+  }
+
+  /**
+   * Record a CONFIRMED self-heal — one that passed content-side validation
+   * and is now cached and in use. Both the user-facing activity log and the
+   * improvement telemetry fire from here (not when the AI merely answers), so
+   * neither ever shows a selector we rejected.
+   */
+  private recordHeal(target: 'skipButton' | 'enforcementWall', selector: string) {
+    const label =
+      target === 'skipButton'
+        ? `self-healed the skip button → ${selector}`
+        : `self-healed the ad-blocker wall → ${selector}`
+    void recordActivity('AI enhancements', label, 'youtube.com')
+    void this.send({
+      type: 'skipSensei:event',
+      kind: 'self_heal',
+      fields: { target, selector },
+    })
   }
 
   private send<T>(message: unknown): Promise<T | null> {
@@ -648,6 +668,7 @@ export class AdEngine {
         log('self-healed enforcement wall selector:', selector)
         if (!this.wallSelectors.includes(selector)) this.wallSelectors.push(selector)
         await addHealedSelector('enforcementWall', selector)
+        this.recordHeal('enforcementWall', selector)
         this.dismissEnforcementWall() // dismiss it now via the healed selector
       }
     } catch {
