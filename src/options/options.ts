@@ -439,6 +439,22 @@ async function main() {
     })
   }
 
+  // Local-only mode overrides the provider, diagnostics, and SponsorBlock —
+  // grey those out while it's on so the override is visible.
+  const localOnlyEl = $<HTMLInputElement>('local-only')
+  const applyLocalOnlyUi = (on: boolean) => {
+    $<HTMLSelectElement>('provider').disabled = on
+    $<HTMLInputElement>('telemetry').disabled = on
+    sbEnabledEl.disabled = on
+    for (const el of sbCatEls) el.disabled = on
+  }
+  localOnlyEl.checked = loaded.localOnlyMode
+  applyLocalOnlyUi(loaded.localOnlyMode)
+  localOnlyEl.addEventListener('change', async () => {
+    await save({ localOnlyMode: localOnlyEl.checked })
+    applyLocalOnlyUi(localOnlyEl.checked)
+  })
+
   const debugLoggingEl = $<HTMLInputElement>('debug-logging')
   debugLoggingEl.checked = (await getSettings()).debugLogging
   debugLoggingEl.addEventListener('change', () =>

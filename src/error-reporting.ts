@@ -61,8 +61,8 @@ export async function reportError(
   error: unknown,
 ): Promise<void> {
   try {
-    const { telemetryEnabled, llmProvider } = await getSettings()
-    if (!telemetryEnabled) return
+    const { telemetryEnabled, llmProvider, localOnlyMode } = await getSettings()
+    if (!telemetryEnabled || localOnlyMode) return
 
     const err = error instanceof Error ? error : new Error(String(error))
     if (/abort/i.test(err.message)) return // user navigation, not a defect
@@ -123,8 +123,8 @@ export async function reportEvent(
   fields: Record<string, string> = {},
 ): Promise<void> {
   try {
-    const { telemetryEnabled, llmProvider } = await getSettings()
-    if (!telemetryEnabled) return
+    const { telemetryEnabled, llmProvider, localOnlyMode } = await getSettings()
+    if (!telemetryEnabled || localOnlyMode) return
 
     const now = Date.now()
     const result = await chrome.storage.local.get(EVENT_BUDGET_KEY)

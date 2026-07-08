@@ -455,6 +455,8 @@ function usable(provider: LlmProvider, settings: Settings): boolean {
 }
 
 export function resolveProvider(settings: Settings): LlmProvider {
+  // Local-only mode forbids any external call — on-device AI only.
+  if (settings.localOnlyMode) return 'builtin'
   return usable(settings.llmProvider, settings) ? settings.llmProvider : 'builtin'
 }
 
@@ -466,6 +468,7 @@ export function resolveProvider(settings: Settings): LlmProvider {
  * the main provider's quota for transcript analysis.
  */
 export function resolveHelperProvider(settings: Settings): LlmProvider {
+  if (settings.localOnlyMode) return 'builtin' // on-device only
   if (settings.llmProvider !== 'groq' && usable('groq', settings)) {
     return 'groq'
   }
