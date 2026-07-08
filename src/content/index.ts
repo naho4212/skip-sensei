@@ -30,8 +30,18 @@ function getVideoId(): string | null {
 
 function reportAdSkip(method: AdSkipMethod) {
   const message: Message = { type: 'skipSensei:adSkipped', method }
-  // Service worker may be asleep mid-restart; a dropped count isn't worth a crash.
-  chrome.runtime.sendMessage(message).catch(() => {})
+  // Service worker may be asleep mid-restart; a dropped count isn't worth a
+  // crash. The try/catch matters too: after an extension reload orphans this
+  // script, sendMessage throws SYNCHRONOUSLY — tear everything down then.
+  try {
+    chrome.runtime.sendMessage(message).catch(() => {})
+  } catch {
+    adEngine?.stop()
+    adEngine = null
+    sponsorEngine?.stop()
+    sponsorEngine = null
+    document.removeEventListener('yt-navigate-finish', onNavigate)
+  }
 }
 
 function syncEngines() {

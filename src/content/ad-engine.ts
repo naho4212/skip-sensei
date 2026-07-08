@@ -137,6 +137,13 @@ export class AdEngine {
   }
 
   private check() {
+    // Extension reloaded/removed → this copy of the script is orphaned and
+    // every chrome.* call throws "Extension context invalidated". Park
+    // quietly; the tab's next refresh runs the fresh script.
+    if (!chrome.runtime?.id) {
+      this.stop()
+      return
+    }
     if (!this.player) return
 
     this.dismissEnforcementWall()
@@ -210,7 +217,13 @@ export class AdEngine {
   }
 
   private send<T>(message: unknown): Promise<T | null> {
-    return chrome.runtime.sendMessage(message).catch(() => null)
+    // sendMessage throws SYNCHRONOUSLY when the extension context is
+    // invalidated — .catch() alone never sees it.
+    try {
+      return chrome.runtime.sendMessage(message).catch(() => null)
+    } catch {
+      return Promise.resolve(null)
+    }
   }
 
   /** Restore normal playback speed + audio once the ad is gone. */

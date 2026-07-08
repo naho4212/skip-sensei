@@ -283,6 +283,11 @@ export class SponsorEngine {
 
   private checkPlayback() {
     if (this.stopped || !this.video || this.segments.length === 0) return
+    // Orphaned by an extension reload — park quietly (see AdEngine.check).
+    if (!chrome.runtime?.id) {
+      this.stop()
+      return
+    }
     const settings = this.getSettings()
     const time = this.video.currentTime
 
@@ -319,6 +324,12 @@ export class SponsorEngine {
   }
 
   private send<T = void>(message: Message): Promise<T | null> {
-    return chrome.runtime.sendMessage(message).catch(() => null)
+    // sendMessage throws SYNCHRONOUSLY when the extension context is
+    // invalidated — .catch() alone never sees it.
+    try {
+      return chrome.runtime.sendMessage(message).catch(() => null)
+    } catch {
+      return Promise.resolve(null)
+    }
   }
 }
