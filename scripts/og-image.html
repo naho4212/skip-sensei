@@ -1,0 +1,90 @@
+<!doctype html>
+<!-- Source for landing/og.png (1200×630). Regenerate with:
+  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+    --headless=new --screenshot=landing/og.png --window-size=1200,630 \
+    --hide-scrollbars --virtual-time-budget=8000 file://$PWD/scripts/og-image.html
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      * { margin: 0; box-sizing: border-box; }
+      body {
+        width: 1200px;
+        height: 630px;
+        overflow: hidden;
+        background: #212121;
+        font-family: Roboto, Arial, sans-serif;
+        color: #f1f1f1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+      }
+      /* soft purple glow behind the lockup */
+      .glow {
+        position: absolute;
+        width: 900px;
+        height: 900px;
+        left: 150px;
+        top: -135px;
+        background: radial-gradient(
+          circle,
+          rgba(124, 58, 237, 0.28) 0%,
+          rgba(124, 58, 237, 0.1) 40%,
+          transparent 70%
+        );
+      }
+      .card {
+        position: relative;
+        text-align: center;
+      }
+      .mark {
+        width: 168px;
+        height: 119px;
+        fill: #7c3aed;
+        margin-bottom: 28px;
+      }
+      .wordmark {
+        font-size: 92px;
+        font-weight: 900;
+        letter-spacing: -0.02em;
+        line-height: 1;
+      }
+      .wordmark .ad { color: #8b5cf6; }
+      .tagline {
+        margin-top: 26px;
+        font-size: 34px;
+        font-weight: 500;
+        color: #aaaaaa;
+      }
+      .sub {
+        margin-top: 14px;
+        font-size: 24px;
+        font-weight: 400;
+        color: #7a7a7a;
+      }
+      .sub b { color: #aaaaaa; font-weight: 500; }
+    </style>
+  </head>
+  <body>
+    <div class="glow"></div>
+    <div class="card">
+      <svg class="mark" viewBox="0 0 24 17" aria-hidden="true">
+        <path d="M0 1.5l6 7-6 7v-14zm7.5 0l6 7-6 7v-14zm8.5 0h2.4v14H16v-14z" />
+      </svg>
+      <div class="wordmark"><span class="ad">AD</span> SENSEI</div>
+      <div class="tagline">Zero interruptions.</div>
+      <div class="sub">
+        Skip YouTube ads &amp; sponsor segments · block ads everywhere ·
+        <b>AI-powered, private, free</b>
+      </div>
+    </div>
+  </body>
+</html>
