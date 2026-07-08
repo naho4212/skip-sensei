@@ -59,6 +59,41 @@ const STUCK_AFTER_MS = 3000
 const MAX_STUCK_RECOVERIES = 3
 
 /**
+ * Cloak: opaque cover over the player while an ad is being neutralized, so
+ * the user sees a calm "Skipping ad…" panel instead of the 16x flicker,
+ * click churn, and pod transitions. Removed the moment the ad is gone.
+ */
+const CLOAK_ID = 'skip-sensei-ad-cloak'
+const CLOAK_STYLE_ID = 'skip-sensei-ad-cloak-style'
+const CLOAK_CSS = `
+#${CLOAK_ID} {
+  position: absolute;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  background: #0f0f0f;
+  color: rgba(255, 255, 255, 0.85);
+  font: 500 14px/1.4 "Roboto", "Arial", sans-serif;
+  cursor: default;
+}
+#${CLOAK_ID} .skip-sensei-cloak-spinner {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  border-top-color: #fff;
+  animation: skip-sensei-cloak-spin 0.8s linear infinite;
+}
+@keyframes skip-sensei-cloak-spin {
+  to { transform: rotate(360deg); }
+}
+`
+
+/**
  * Ad Engine: detects YouTube-served ads on the current watch page and
  * neutralizes them. One instance per watch page; SPA navigation tears it
  * down and creates a fresh one.
@@ -90,6 +125,7 @@ export class AdEngine {
   private ffLastTime = -1
   private ffLastAdvanceAt = 0
   private stuckRecoveries = 0
+  private cloak: HTMLElement | null = null
   /** Runtime skip-button selectors = hardcoded + AI-healed ones from storage. */
   private skipSelectors: string[] = [...SKIP_BUTTONS]
   /** AI-healed selectors for the anti-adblock enforcement modal. */
@@ -125,6 +161,15 @@ export class AdEngine {
     this.player = null
     this.fastForwarding = false
     this.skipClickedAt = null
+    // Teardown must leave the video watchable (orphaned scripts included):
+    // uncover the player and restore speed/audio.
+    this.removeCloak()
+    const video = document.querySelector<HTMLVideoElement>(VIDEO)
+    if (video) {
+      if (video.playbackRate !== 1) video.playbackRate = 1
+      if (this.mutedForAd) video.muted = false
+    }
+    this.mutedForAd = false
   }
 
   get isActive(): boolean {
@@ -178,6 +223,7 @@ export class AdEngine {
     const adShowing = this.adIsShowing()
     if (!adShowing) {
       this.endFastForward()
+      this.removeCloak()
       this.adShowingSince = null
       this.skipClickedAt = null
       this.healInFlight = false
@@ -187,6 +233,7 @@ export class AdEngine {
     }
 
     if (this.adShowingSince === null) this.adShowingSince = Date.now()
+    this.applyCloak()
 
     if (this.clickSkipButton()) {
       // Give the click a moment to take effect — but no longer. YouTube's
@@ -194,7 +241,10 @@ export class AdEngine {
       // the click (the 2nd ad of a pod, typically) must not park here at
       // normal speed, so past the grace period we fall through and burn it.
       if (Date.now() - this.skipClickedAt! <= SKIP_CLICK_GRACE_MS) {
-        this.endFastForward()
+        // Rate back to normal for the transition, but STAY muted/cloaked —
+        // the ad is still on screen until the click lands.
+        const video = document.querySelector<HTMLVideoElement>(VIDEO)
+        if (video && video.playbackRate !== 1) video.playbackRate = 1
         return
       }
     } else {
@@ -251,6 +301,41 @@ export class AdEngine {
     } catch {
       return Promise.resolve(null)
     }
+  }
+
+  /**
+   * Cover the player and mute the moment an ad is detected. Everything the
+   * engine does next (skip clicks, 16x burn, pod transitions, stuck
+   * recovery) happens behind the cover. The cloak sits above the ad's UI
+   * but querySelector/synthetic clicks still reach the skip button fine.
+   */
+  private applyCloak() {
+    const video = document.querySelector<HTMLVideoElement>(VIDEO)
+    if (video && !video.muted) {
+      this.mutedForAd = true
+      video.muted = true
+    }
+    if (this.cloak?.isConnected) return
+    if (!document.getElementById(CLOAK_STYLE_ID)) {
+      const style = document.createElement('style')
+      style.id = CLOAK_STYLE_ID
+      style.textContent = CLOAK_CSS
+      document.head.appendChild(style)
+    }
+    const cloak = document.createElement('div')
+    cloak.id = CLOAK_ID
+    const spinner = document.createElement('div')
+    spinner.className = 'skip-sensei-cloak-spinner'
+    const label = document.createElement('span')
+    label.textContent = 'Skipping ad…'
+    cloak.append(spinner, label)
+    this.player?.appendChild(cloak)
+    this.cloak = cloak
+  }
+
+  private removeCloak() {
+    document.getElementById(CLOAK_ID)?.remove()
+    this.cloak = null
   }
 
   /** Restore normal playback speed + audio once the ad is gone. */
