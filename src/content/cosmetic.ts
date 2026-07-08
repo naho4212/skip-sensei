@@ -63,6 +63,41 @@ const SELECTORS = [
   '[aria-label="Advertisement" i]',
 ]
 
+/**
+ * YouTube's own promoted/sponsored items: first-party custom elements served
+ * from youtube.com, so there's no ad-network request the DNR filter lists can
+ * block — they only disappear via cosmetic hiding. Every tag here is
+ * ad-specific (none match real videos). Hiding the wrapping rich-item removes
+ * the whole feed card so no empty gap is left. Applied only on youtube.com.
+ *
+ * Deliberately NOT keyed off the "Sponsored" badge class (.ytBadgeShapeText),
+ * which also labels real videos ("4K", "New", "Live") and would over-hide.
+ * Never touch ytd-masthead — that's the header/search bar, not an ad.
+ */
+const YOUTUBE_SELECTORS = [
+  'ytd-ad-slot-renderer',
+  'ytd-rich-item-renderer:has(ytd-ad-slot-renderer)', // home-feed ad card
+  'ytd-in-feed-ad-layout-renderer',
+  'ytd-rich-section-renderer:has(ytd-statement-banner-renderer)',
+  'ytd-statement-banner-renderer',
+  'ytd-brand-video-shelf-renderer',
+  'ytd-brand-video-singleton-renderer',
+  'ytd-promoted-sparkles-web-renderer',
+  'ytd-promoted-sparkles-text-search-renderer',
+  'ytd-promoted-video-renderer',
+  'ytd-search-pyv-renderer', // promoted result in search
+  'ytd-display-ad-renderer',
+  'ytd-carousel-ad-renderer',
+  'ytd-companion-slot-renderer',
+  'ytd-action-companion-ad-renderer',
+  'ytd-player-legacy-desktop-watch-ads-renderer',
+  '#masthead-ad', // homepage top banner
+]
+
+function isYouTube(): boolean {
+  return /(^|\.)youtube\.com$/.test(location.hostname)
+}
+
 const GAPFILL_STYLE_ID = 'skip-sensei-gapfill'
 
 function isValidSelectorList(list: string[]): string[] {
@@ -104,9 +139,12 @@ async function apply() {
 
   const existing = document.getElementById(STYLE_ID)
   if (on && !existing) {
+    const selectors = isYouTube()
+      ? [...SELECTORS, ...YOUTUBE_SELECTORS]
+      : SELECTORS
     const style = document.createElement('style')
     style.id = STYLE_ID
-    style.textContent = buildCss(SELECTORS)
+    style.textContent = buildCss(selectors)
     ;(document.head ?? document.documentElement).appendChild(style)
     void applyGapfill() // hide anything the AI found on prior visits
   } else if (!on && existing) {
