@@ -31,6 +31,7 @@
             <option value="groq">Groq (free API key)</option>
             <option value="openrouter">OpenRouter (free API key)</option>
             <option value="ollama">Local Ollama (free, no key)</option>
+            <option value="openclaw">OpenClaw gateway (your OpenClaw)</option>
             <option value="anthropic">Anthropic Claude (API key)</option>
             <option value="openai">OpenAI (API key)</option>
           </select>
@@ -40,10 +41,18 @@
         <div id="cloud-fields" hidden>
           <label class="field" id="api-key-field">
             <span>
-              API key
+              <span id="api-key-label">API key</span>
               <a id="api-key-link" target="_blank" rel="noopener">Get a key →</a>
             </span>
             <input type="password" id="api-key" autocomplete="off" placeholder="paste your key" />
+          </label>
+          <label class="field" id="openclaw-url-field" hidden>
+            <span>Gateway URL</span>
+            <input
+              type="text"
+              id="openclaw-url"
+              placeholder="http://127.0.0.1:18789/v1/chat/completions"
+            />
           </label>
           <label class="field">
             <span>Model <em>(optional override)</em></span>

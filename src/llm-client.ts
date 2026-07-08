@@ -28,6 +28,8 @@ const DEFAULT_MODELS: Record<Exclude<LlmProvider, 'builtin'>, string> = {
   groq: 'llama-3.3-70b-versatile',
   openrouter: 'meta-llama/llama-3.3-70b-instruct:free',
   ollama: 'llama3.1:8b',
+  // For OpenClaw the "model" is an agent target, not a model id.
+  openclaw: 'openclaw',
 }
 
 /** Per-provider transcript chunk budget (chars). Long videos are chunked. */
@@ -46,6 +48,7 @@ const MAX_INPUT_CHARS: Record<LlmProvider, number> = {
   openrouter: 60_000,
   // Local models are slow; keep chunks modest so one call stays in the timeout.
   ollama: 24_000,
+  openclaw: 60_000,
 }
 
 const CHUNK_OVERLAP_LINES = 5
@@ -64,6 +67,7 @@ const CHUNK_TIMEOUT_MS: Record<LlmProvider, number> = {
   groq: 60_000,
   openrouter: 90_000, // free pools can queue under load
   ollama: 180_000, // local inference is RAM/CPU-bound
+  openclaw: 180_000, // full agent runs, plus possibly a local model behind it
 }
 
 const SYSTEM_PROMPT = `You analyze YouTube video transcripts to find paid promotional segments that viewers may want to skip.
@@ -446,6 +450,7 @@ function usable(provider: LlmProvider, settings: Settings): boolean {
   if (provider === 'builtin') return true
   if (inCooldown(provider)) return false // fall back while rate-limited
   if (provider === 'ollama') return true // local, keyless
+  if (provider === 'openclaw') return true // local gateway; token optional (auth "none" mode)
   return !!settings.apiKeys[provider]?.trim()
 }
 
@@ -464,7 +469,12 @@ export function resolveHelperProvider(settings: Settings): LlmProvider {
   if (settings.llmProvider !== 'groq' && usable('groq', settings)) {
     return 'groq'
   }
-  return resolveProvider(settings)
+  const provider = resolveProvider(settings)
+  // NEVER send page HTML to OpenClaw: helper prompts embed content from
+  // arbitrary websites, and the gateway runs full agent turns with operator
+  // permissions — that would hand any malicious page a prompt-injection
+  // channel into an agent that can act. OpenClaw gets transcripts only.
+  return provider === 'openclaw' ? 'builtin' : provider
 }
 
 export async function builtinAvailability(): Promise<string> {
@@ -652,6 +662,13 @@ const OPENAI_COMPATIBLE = {
     label: 'Ollama',
     jsonMode: false,
   },
+  openclaw: {
+    // Placeholder — the real URL comes from settings.openclawUrl (the
+    // gateway port is user-configurable).
+    url: 'http://127.0.0.1:18789/v1/chat/completions',
+    label: 'OpenClaw',
+    jsonMode: false,
+  },
 } as const
 
 /**
@@ -792,7 +809,11 @@ async function completeOpenAiCompatible(
   settings: Settings,
   signal: AbortSignal,
 ): Promise<string> {
-  const { url, label, jsonMode } = OPENAI_COMPATIBLE[provider]
+  const { url: defaultUrl, label, jsonMode } = OPENAI_COMPATIBLE[provider]
+  const url =
+    provider === 'openclaw'
+      ? settings.openclawUrl.trim() || defaultUrl
+      : defaultUrl
   const key =
     provider === 'ollama' ? '' : (settings.apiKeys[provider] ?? '').trim()
   const response = await fetch(url, {

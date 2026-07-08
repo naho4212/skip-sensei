@@ -8,9 +8,10 @@ export type LlmProvider =
   | 'groq'
   | 'openrouter'
   | 'ollama'
+  | 'openclaw'
 
 /** Providers that authenticate with a user-supplied API key (Ollama is local
- * and keyless; built-in is on-device). */
+ * and keyless; built-in is on-device). OpenClaw's "key" is its gateway token. */
 export type KeyedProvider = Exclude<LlmProvider, 'builtin' | 'ollama'>
 
 export interface Settings {
@@ -43,6 +44,8 @@ export interface Settings {
   apiKeys: Partial<Record<KeyedProvider, string>>
   /** Model override; '' = provider default. */
   model: string
+  /** OpenClaw gateway chat-completions URL (port is user-configurable). */
+  openclawUrl: string
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -63,6 +66,7 @@ export const DEFAULT_SETTINGS: Settings = {
   llmProvider: 'builtin',
   apiKeys: {},
   model: '',
+  openclawUrl: 'http://127.0.0.1:18789/v1/chat/completions',
 }
 
 export interface Stats {

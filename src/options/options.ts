@@ -41,6 +41,7 @@ const KEY_LINKS: Record<KeyedProvider, string> = {
   openrouter: 'https://openrouter.ai/settings/keys',
   anthropic: 'https://console.anthropic.com/settings/keys',
   openai: 'https://platform.openai.com/api-keys',
+  openclaw: 'https://docs.openclaw.ai/gateway/openai-http-api',
 }
 
 /** Providers whose free tier makes the key link say so. */
@@ -85,6 +86,11 @@ const MODEL_OPTIONS: Record<
     { value: 'qwen3:8b', label: 'qwen3:8b' },
     { value: 'deepseek-r1:8b', label: 'deepseek-r1:8b · slow, thorough' },
     { value: 'gemma3:12b', label: 'gemma3:12b · needs 16 GB+ RAM' },
+  ],
+  openclaw: [
+    { value: '', label: 'Default OpenClaw agent' },
+    { value: 'openclaw/default', label: 'openclaw/default (stable alias)' },
+    // "Custom…" covers openclaw/<agentId> for a specific agent.
   ],
   gemini: [
     { value: '', label: 'Provider default — gemini-2.5-flash' },
@@ -165,6 +171,8 @@ const PROVIDER_INFO: Record<LlmProvider, string> = {
     'One free key, many open models (default Llama 3.3 70B :free). Free tier is 50 requests/day (1,000/day forever after a one-time $10 top-up) — fine for light use or as a backup. Each video is analyzed once, then cached.',
   ollama:
     'Fully local and unlimited — no key, no cloud, total privacy, and smarter than Chrome’s built-in AI. Needs the Ollama app running with a model pulled (e.g. “ollama pull llama3.1:8b”) and extension access enabled: OLLAMA_ORIGINS=chrome-extension://* . Analysis speed depends on your Mac.',
+  openclaw:
+    'Already running OpenClaw? Point Ad Sensei at its gateway and sponsor analysis uses whatever model your OpenClaw routes to — no extra key to manage. Enable the endpoint in your config (gateway.http.endpoints.chatCompletions.enabled: true) and paste your gateway token. Analysis runs as full agent turns, so it’s slower and heavier than a direct API. For safety, only video transcripts are ever sent to OpenClaw — the AI page helpers (popup review, cookie consent) stay on other providers, since the gateway token carries operator permissions.',
   anthropic:
     'Analysis time: a few seconds, regardless of video length. Uses your Anthropic API key (default model claude-haiku-4-5); typical cost is well under 1¢ per video. Each video is analyzed once, then cached.',
   openai:
@@ -186,12 +194,22 @@ function render(settings: Settings) {
   if (provider !== 'builtin') {
     const keyField = $('api-key-field')
     keyField.hidden = provider === 'ollama' // local server, no key
+    $('openclaw-url-field').hidden = provider !== 'openclaw'
+    const urlEl = $<HTMLInputElement>('openclaw-url')
+    if (provider === 'openclaw' && document.activeElement !== urlEl) {
+      urlEl.value = settings.openclawUrl
+    }
     if (provider !== 'ollama') {
       apiKeyEl.value = settings.apiKeys[provider] ?? ''
       apiKeyLinkEl.href = KEY_LINKS[provider]
-      apiKeyLinkEl.textContent = FREE_KEY_PROVIDERS.has(provider)
-        ? 'Get a free key →'
-        : 'Get a key →'
+      $('api-key-label').textContent =
+        provider === 'openclaw' ? 'Gateway token' : 'API key'
+      apiKeyLinkEl.textContent =
+        provider === 'openclaw'
+          ? 'Setup guide →'
+          : FREE_KEY_PROVIDERS.has(provider)
+            ? 'Get a free key →'
+            : 'Get a key →'
     }
   }
   void renderUsage(provider)
@@ -247,7 +265,9 @@ async function renderUsage(provider: LlmProvider) {
     noteEl.textContent =
       provider === 'ollama'
         ? 'Counts this extension’s calls to your local Ollama server — free and unlimited.'
-        : 'Counts this extension’s calls to your key. Most videos/sites are cached, so usage stays low.'
+        : provider === 'openclaw'
+          ? 'Counts this extension’s calls to your OpenClaw gateway — cost depends on the model OpenClaw routes to.'
+          : 'Counts this extension’s calls to your key. Most videos/sites are cached, so usage stays low.'
   }
 }
 
@@ -346,6 +366,16 @@ async function main() {
   modelEl.addEventListener(
     'input',
     debounce(() => void save({ model: modelEl.value.trim() }), 400),
+  )
+  $<HTMLInputElement>('openclaw-url').addEventListener(
+    'input',
+    debounce(() => {
+      const value = $<HTMLInputElement>('openclaw-url').value.trim()
+      void save({
+        openclawUrl:
+          value || 'http://127.0.0.1:18789/v1/chat/completions',
+      })
+    }, 400),
   )
   thresholdEl.addEventListener('input', () => {
     thresholdValueEl.value = Number(thresholdEl.value).toFixed(2)

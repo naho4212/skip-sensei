@@ -31,8 +31,9 @@ export default defineManifest({
     'https://api.openai.com/*',
     'https://api.groq.com/*',
     'https://openrouter.ai/*',
-    // Local Ollama server (only contacted when the user selects it).
+    // Local Ollama / OpenClaw gateways (only contacted when the user selects them).
     'http://localhost/*',
+    'http://127.0.0.1/*',
   ],
   background: {
     service_worker: 'src/service-worker.ts',

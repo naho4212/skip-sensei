@@ -51,6 +51,8 @@ const SETTING_LABELS: Partial<Record<keyof Settings | string, string>> = {
   'apiKeys.openrouter': 'OpenRouter API key',
   'apiKeys.anthropic': 'Anthropic API key',
   'apiKeys.openai': 'OpenAI API key',
+  'apiKeys.openclaw': 'OpenClaw gateway token',
+  openclawUrl: 'OpenClaw gateway URL',
 }
 
 function cell(text: string, className?: string): HTMLTableCellElement {
