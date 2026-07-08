@@ -92,6 +92,11 @@ const YOUTUBE_SELECTORS = [
   'ytd-action-companion-ad-renderer',
   'ytd-player-legacy-desktop-watch-ads-renderer',
   '#masthead-ad', // homepage top banner
+  // Watch-page sidebar "ads engagement panel" (a newer display-ad format).
+  // Hide only the panel that actually contains the ad content — the generic
+  // ytd-engagement-panel-section-list-renderer also holds chapters/transcript.
+  'ytd-ads-engagement-panel-content-renderer',
+  'ytd-engagement-panel-section-list-renderer:has(ytd-ads-engagement-panel-content-renderer)',
 ]
 
 function isYouTube(): boolean {
@@ -135,22 +140,34 @@ async function blockingActive(): Promise<boolean> {
 }
 
 async function apply() {
-  const on = await blockingActive()
+  const settings = await getSettings()
+  const allowed = settings.masterEnabled && !isAllowlisted(settings.allowlist)
+  // Generic web ad hiding is the "Block all ads" feature. YouTube's own
+  // display ads (feed/sidebar/masthead) are also hidden when "Skip YouTube
+  // ads" is on — a YouTube display ad slipping through is surprising when
+  // ad-skipping is enabled.
+  const genericOn = allowed && settings.blockAllAds
+  const ytOn =
+    allowed &&
+    isYouTube() &&
+    (settings.blockAllAds || settings.adEngineEnabled)
 
-  const existing = document.getElementById(STYLE_ID)
-  if (on && !existing) {
-    const selectors = isYouTube()
-      ? [...SELECTORS, ...YOUTUBE_SELECTORS]
-      : SELECTORS
-    const style = document.createElement('style')
-    style.id = STYLE_ID
-    style.textContent = buildCss(selectors)
-    ;(document.head ?? document.documentElement).appendChild(style)
-    void applyGapfill() // hide anything the AI found on prior visits
-  } else if (!on && existing) {
-    existing.remove()
+  const selectors = [
+    ...(genericOn ? SELECTORS : []),
+    ...(ytOn ? YOUTUBE_SELECTORS : []),
+  ]
+
+  const existing = document.getElementById(STYLE_ID) as HTMLStyleElement | null
+  if (selectors.length === 0) {
+    existing?.remove()
     document.getElementById(GAPFILL_STYLE_ID)?.remove()
+    return
   }
+  const style = existing ?? document.createElement('style')
+  style.id = STYLE_ID
+  style.textContent = buildCss(selectors)
+  if (!existing) (document.head ?? document.documentElement).appendChild(style)
+  if (genericOn) void applyGapfill() // hide anything the AI found on prior visits
 }
 
 /** Apply this domain's AI-discovered ad selectors (from prior visits). */
