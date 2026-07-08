@@ -42,6 +42,9 @@ export class SponsorEngine {
   progressTotal: number | undefined
   private segments: SponsorSegment[] = []
   private chapterSegments: SponsorSegment[] = []
+  /** Deterministic segments (creator chapters + SponsorBlock), merged. The AI
+   * adds its own findings on top of these; these always win an overlap. */
+  private externalSegments: SponsorSegment[] = []
   private stopped = false
   private video: HTMLVideoElement | null = null
   /**
@@ -117,39 +120,39 @@ export class SponsorEngine {
       log('ad chapters:', describeSegments(this.chapterSegments))
     }
 
-    // SponsorBlock: crowd-sourced, instant, exact. If it has segments for this
-    // video, use them and skip the AI entirely (no transcript, no LLM call).
-    // The AI only runs for videos with no SponsorBlock submissions.
+    // SponsorBlock: crowd-sourced, instant, exact. Merge it with the chapter
+    // segments as the deterministic base, arm those immediately, then ALSO run
+    // the AI on top — the two sources catch different things (SponsorBlock has
+    // exact community timestamps; the AI finds reads nobody submitted), so
+    // merging both gives the most complete coverage.
     const sbSegments =
       (await this.send<SponsorSegment[]>({
         type: 'skipSensei:fetchSponsorBlock',
         videoId: this.videoId,
       })) ?? []
     if (this.stopped) return
-    if (sbSegments.length > 0) {
-      this.segments = this.mergeExternal(sbSegments)
-      log('SponsorBlock:', describeSegments(sbSegments))
-      this.setStatus(
-        'ready',
-        `SponsorBlock — ${sbSegments.length} segment${sbSegments.length === 1 ? '' : 's'}`,
-      )
-      return
+    this.externalSegments = this.dedupeOverlaps([
+      ...this.chapterSegments,
+      ...sbSegments,
+    ])
+    if (this.externalSegments.length > 0) {
+      this.segments = [...this.externalSegments]
+      if (sbSegments.length > 0) log('SponsorBlock:', describeSegments(sbSegments))
+      // Armed with deterministic segments; the AI may add more below.
+      this.setStatus('ready')
     }
 
     await this.analyze(video)
   }
 
-  /** Merge external (SponsorBlock) segments on top of chapter segments;
-   * chapter segments win any overlap. */
-  private mergeExternal(external: SponsorSegment[]): SponsorSegment[] {
-    const merged = [...this.chapterSegments]
-    for (const seg of external) {
-      const overlaps = merged.some(
-        (m) => seg.start < m.end && seg.end > m.start,
-      )
-      if (!overlaps) merged.push(seg)
+  /** Merge a set of segments, dropping any that overlap an earlier one.
+   * Earlier entries (chapters, then SponsorBlock) win. */
+  private dedupeOverlaps(all: SponsorSegment[]): SponsorSegment[] {
+    const kept: SponsorSegment[] = []
+    for (const seg of all) {
+      if (!kept.some((m) => seg.start < m.end && seg.end > m.start)) kept.push(seg)
     }
-    return merged.sort((a, b) => a.start - b.start)
+    return kept.sort((a, b) => a.start - b.start)
   }
 
   private async loadChapterSegments(
@@ -181,14 +184,15 @@ export class SponsorEngine {
     return segments
   }
 
-  /** Chapter segments win; LLM segments overlapping one are absorbed by it. */
+  /** Deterministic segments (chapters + SponsorBlock) win; AI segments that
+   * overlap one are dropped, the rest are added. */
   private mergeSegments(llmSegments: SponsorSegment[]): SponsorSegment[] {
-    const merged = [...this.chapterSegments]
+    const merged = [...this.externalSegments]
     for (const segment of llmSegments) {
-      const overlapsChapter = this.chapterSegments.some(
+      const overlaps = merged.some(
         (c) => segment.start < c.end && segment.end > c.start,
       )
-      if (!overlapsChapter) merged.push({ ...segment, source: 'llm' })
+      if (!overlaps) merged.push({ ...segment, source: 'llm' })
     }
     return merged.sort((a, b) => a.start - b.start)
   }
@@ -207,12 +211,12 @@ export class SponsorEngine {
     }
 
     if (document.querySelector(LIVE_BADGE) || !Number.isFinite(video.duration)) {
-      this.setStatus('unavailable', 'live stream has no complete transcript')
+      this.setStatusOrKeepExternal('unavailable', 'live stream has no complete transcript')
       return
     }
     const durationSeconds = video.duration
     if (durationSeconds < MIN_VIDEO_SECONDS) {
-      this.setStatus('unavailable', 'video too short to scan')
+      this.setStatusOrKeepExternal('unavailable', 'video too short to scan')
       return
     }
 
@@ -221,11 +225,11 @@ export class SponsorEngine {
     log('transcript fetch:', transcript.status, `${transcript.lines.length} lines`)
 
     if (transcript.status === 'no-transcript') {
-      this.setStatus('no-transcript')
+      this.setStatusOrKeepExternal('no-transcript')
       return
     }
     if (transcript.status === 'error') {
-      this.setStatus('error', 'Could not load transcript')
+      this.setStatusOrKeepExternal('error', 'Could not load transcript')
       return
     }
 
@@ -237,7 +241,7 @@ export class SponsorEngine {
     })
     if (this.stopped) return
     if (!analysis) {
-      this.setStatus('error', 'Analysis did not complete')
+      this.setStatusOrKeepExternal('error', 'Analysis did not complete')
       return
     }
     log(
@@ -254,13 +258,24 @@ export class SponsorEngine {
       this.segments = this.mergeSegments(analysis.segments)
       this.setStatus('ready')
     } else {
-      // Chapter-derived segments (if any) stay active even when the LLM
-      // path is unavailable — this.segments already holds them.
-      this.setStatus(
+      // SponsorBlock/chapter segments (if any) stay active even when the LLM
+      // path is unavailable.
+      this.setStatusOrKeepExternal(
         analysis.status === 'no-transcript' ? 'no-transcript' : analysis.status,
         analysis.reason,
       )
     }
+  }
+
+  /** Report a non-ok status only when there are no deterministic
+   * (SponsorBlock/chapter) segments to fall back on; otherwise those keep us
+   * 'ready' so their skips stay armed. */
+  private setStatusOrKeepExternal(
+    status: SponsorEngineStatus,
+    reason?: string,
+  ) {
+    if (this.externalSegments.length > 0) this.setStatus('ready')
+    else this.setStatus(status, reason)
   }
 
   private setStatus(status: SponsorEngineStatus, reason?: string) {
