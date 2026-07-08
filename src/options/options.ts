@@ -9,6 +9,7 @@ import {
 } from '../storage'
 import {
   FREE_TIER_DAILY_LIMIT,
+  type KeyedProvider,
   type LlmProvider,
   type Message,
   type Settings,
@@ -33,12 +34,17 @@ const savedNoteEl = $('saved-note')
 let savedTimer: number | null = null
 let currentSettings: Settings
 
-/** Where to get a key, per cloud provider. */
-const KEY_LINKS: Record<Exclude<LlmProvider, 'builtin'>, string> = {
+/** Where to get a key, per keyed cloud provider. */
+const KEY_LINKS: Record<KeyedProvider, string> = {
   gemini: 'https://aistudio.google.com/apikey',
+  groq: 'https://console.groq.com/keys',
+  openrouter: 'https://openrouter.ai/settings/keys',
   anthropic: 'https://console.anthropic.com/settings/keys',
   openai: 'https://platform.openai.com/api-keys',
 }
+
+/** Providers whose free tier makes the key link say so. */
+const FREE_KEY_PROVIDERS = new Set<LlmProvider>(['gemini', 'groq', 'openrouter'])
 
 /** Sentinel select value that reveals the free-text model field. */
 const CUSTOM_MODEL = '__custom__'
@@ -49,6 +55,37 @@ const MODEL_OPTIONS: Record<
   Exclude<LlmProvider, 'builtin'>,
   { value: string; label: string }[]
 > = {
+  groq: [
+    { value: '', label: 'Provider default — llama-3.3-70b-versatile' },
+    {
+      value: 'llama-3.1-8b-instant',
+      label: 'llama-3.1-8b-instant · fastest, 14.4K free req/day',
+    },
+    { value: 'llama-3.3-70b-versatile', label: 'llama-3.3-70b-versatile' },
+    {
+      value: 'meta-llama/llama-4-scout-17b-16e-instruct',
+      label: 'llama-4-scout · highest free tokens/min',
+    },
+  ],
+  openrouter: [
+    {
+      value: '',
+      label: 'Provider default — llama-3.3-70b-instruct:free',
+    },
+    {
+      value: 'meta-llama/llama-3.3-70b-instruct:free',
+      label: 'meta-llama/llama-3.3-70b-instruct:free',
+    },
+    { value: 'deepseek/deepseek-r1:free', label: 'deepseek/deepseek-r1:free · slow, thorough' },
+    { value: 'google/gemma-3-27b-it:free', label: 'google/gemma-3-27b-it:free' },
+  ],
+  ollama: [
+    { value: '', label: 'Provider default — llama3.1:8b' },
+    { value: 'llama3.1:8b', label: 'llama3.1:8b' },
+    { value: 'qwen3:8b', label: 'qwen3:8b' },
+    { value: 'deepseek-r1:8b', label: 'deepseek-r1:8b · slow, thorough' },
+    { value: 'gemma3:12b', label: 'gemma3:12b · needs 16 GB+ RAM' },
+  ],
   gemini: [
     { value: '', label: 'Provider default — gemini-2.5-flash' },
     {
@@ -121,7 +158,13 @@ const PROVIDER_INFO: Record<LlmProvider, string> = {
   builtin:
     'Analysis time: runs on your device — roughly 30–60 seconds per 20 minutes of video, so an hour-long podcast can take ~5 minutes on first watch. Each video is analyzed once, then cached; re-watches are instant. Free and fully private.',
   gemini:
-    'Recommended free option. Fast and accurate, and its huge context analyzes even a 3-hour video in one pass — no chunking. Free tier needs no credit card (~250 videos/day, ~5 requests/min — Ad Sensei paces its calls and falls back to on-device AI if the limit is hit). Get a free key at aistudio.google.com/apikey. Each video is analyzed once, then cached.',
+    'Recommended free option. Fast and accurate, and its huge context analyzes even a 3-hour video in one pass — no chunking. Free tier needs no credit card (~250 videos/day, ~5 requests/min — Ad Sensei paces its calls and falls back to on-device AI if the limit is hit). Get a free key at aistudio.google.com/apikey. Each video is analyzed once, then cached. Tip: also add a Groq key — quick AI helper tasks then use Groq and never touch Gemini’s rate limit.',
+  groq:
+    'Free and very fast (Llama 3.3 70B). Free tier is generous on requests but tight on tokens/minute, so long videos are analyzed in paced chunks — a bit slower than Gemini on podcasts. Bonus: with a Groq key saved, quick AI helper tasks (popup review, cookie consent, selector repair) use Groq even when another provider is selected.',
+  openrouter:
+    'One free key, many open models (default Llama 3.3 70B :free). Free tier is 50 requests/day (1,000/day forever after a one-time $10 top-up) — fine for light use or as a backup. Each video is analyzed once, then cached.',
+  ollama:
+    'Fully local and unlimited — no key, no cloud, total privacy, and smarter than Chrome’s built-in AI. Needs the Ollama app running with a model pulled (e.g. “ollama pull llama3.1:8b”) and extension access enabled: OLLAMA_ORIGINS=chrome-extension://* . Analysis speed depends on your Mac.',
   anthropic:
     'Analysis time: a few seconds, regardless of video length. Uses your Anthropic API key (default model claude-haiku-4-5); typical cost is well under 1¢ per video. Each video is analyzed once, then cached.',
   openai:
@@ -141,11 +184,15 @@ function render(settings: Settings) {
   builtinStatusEl.hidden = provider !== 'builtin'
 
   if (provider !== 'builtin') {
-    apiKeyEl.value = settings.apiKeys[provider] ?? ''
-    const link = KEY_LINKS[provider]
-    apiKeyLinkEl.href = link
-    apiKeyLinkEl.textContent =
-      provider === 'gemini' ? 'Get a free key →' : 'Get a key →'
+    const keyField = $('api-key-field')
+    keyField.hidden = provider === 'ollama' // local server, no key
+    if (provider !== 'ollama') {
+      apiKeyEl.value = settings.apiKeys[provider] ?? ''
+      apiKeyLinkEl.href = KEY_LINKS[provider]
+      apiKeyLinkEl.textContent = FREE_KEY_PROVIDERS.has(provider)
+        ? 'Get a free key →'
+        : 'Get a key →'
+    }
   }
   void renderUsage(provider)
 }
@@ -198,7 +245,9 @@ async function renderUsage(provider: LlmProvider) {
   } else {
     dailyEl.hidden = true
     noteEl.textContent =
-      'Counts this extension’s calls to your key. Most videos/sites are cached, so usage stays low.'
+      provider === 'ollama'
+        ? 'Counts this extension’s calls to your local Ollama server — free and unlimited.'
+        : 'Counts this extension’s calls to your key. Most videos/sites are cached, so usage stays low.'
   }
 }
 
@@ -278,7 +327,7 @@ async function main() {
     'input',
     debounce(() => {
       const provider = currentSettings.llmProvider
-      if (provider === 'builtin') return
+      if (provider === 'builtin' || provider === 'ollama') return
       void save({
         apiKeys: { ...currentSettings.apiKeys, [provider]: apiKeyEl.value },
       })

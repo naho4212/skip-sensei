@@ -1,6 +1,17 @@
 /** Shared message + settings contracts. All keys are skipSensei-namespaced. */
 
-export type LlmProvider = 'builtin' | 'gemini' | 'anthropic' | 'openai'
+export type LlmProvider =
+  | 'builtin'
+  | 'gemini'
+  | 'anthropic'
+  | 'openai'
+  | 'groq'
+  | 'openrouter'
+  | 'ollama'
+
+/** Providers that authenticate with a user-supplied API key (Ollama is local
+ * and keyless; built-in is on-device). */
+export type KeyedProvider = Exclude<LlmProvider, 'builtin' | 'ollama'>
 
 export interface Settings {
   masterEnabled: boolean
@@ -29,7 +40,7 @@ export interface Settings {
   telemetryEnabled: boolean
   llmProvider: LlmProvider
   /** Per-provider API keys, so switching providers never reuses the wrong key. */
-  apiKeys: Partial<Record<Exclude<LlmProvider, 'builtin'>, string>>
+  apiKeys: Partial<Record<KeyedProvider, string>>
   /** Model override; '' = provider default. */
   model: string
 }
@@ -77,9 +88,13 @@ export interface ApiUsage {
 }
 
 /** Approximate free-tier daily request cap, for the usage estimate.
- * Gemini free tier (2.5 Flash) is ~250 requests/day and only ~5/minute. */
+ * Gemini free tier (2.5 Flash) is ~250 requests/day and only ~5/minute.
+ * Groq is per-model (~1K/day on the 70B default, 14.4K on 8b-instant).
+ * OpenRouter :free models are 50/day (1K/day after a one-time $10 top-up). */
 export const FREE_TIER_DAILY_LIMIT: Partial<Record<LlmProvider, number>> = {
   gemini: 250,
+  groq: 1000,
+  openrouter: 50,
 }
 
 export const DEFAULT_STATS: Stats = {

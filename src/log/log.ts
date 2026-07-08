@@ -47,6 +47,8 @@ const SETTING_LABELS: Partial<Record<keyof Settings | string, string>> = {
   llmProvider: 'AI provider',
   model: 'Model override',
   'apiKeys.gemini': 'Gemini API key',
+  'apiKeys.groq': 'Groq API key',
+  'apiKeys.openrouter': 'OpenRouter API key',
   'apiKeys.anthropic': 'Anthropic API key',
   'apiKeys.openai': 'OpenAI API key',
 }

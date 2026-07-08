@@ -28,6 +28,9 @@
           <select id="provider">
             <option value="builtin">Chrome built-in AI (free, on-device)</option>
             <option value="gemini">Google Gemini (free API key)</option>
+            <option value="groq">Groq (free API key)</option>
+            <option value="openrouter">OpenRouter (free API key)</option>
+            <option value="ollama">Local Ollama (free, no key)</option>
             <option value="anthropic">Anthropic Claude (API key)</option>
             <option value="openai">OpenAI (API key)</option>
           </select>
@@ -35,7 +38,7 @@
         <p class="hint" id="provider-info"></p>
         <p class="hint" id="builtin-status"></p>
         <div id="cloud-fields" hidden>
-          <label class="field">
+          <label class="field" id="api-key-field">
             <span>
               API key
               <a id="api-key-link" target="_blank" rel="noopener">Get a key →</a>

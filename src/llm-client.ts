@@ -25,6 +25,9 @@ const DEFAULT_MODELS: Record<Exclude<LlmProvider, 'builtin'>, string> = {
   gemini: 'gemini-2.5-flash',
   anthropic: 'claude-haiku-4-5',
   openai: 'gpt-5-mini',
+  groq: 'llama-3.3-70b-versatile',
+  openrouter: 'meta-llama/llama-3.3-70b-instruct:free',
+  ollama: 'llama3.1:8b',
 }
 
 /** Per-provider transcript chunk budget (chars). Long videos are chunked. */
@@ -37,6 +40,12 @@ const MAX_INPUT_CHARS: Record<LlmProvider, number> = {
   gemini: 400_000,
   anthropic: 60_000,
   openai: 60_000,
+  // Groq's free tier is ~6-12K tokens/MINUTE — small chunks + pacing or every
+  // long transcript 429s immediately.
+  groq: 18_000,
+  openrouter: 60_000,
+  // Local models are slow; keep chunks modest so one call stays in the timeout.
+  ollama: 24_000,
 }
 
 const CHUNK_OVERLAP_LINES = 5
@@ -52,6 +61,9 @@ const CHUNK_TIMEOUT_MS: Record<LlmProvider, number> = {
   gemini: 90_000, // large single-call inputs take a bit longer
   anthropic: 60_000,
   openai: 60_000,
+  groq: 60_000,
+  openrouter: 90_000, // free pools can queue under load
+  ollama: 180_000, // local inference is RAM/CPU-bound
 }
 
 const SYSTEM_PROMPT = `You analyze YouTube video transcripts to find paid promotional segments that viewers may want to skip.
@@ -366,6 +378,8 @@ export class RateLimitError extends LlmError {}
 /** Self-imposed requests-per-minute cap (rolling 60s window), per provider. */
 const RPM_SELF_CAP: Partial<Record<LlmProvider, number>> = {
   gemini: 4, // free tier is 5 RPM; stay one under for other tabs/devices
+  groq: 25, // free tier is 30 RPM
+  openrouter: 15, // :free models are 20 RPM
 }
 
 const recentCallTimes = new Map<LlmProvider, number[]>()
@@ -427,16 +441,30 @@ function setCooldown(provider: LlmProvider, dailyQuota: boolean, retryAfterSec?:
   warn(`${provider} rate-limited — falling back to built-in AI for ~${Math.round(ms / 1000)}s`)
 }
 
+/** Is this provider actually usable right now (configured + not rate-limited)? */
+function usable(provider: LlmProvider, settings: Settings): boolean {
+  if (provider === 'builtin') return true
+  if (inCooldown(provider)) return false // fall back while rate-limited
+  if (provider === 'ollama') return true // local, keyless
+  return !!settings.apiKeys[provider]?.trim()
+}
+
 export function resolveProvider(settings: Settings): LlmProvider {
-  const provider = settings.llmProvider
-  if (
-    provider !== 'builtin' &&
-    settings.apiKeys[provider]?.trim() &&
-    !inCooldown(provider) // fall back to built-in while rate-limited
-  ) {
-    return provider
+  return usable(settings.llmProvider, settings) ? settings.llmProvider : 'builtin'
+}
+
+/**
+ * Provider for the small AI-enhancement helper calls (popup review, consent,
+ * selector heal, gap-fill). These are bursty 1-2K-token calls — exactly what
+ * blows Gemini's 5-requests/minute free tier. Groq's free tier is ~30 RPM /
+ * 14.4K requests/day, so when a Groq key exists the helpers use it and leave
+ * the main provider's quota for transcript analysis.
+ */
+export function resolveHelperProvider(settings: Settings): LlmProvider {
+  if (settings.llmProvider !== 'groq' && usable('groq', settings)) {
+    return 'groq'
   }
-  return 'builtin'
+  return resolveProvider(settings)
 }
 
 export async function builtinAvailability(): Promise<string> {
@@ -515,7 +543,14 @@ async function completeWithRetry(
       // Pace BEFORE starting the timeout clock — a rate-limit wait isn't a hang.
       await paceRequests(provider, signal)
       const raw = await withTimeout(
-        complete(provider, SYSTEM_PROMPT, prompt, settings, signal),
+        complete(
+          provider,
+          resolveModel(provider, settings),
+          SYSTEM_PROMPT,
+          prompt,
+          settings,
+          signal,
+        ),
         CHUNK_TIMEOUT_MS[provider],
       )
       return parseSegments(raw, durationSeconds)
@@ -533,10 +568,15 @@ async function completeWithRetry(
 
 export class TimeoutError extends LlmError {}
 
+/** Helpers on Groq always use the fast small model — its free tier allows
+ * 14.4K requests/day (vs ~1K on the 70B), and the tasks are simple. */
+const GROQ_HELPER_MODEL = 'llama-3.1-8b-instant'
+
 /**
- * Resolve the provider, run one completion, and — if a cloud provider is
- * rate-limited — transparently retry on the built-in model. Used by the small
- * single-shot AI helpers (selector heal, gap-fill, popup review, consent).
+ * Resolve the helper provider (Groq when available), run one completion, and
+ * — if the provider is rate-limited — transparently retry on the built-in
+ * model. Used by the small single-shot AI helpers (selector heal, gap-fill,
+ * popup review, consent).
  */
 async function completeSmart(
   system: string,
@@ -544,18 +584,20 @@ async function completeSmart(
   settings: Settings,
   signal: AbortSignal,
 ): Promise<string> {
-  const provider = resolveProvider(settings)
+  const provider = resolveHelperProvider(settings)
+  const model =
+    provider === 'groq' ? GROQ_HELPER_MODEL : resolveModel(provider, settings)
   try {
     await paceRequests(provider, signal)
     return await withTimeout(
-      complete(provider, system, prompt, settings, signal),
+      complete(provider, model, system, prompt, settings, signal),
       CHUNK_TIMEOUT_MS[provider],
     )
   } catch (error) {
     if (error instanceof RateLimitError && provider !== 'builtin') {
       // Cooldown is set; fall back to on-device AI for this call.
       return await withTimeout(
-        complete('builtin', system, prompt, settings, signal),
+        complete('builtin', '', system, prompt, settings, signal),
         CHUNK_TIMEOUT_MS.builtin,
       )
     }
@@ -582,8 +624,52 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   })
 }
 
+/** OpenAI-protocol providers. jsonMode: whether response_format is safe to
+ * send (many OpenRouter :free models and older Ollama builds reject it). */
+const OPENAI_COMPATIBLE = {
+  openai: {
+    url: 'https://api.openai.com/v1/chat/completions',
+    label: 'OpenAI',
+    jsonMode: true,
+  },
+  gemini: {
+    url: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
+    label: 'Gemini',
+    jsonMode: true,
+  },
+  groq: {
+    url: 'https://api.groq.com/openai/v1/chat/completions',
+    label: 'Groq',
+    jsonMode: true,
+  },
+  openrouter: {
+    url: 'https://openrouter.ai/api/v1/chat/completions',
+    label: 'OpenRouter',
+    jsonMode: false,
+  },
+  ollama: {
+    url: 'http://localhost:11434/v1/chat/completions',
+    label: 'Ollama',
+    jsonMode: false,
+  },
+} as const
+
+/**
+ * Model to use for `provider`. The user's model override only applies to the
+ * provider they actually selected — a fallback/helper provider must use its
+ * own default (a Gemini model id sent to Groq is a guaranteed 404).
+ */
+function resolveModel(provider: LlmProvider, settings: Settings): string {
+  if (provider === 'builtin') return ''
+  if (provider === settings.llmProvider && settings.model.trim()) {
+    return settings.model.trim()
+  }
+  return DEFAULT_MODELS[provider]
+}
+
 function complete(
   provider: LlmProvider,
+  model: string,
   system: string,
   prompt: string,
   settings: Settings,
@@ -591,27 +677,18 @@ function complete(
 ): Promise<string> {
   switch (provider) {
     case 'anthropic':
-      return completeAnthropic(system, prompt, settings, signal)
-    case 'openai':
-      return completeOpenAiCompatible(
-        'https://api.openai.com/v1/chat/completions',
-        'openai',
-        system,
-        prompt,
-        settings,
-        signal,
-      )
-    case 'gemini':
-      return completeOpenAiCompatible(
-        'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
-        'gemini',
-        system,
-        prompt,
-        settings,
-        signal,
-      )
+      return completeAnthropic(model, system, prompt, settings, signal)
     case 'builtin':
       return completeBuiltin(system, prompt, signal)
+    default:
+      return completeOpenAiCompatible(
+        provider,
+        model,
+        system,
+        prompt,
+        settings,
+        signal,
+      )
   }
 }
 
@@ -665,6 +742,7 @@ export function parseSegments(
 // ---------------------------------------------------------------------------
 
 async function completeAnthropic(
+  model: string,
   system: string,
   prompt: string,
   settings: Settings,
@@ -681,7 +759,7 @@ async function completeAnthropic(
       'anthropic-dangerous-direct-browser-access': 'true',
     },
     body: JSON.stringify({
-      model: settings.model.trim() || DEFAULT_MODELS.anthropic,
+      model,
       max_tokens: 1500,
       temperature: 0,
       system,
@@ -704,26 +782,29 @@ async function completeAnthropic(
   return text
 }
 
-/** OpenAI-compatible chat-completions call. Used by OpenAI and Gemini (whose
- * `/v1beta/openai/` endpoint speaks the same protocol). */
+/** OpenAI-compatible chat-completions call: OpenAI, Gemini's `/v1beta/openai/`
+ * endpoint, Groq, OpenRouter, and a local Ollama server all speak it. */
 async function completeOpenAiCompatible(
-  url: string,
-  provider: 'openai' | 'gemini',
+  provider: keyof typeof OPENAI_COMPATIBLE,
+  model: string,
   system: string,
   prompt: string,
   settings: Settings,
   signal: AbortSignal,
 ): Promise<string> {
+  const { url, label, jsonMode } = OPENAI_COMPATIBLE[provider]
+  const key =
+    provider === 'ollama' ? '' : (settings.apiKeys[provider] ?? '').trim()
   const response = await fetch(url, {
     method: 'POST',
     signal,
     headers: {
       'content-type': 'application/json',
-      authorization: `Bearer ${(settings.apiKeys[provider] ?? '').trim()}`,
+      ...(key ? { authorization: `Bearer ${key}` } : {}),
     },
     body: JSON.stringify({
-      model: settings.model.trim() || DEFAULT_MODELS[provider],
-      response_format: { type: 'json_object' },
+      model,
+      ...(jsonMode ? { response_format: { type: 'json_object' } } : {}),
       messages: [
         { role: 'system', content: system },
         { role: 'user', content: prompt },
@@ -733,7 +814,6 @@ async function completeOpenAiCompatible(
   if (!response.ok) {
     const body = await safeText(response)
     throwForStatus(provider, response, body)
-    const label = provider === 'gemini' ? 'Gemini' : 'OpenAI'
     throw new LlmError(`${label} API ${response.status}: ${body}`)
   }
   const data = await response.json()

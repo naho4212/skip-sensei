@@ -29,6 +29,10 @@ export default defineManifest({
     'https://generativelanguage.googleapis.com/*',
     'https://api.anthropic.com/*',
     'https://api.openai.com/*',
+    'https://api.groq.com/*',
+    'https://openrouter.ai/*',
+    // Local Ollama server (only contacted when the user selects it).
+    'http://localhost/*',
   ],
   background: {
     service_worker: 'src/service-worker.ts',
