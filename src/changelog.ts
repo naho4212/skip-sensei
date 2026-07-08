@@ -15,6 +15,17 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.2.0',
+    date: '2026-07-08',
+    items: [
+      'SponsorBlock: instant, exact sponsor skipping from the community database, with the AI as fallback — pick which segment types to skip in Settings',
+      'Strip tracking parameters (utm_, fbclid, gclid, and more) from links as you browse',
+      'Local-only mode: on-device AI only, zero external calls, no diagnostics',
+      'YouTube extras: hide Shorts, hide end-screen cards, turn off autoplay, auto-dismiss "Continue watching?"',
+      'Hides more YouTube ads: in-feed, masthead, and sidebar "Sponsored" cards',
+    ],
+  },
+  {
     version: '0.1.0',
     date: '2026-07-08',
     items: [
