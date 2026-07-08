@@ -1,14 +1,13 @@
 // Ad Sensei error-report collector (Vercel serverless function).
 //
 // Accepts POST app_error events from the extension, whitelists and caps every
-// field, and writes one JSON line to the function log. View with
-// `vercel logs` or the Vercel dashboard.
+// field, and persists each report as one JSON blob in Vercel Blob
+// (`errors/<day>/<timestamp>.json`), plus a line in the function log.
+// Query recent reports via GET /api/errors?key=<ERROR_LOG_READ_KEY>.
 //
-// NOTE: function logs are short-lived (hours on the hobby plan) — fine for
-// verifying the pipeline and small-scale testing, not a durable error store.
-// When volume matters, swap the console.log for Upstash Redis / Vercel KV or
-// point the extension at Sentry — the report shape already carries what
-// Sentry would want.
+// Reports are secret-scrubbed by the extension before they're sent and again
+// capped here; blob URLs carry unguessable random suffixes, and listing
+// requires the store token.
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const VERSION_RE = /^[\w.-]{1,32}$/
@@ -23,7 +22,7 @@ const TEXT_FIELDS = {
   browser: 40,
 }
 
-module.exports = (req, res) => {
+module.exports = async (req, res) => {
   // The extension's service worker is a cross-origin caller — allow it.
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
@@ -55,6 +54,23 @@ module.exports = (req, res) => {
     }
   }
 
-  console.log('[error-report]', JSON.stringify(record))
+  const line = JSON.stringify(record)
+  console.log('[error-report]', line)
+
+  // Durable copy in Vercel Blob. Day-prefixed, timestamp-named pathnames sort
+  // chronologically, which is what /api/errors relies on to return the most
+  // recent reports first. A blob failure must never bounce the client.
+  try {
+    const { put } = await import('@vercel/blob')
+    const stamp = record.received_at.replace(/[:.]/g, '-')
+    await put(`errors/${stamp.slice(0, 10)}/${stamp}.json`, line, {
+      access: 'public',
+      contentType: 'application/json',
+      addRandomSuffix: true,
+    })
+  } catch (err) {
+    console.log('[error-report] blob write failed:', err && err.message)
+  }
+
   return res.status(204).end()
 }

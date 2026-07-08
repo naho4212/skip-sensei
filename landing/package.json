@@ -1,0 +1,7 @@
+{
+  "name": "ad-sensei-landing",
+  "private": true,
+  "dependencies": {
+    "@vercel/blob": "^1.1.1"
+  }
+}
