@@ -1,4 +1,5 @@
 import {
+  AD_BADGES,
   AD_SHOWING_CLASSES,
   ENFORCEMENT_MESSAGE,
   MODAL_BACKDROP,
@@ -16,6 +17,21 @@ import type { AdSkipMethod } from '../types'
 
 /** Playback rate for burning through un-skippable ads. */
 const AD_FAST_RATE = 16
+
+/**
+ * Class/badge-level "an ad is on screen" check, usable outside the engine —
+ * the sponsor engine must NOT sample video.duration while a pre-roll plays
+ * (the ad shares the <video> element, so the duration is the ad's).
+ */
+export function playerShowsAd(
+  player: HTMLElement | null = document.querySelector<HTMLElement>(PLAYER),
+): boolean {
+  if (!player) return false
+  if (AD_SHOWING_CLASSES.some((cls) => player.classList.contains(cls))) {
+    return true
+  }
+  return AD_BADGES.some((sel) => player.querySelector(sel))
+}
 
 /** How long an ad may play with no matching skip button before we try to self-heal. */
 const HEAL_AFTER_MS = 7000
@@ -113,9 +129,7 @@ export class AdEngine {
     this.removeOverlayAds()
     this.dismissPauseOverlays()
 
-    const adShowing = AD_SHOWING_CLASSES.some((cls) =>
-      this.player!.classList.contains(cls),
-    )
+    const adShowing = this.adIsShowing()
     if (!adShowing) {
       this.endFastForward()
       this.adShowingSince = null
@@ -188,7 +202,18 @@ export class AdEngine {
     this.fastForwarding = false
   }
 
-  private clickSkipButton(): boolean {
+  /**
+   * Detect ad playback from several independent signals — YouTube renames any
+   * one of them regularly (player class, badge class, button class), and the
+   * class-only check going stale means NOTHING fires (no skip, no
+   * fast-forward). Any single signal is enough.
+   */
+  private adIsShowing(): boolean {
+    if (playerShowsAd(this.player)) return true
+    return this.findSkipButton() !== null
+  }
+
+  private findSkipButton(): HTMLElement | null {
     for (const selector of this.skipSelectors) {
       let button: HTMLElement | null = null
       try {
@@ -196,17 +221,34 @@ export class AdEngine {
       } catch {
         continue // a bad AI-healed selector shouldn't break the loop
       }
-      if (button && button.offsetParent !== null) {
-        button.click()
-        const now = Date.now()
-        if (now - this.lastSkipButtonCountAt > 3000) {
-          this.lastSkipButtonCountAt = now
-          this.onSkip('skip-button')
-        }
-        return true
+      if (button && button.offsetParent !== null) return button
+    }
+    // Last resort, survives class renames: any visible player button whose
+    // label is exactly "Skip" / "Skip Ad(s)". Kept strict so nothing else
+    // (e.g. "Skip navigation") can ever match.
+    for (const button of this.player!.querySelectorAll<HTMLElement>(
+      'button',
+    )) {
+      if (button.offsetParent === null) continue
+      const text = (button.textContent ?? '').trim()
+      const aria = button.getAttribute('aria-label') ?? ''
+      if (/^skip( ads?)?$/i.test(text) || /\bskip ads?\b/i.test(aria)) {
+        return button
       }
     }
-    return false
+    return null
+  }
+
+  private clickSkipButton(): boolean {
+    const button = this.findSkipButton()
+    if (!button) return false
+    button.click()
+    const now = Date.now()
+    if (now - this.lastSkipButtonCountAt > 3000) {
+      this.lastSkipButtonCountAt = now
+      this.onSkip('skip-button')
+    }
+    return true
   }
 
   /**

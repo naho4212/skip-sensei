@@ -1,5 +1,6 @@
 import { log } from '../log'
 import { LIVE_BADGE, VIDEO } from '../selectors'
+import { playerShowsAd } from './ad-engine'
 import { fetchChapters, fetchTranscript } from '../transcript'
 import type {
   Message,
@@ -100,6 +101,12 @@ export class SponsorEngine {
     }
     this.video = video
     video.addEventListener('timeupdate', this.onTimeUpdate)
+
+    // A pre-roll ad plays in the SAME <video> element, so right now
+    // video.duration may be the AD's duration — sampling it mid-ad marks a
+    // long video "too short" and truncates LLM segments to the ad's length.
+    await this.waitUntilAdFree(video)
+    if (this.stopped) return
 
     // Creator-declared "Ad Break" chapters are a deterministic signal: fetch
     // them first so those skips are armed instantly, independent of the LLM.
@@ -245,6 +252,30 @@ export class SponsorEngine {
         if (video && video.readyState >= 1) return resolve(video)
         if (++attempts > 80) return resolve(video)
         setTimeout(poll, 250)
+      }
+      poll()
+    })
+  }
+
+  /** Resolve once no ad is on screen and the video's own metadata is loaded.
+   * Ads are usually gone in seconds (the ad engine fast-forwards them); after
+   * ~2 minutes proceed anyway rather than never analyzing. */
+  private waitUntilAdFree(video: HTMLVideoElement): Promise<void> {
+    return new Promise((resolve) => {
+      let attempts = 0
+      const poll = () => {
+        if (this.stopped) return resolve()
+        if (!playerShowsAd() && video.readyState >= 1) {
+          if (this.reason === 'waiting for the ad to finish') {
+            this.reason = undefined
+          }
+          return resolve()
+        }
+        if (this.status === 'analyzing') {
+          this.reason = 'waiting for the ad to finish'
+        }
+        if (++attempts > 240) return resolve()
+        setTimeout(poll, 500)
       }
       poll()
     })
