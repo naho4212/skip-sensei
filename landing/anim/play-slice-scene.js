@@ -133,7 +133,7 @@
         lineHeight: 1,
         opacity: wm,
         transform: `translateY(${(1 - wm) * 26}px)`
-      } }, /* @__PURE__ */ React.createElement("span", { style: { color: accent } }, "AD"), " ", /* @__PURE__ */ React.createElement("span", { style: { color: "#f1f1f1" } }, "SENSEI")), flash > 4e-3 && /* @__PURE__ */ React.createElement("div", { style: { position: "absolute", inset: 0, background: "#fff", opacity: flash } }));
+      } }, /* @__PURE__ */ React.createElement("span", { style: { color: accent } }, "AD"), " ", /* @__PURE__ */ React.createElement("span", { style: { color: "#f1f1f1" } }, "SENSEI")));
     }
     function PlaySliceScene(props) {
       const accent = props.accent ?? "#7c3aed";

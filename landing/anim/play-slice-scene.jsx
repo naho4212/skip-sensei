@@ -203,10 +203,8 @@
           </div>
         )}
 
-        {/* very soft impact flash */}
-        {flash > 0.004 && (
-          <div style={{ position: "absolute", inset: 0, background: "#fff", opacity: flash }}></div>
-        )}
+        {/* impact flash removed — the full-stage white overlay read as a
+            flashing box; the diagonal slice beam stays */}
       </div>
     );
   }

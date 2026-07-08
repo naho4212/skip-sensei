@@ -81,7 +81,10 @@
       html { scroll-behavior: smooth; }
       body {
         margin: 0;
-        background: var(--bg);
+        background:
+          radial-gradient(1100px 520px at 50% -40px, rgba(124, 58, 237, 0.22), transparent 60%),
+          var(--bg);
+        background-repeat: no-repeat;
         color: var(--text);
         font-family: Roboto, Arial, 'Helvetica Neue', sans-serif;
         -webkit-font-smoothing: antialiased;
@@ -110,13 +113,7 @@
 
       /* hero */
       header.hero {
-        text-align: center; padding: 72px 0 64px;
-        background: radial-gradient(
-            1100px 520px at 50% -6%,
-            rgba(124, 58, 237, 0.24),
-            transparent 62%
-          ),
-          var(--bg);
+        text-align: center; padding: 40px 0 64px;
       }
       /* 16:9 to match the animation's 1920×1080 stage — no dead space around it */
       .hero-mark {
@@ -235,19 +232,25 @@
         position: sticky; top: 14px; z-index: 30;
         max-width: var(--maxw); margin: 14px auto 0; padding: 0 40px;
       }
-      nav {
+      .nav-wrap > nav {
+        position: relative;
         display: flex; align-items: center; justify-content: space-between;
-        gap: 20px; padding: 10px 10px 10px 20px; margin: 0;
+        gap: 20px; padding: 9px 9px 9px 20px; margin: 0;
         border-radius: 999px;
         background: rgba(30, 27, 38, 0.72);
         border: 1px solid var(--hair);
         backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
         box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
       }
+      /* center links absolutely so they sit at the pill's center regardless
+         of the logo/CTA widths — no inherited pill box on the inner <nav> */
       .nav-links {
-        display: inline-flex; align-items: center; gap: 26px;
-        font-size: 13px; font-weight: 500; color: var(--text-2);
+        position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+        display: inline-flex; align-items: center; gap: 28px;
+        font-size: 14px; font-weight: 500; color: var(--text-2);
+        white-space: nowrap;
       }
+      .nav-links a { padding: 4px 2px; }
       .nav-links a:hover { color: var(--text); }
       @media (max-width: 720px) { .nav-links { display: none; } }
       nav .cta-sm {
