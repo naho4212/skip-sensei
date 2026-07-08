@@ -1,0 +1,90 @@
+# Monthly filter-list refresh (the MV3 "rebuild-and-ship" pattern).
+#
+# DNR rulesets are static — baked into the extension and only updated when a
+# new version ships. This job pulls the latest AdGuard lists, rebuilds the
+# rulesets, and if anything changed: bumps the patch version, rebuilds/packages,
+# commits, and (if CWS secrets are configured) publishes to the Chrome Web Store.
+#
+# To enable auto-publish, add these repository secrets (Settings → Secrets and
+# variables → Actions). Without them the job still refreshes filters and commits
+# — it just skips the publish step.
+#   CWS_EXTENSION_ID     Chrome Web Store item id
+#   CWS_CLIENT_ID        OAuth client id (Google Cloud console)
+#   CWS_CLIENT_SECRET    OAuth client secret
+#   CWS_REFRESH_TOKEN    OAuth refresh token for the CWS API
+# See: https://github.com/fregante/chrome-webstore-upload-cli#authentication
+
+name: Refresh filter lists
+
+on:
+  schedule:
+    - cron: '0 6 1 * *' # 06:00 UTC on the 1st of each month
+  workflow_dispatch: {} # also runnable on demand
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    env:
+      CWS_EXTENSION_ID: ${{ secrets.CWS_EXTENSION_ID }}
+      CWS_CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
+      CWS_CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
+      CWS_REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Update AdGuard rulesets to latest
+        run: npm install --save-dev @adguard/dnr-rulesets@latest
+
+      - name: Rebuild rulesets
+        run: npm run rulesets
+
+      - name: Detect changes
+        id: diff
+        run: |
+          if git diff --quiet -- public/rulesets package.json package-lock.json; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Filter lists already up to date — nothing to ship."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Bump version
+        if: steps.diff.outputs.changed == 'true'
+        id: bump
+        run: echo "version=$(node scripts/bump-version.mjs)" >> "$GITHUB_OUTPUT"
+
+      - name: Build and package
+        if: steps.diff.outputs.changed == 'true'
+        run: npm run package
+
+      - name: Commit refreshed filters
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "chore: refresh filter lists -> v${{ steps.bump.outputs.version }}"
+          git push
+
+      - name: Publish to Chrome Web Store
+        if: steps.diff.outputs.changed == 'true' && env.CWS_EXTENSION_ID != ''
+        run: |
+          ZIP="$(ls landing/ad-sensei-v*.zip | head -1)"
+          echo "Publishing $ZIP to the Chrome Web Store..."
+          npx --yes chrome-webstore-upload-cli@3 upload \
+            --source "$ZIP" \
+            --extension-id "$CWS_EXTENSION_ID" \
+            --client-id "$CWS_CLIENT_ID" \
+            --client-secret "$CWS_CLIENT_SECRET" \
+            --refresh-token "$CWS_REFRESH_TOKEN" \
+            --auto-publish
