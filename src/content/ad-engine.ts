@@ -151,6 +151,8 @@ export class AdEngine {
   private skipClickedAt: number | null = null
   private lastCheckAt = 0
   private lastClickDispatchAt = 0
+  /** Cheap class-based ad signal from the previous check, for transition detection. */
+  private adClassLast = false
   /** Stuck-ad watchdog: last observed playback position and when it moved. */
   private ffLastTime = -1
   private ffLastAdvanceAt = 0
@@ -254,8 +256,15 @@ export class AdEngine {
     }
     if (!this.player) return
 
+    // The instant an ad starts, react without waiting out the throttle — this
+    // is what removes the visible ad-flash before the cloak/fast-forward kick
+    // in. We only bypass on the TRANSITION (cheap class check), so a running
+    // ad still throttles and can't cause a mutation storm.
     const now = Date.now()
-    if (now - this.lastCheckAt < CHECK_THROTTLE_MS) return
+    const adClassNow = playerShowsAd(this.player)
+    const adJustStarted = adClassNow && !this.adClassLast
+    this.adClassLast = adClassNow
+    if (!adJustStarted && now - this.lastCheckAt < CHECK_THROTTLE_MS) return
     this.lastCheckAt = now
 
     this.dismissEnforcementWall()
