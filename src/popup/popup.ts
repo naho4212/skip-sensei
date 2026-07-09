@@ -261,9 +261,36 @@ const SOURCE_TAG: Record<string, string> = {
   youtube: 'YT',
 }
 
+// Hovering a review row outlines the matching element(s) on the page.
+// A port (not one-shot messages) so the content script can clear the
+// highlight the instant the popup closes, even mid-hover.
+let highlightPort: chrome.runtime.Port | null = null
+let highlightPortTab: number | null = null
+
+function sendHighlight(tabId: number, selector: string | null) {
+  try {
+    if (!highlightPort || highlightPortTab !== tabId) {
+      highlightPort = chrome.tabs.connect(tabId, {
+        name: 'skipSensei:highlight',
+      })
+      highlightPortTab = tabId
+      highlightPort.onDisconnect.addListener(() => {
+        highlightPort = null
+        highlightPortTab = null
+      })
+    }
+    highlightPort.postMessage({ selector })
+  } catch {
+    highlightPort = null
+    highlightPortTab = null
+  }
+}
+
 function hiddenItemRow(tabId: number, item: HiddenElement): HTMLLIElement {
   const li = document.createElement('li')
   li.className = item.vetoed ? 'hidden-item vetoed' : 'hidden-item'
+  li.addEventListener('mouseenter', () => sendHighlight(tabId, item.selector))
+  li.addEventListener('mouseleave', () => sendHighlight(tabId, null))
 
   const info = document.createElement('div')
   info.className = 'hidden-info'
@@ -309,6 +336,7 @@ function hiddenItemRow(tabId: number, item: HiddenElement): HTMLLIElement {
         selector: item.selector,
       })
       .catch(() => {})
+    sendHighlight(tabId, null)
     li.classList.add('confirmed')
     up.disabled = true
     down.disabled = true
@@ -320,6 +348,7 @@ function hiddenItemRow(tabId: number, item: HiddenElement): HTMLLIElement {
         selector: item.selector,
       })
       .catch(() => {})
+    sendHighlight(tabId, null)
     li.remove()
     if ($<HTMLUListElement>('hidden-list').children.length === 0)
       $('hidden-review').hidden = true

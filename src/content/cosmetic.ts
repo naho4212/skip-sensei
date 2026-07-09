@@ -460,6 +460,43 @@ async function confirmHiddenSelector(selector: string) {
   reportGapfillFeedback(selector, 'ad')
 }
 
+/**
+ * Popup hover-highlight: outline the element(s) a review row refers to so the
+ * user can see what they're rating. Hidden elements are temporarily revealed
+ * (display:revert wins over the hide rules because this <style> comes later).
+ * Driven over a port so the highlight clears the moment the popup closes.
+ */
+const HIGHLIGHT_STYLE_ID = 'skip-sensei-highlight'
+
+function highlightSelector(selector: string | null) {
+  document.getElementById(HIGHLIGHT_STYLE_ID)?.remove()
+  if (!selector) return
+  try {
+    document.querySelector(selector)
+  } catch {
+    return // invalid selector — nothing to show
+  }
+  const style = document.createElement('style')
+  style.id = HIGHLIGHT_STYLE_ID
+  style.textContent = `${selector}{display:revert!important;outline:3px solid #7c3aed!important;outline-offset:2px!important;box-shadow:0 0 0 6px rgba(124,58,237,0.35)!important}`
+  ;(document.head ?? document.documentElement).appendChild(style)
+  const first = document.querySelector(selector)
+  if (first) {
+    const rect = first.getBoundingClientRect()
+    const offscreen = rect.bottom < 0 || rect.top > window.innerHeight
+    if (offscreen)
+      first.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  }
+}
+
+chrome.runtime.onConnect.addListener((port) => {
+  if (port.name !== 'skipSensei:highlight') return
+  port.onMessage.addListener((msg: { selector?: string | null }) =>
+    highlightSelector(msg?.selector ?? null),
+  )
+  port.onDisconnect.addListener(() => highlightSelector(null))
+})
+
 function reportGapfillFeedback(selector: string, verdict: 'ad' | 'not-ad') {
   try {
     void chrome.runtime.sendMessage({
