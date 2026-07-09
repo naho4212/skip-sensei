@@ -96,15 +96,30 @@ async function setRulesets(ids: string[], on: boolean, label: string) {
 }
 
 /**
+ * YouTube is ALWAYS exempt from NETWORK ad-blocking. Blocking YouTube's ad /
+ * tracking requests is exactly what trips its "ad blocker detected"
+ * enforcement (the "violates Terms of Service" wall, then hard "Video
+ * unavailable" errors). And it buys almost nothing: YouTube's video ads are
+ * served from the same host as the video, so they can't be network-blocked
+ * anyway. YouTube ads are handled the safe way instead — the reactive Skip
+ * engine (the ad plays, the impression fires, then it's skipped, which looks
+ * like a user hitting "Skip") plus cosmetic hiding of display ads. Result:
+ * ad-free YouTube without giving YouTube a reason to flag the session.
+ */
+const NETWORK_EXEMPT = ['youtube.com', 'youtube-nocookie.com', 'googlevideo.com']
+
+/**
  * Rebuild the dynamic allow rules from the allowlist. Each hostname gets a
  * high-priority allowAllRequests rule that exempts the whole page (and its
  * subframes) from the static block rules — i.e. "pause blocking on this site".
  */
 async function syncAllowlist(hostnames: string[]) {
   const existing = await chrome.declarativeNetRequest.getDynamicRules()
-  const addRules = hostnames
-    .map((h) => h.trim().toLowerCase())
-    .filter(Boolean)
+  const addRules = [
+    ...NETWORK_EXEMPT,
+    ...hostnames.map((h) => h.trim().toLowerCase()).filter(Boolean),
+  ]
+    .filter((h, i, arr) => arr.indexOf(h) === i) // dedupe
     .map((hostname, i) => ({
       id: i + 1,
       priority: ALLOWLIST_PRIORITY,
