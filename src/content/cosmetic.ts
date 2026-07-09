@@ -373,7 +373,13 @@ function startPlaceholderObserver() {
 function stopPlaceholderObserver() {
   placeholderObserver?.disconnect()
   placeholderObserver = null
-  document.querySelectorAll(`.${SLOT_BRAND_CLASS}`).forEach((el) => el.remove())
+  // Only remove PLACEHOLDER-mode overlays. The empty-slot collapser's
+  // branded slots own their overlays — removing them here was the bug that
+  // left "branded" slots blank (apply() re-runs 2s after load and stops the
+  // observer on every non-placeholder site).
+  document.querySelectorAll(`.${SLOT_BRAND_CLASS}`).forEach((el) => {
+    if (!el.parentElement?.classList.contains(BRANDED_SLOT_CLASS)) el.remove()
+  })
 }
 
 function isAllowlisted(allowlist: string[]): boolean {
@@ -687,10 +693,14 @@ function isEmptyAdSlot(el: HTMLElement): boolean {
   return text === '' || SLOT_LABEL_RE.test(text)
 }
 
-function collapseEmptyAdSlots() {
+async function collapseEmptyAdSlots() {
   // Feature rides the same switch as the rest of cosmetic hiding; a user 👎
   // on .skip-sensei-empty-slot removes it from activeSelectors for the domain.
   if (!activeSelectors.includes(`.${EMPTY_SLOT_CLASS}`)) return
+  // 👎 on the branded-slot entry: keep collapsing, stop branding here.
+  const brandAllowed = !(await getRejectedGapfill(bareDomain())).includes(
+    `.${BRANDED_SLOT_CLASS}`,
+  )
   // Name-based candidates: the element's OWN id/class declares it an ad slot.
   // Trusted even inside <header> — masthead billboard slots are a standard
   // news-site pattern (e.g. Business Insider's .masthead-ad) — because
@@ -722,11 +732,13 @@ function collapseEmptyAdSlots() {
   let tagged = 0
   let branded = 0
   const collapse = (el: HTMLElement, guard: string) => {
-    if (
-      el.classList.contains(EMPTY_SLOT_CLASS) ||
-      el.classList.contains(BRANDED_SLOT_CLASS)
-    )
+    if (el.classList.contains(BRANDED_SLOT_CLASS)) {
+      // Self-heal: re-add the overlay if something stripped it.
+      if (!el.querySelector(`:scope > .${SLOT_BRAND_CLASS}`))
+        el.appendChild(buildSlotBrand())
       return
+    }
+    if (el.classList.contains(EMPTY_SLOT_CLASS)) return
     if (el.closest(guard)) return
     if (!isEmptyAdSlot(el)) return
     // Collapse, then check the page actually reclaimed the space. A slot in
@@ -739,6 +751,7 @@ function collapseEmptyAdSlots() {
     const after = parent?.getBoundingClientRect().height ?? 0
     if (parent && before - after < 40) {
       el.classList.remove(EMPTY_SLOT_CLASS)
+      if (!brandAllowed) return // user 👎'd the card here — leave the slot be
       el.classList.add(BRANDED_SLOT_CLASS)
       if (!el.querySelector(`:scope > .${SLOT_BRAND_CLASS}`))
         el.appendChild(buildSlotBrand())
@@ -756,8 +769,8 @@ function collapseEmptyAdSlots() {
 async function scheduleSlotCollapse() {
   if (!(await blockingActive())) return
   // Two passes: slots settle at different times (lazy ad scripts give up).
-  setTimeout(collapseEmptyAdSlots, 2000)
-  setTimeout(collapseEmptyAdSlots, 6000)
+  setTimeout(() => void collapseEmptyAdSlots(), 2000)
+  setTimeout(() => void collapseEmptyAdSlots(), 6000)
 }
 
 /** Human-readable summary of everything the extension is hiding on this page
@@ -789,6 +802,8 @@ function describeHiddenElements() {
   ]
   const out = []
   for (const { selector, source, vetoed } of sources) {
+    // Collapser results get friendlier synthetic entries below.
+    if (selector === `.${EMPTY_SLOT_CLASS}`) continue
     let els: Element[] = []
     try {
       els = Array.from(document.querySelectorAll(selector))
@@ -807,6 +822,26 @@ function describeHiddenElements() {
     })
     if (out.length >= 25) break
   }
+  // Empty-slot collapser outcomes, so "13 slots handled" never reads as
+  // "nothing hidden here" in the popup.
+  const collapsed = document.querySelectorAll(`.${EMPTY_SLOT_CLASS}`).length
+  if (collapsed > 0 && activeSelectors.includes(`.${EMPTY_SLOT_CLASS}`))
+    out.push({
+      selector: `.${EMPTY_SLOT_CLASS}`,
+      source: 'list' as const,
+      count: collapsed,
+      tag: 'div',
+      text: 'Empty ad slot — collapsed, content moved up',
+    })
+  const brandedSlots = document.querySelectorAll(`.${BRANDED_SLOT_CLASS}`).length
+  if (brandedSlots > 0)
+    out.push({
+      selector: `.${BRANDED_SLOT_CLASS}`,
+      source: 'list' as const,
+      count: brandedSlots,
+      tag: 'div',
+      text: 'Empty ad slot — filled with the Ad Sensei card',
+    })
   return out
 }
 
@@ -816,6 +851,14 @@ async function rejectHiddenSelector(selector: string) {
   const domain = bareDomain()
   await addRejectedGapfill(domain, selector)
   await removeVetoedGapfill(domain, selector)
+  // Collapser outcomes: un-tag every slot right now (the rejected list stops
+  // future passes; see collapseEmptyAdSlots).
+  if (selector === `.${EMPTY_SLOT_CLASS}` || selector === `.${BRANDED_SLOT_CLASS}`) {
+    for (const el of document.querySelectorAll(selector)) {
+      el.classList.remove(EMPTY_SLOT_CLASS, BRANDED_SLOT_CLASS)
+      el.querySelector(`:scope > .${SLOT_BRAND_CLASS}`)?.remove()
+    }
+  }
   const current = await getGapfillSelectors(domain)
   await setGapfillSelectors(
     domain,
@@ -988,7 +1031,7 @@ function selectorFor(el: HTMLElement): string | null {
     if (document.querySelectorAll(s).length === 1) return s
   }
   const classes = [...el.classList]
-    .filter((c) => /^[A-Za-z][\w-]*$/.test(c))
+    .filter((c) => /^[A-Za-z][\w-]*$/.test(c) && !c.startsWith('skip-sensei'))
     .slice(0, 4)
   if (classes.length > 0) {
     const s = `${el.tagName.toLowerCase()}.${classes.map((c) => CSS.escape(c)).join('.')}`
@@ -1026,6 +1069,8 @@ function collectAdCandidates(
   const push = (el: Element | null) => {
     if (!(el instanceof HTMLElement) || seen.has(el) || out.length >= 12) return
     seen.add(el)
+    // Already handled by the collapser — nothing left to decide.
+    if (el.closest(`.${EMPTY_SLOT_CLASS}, .${BRANDED_SLOT_CLASS}`)) return
     if (!isSafeCandidate(el)) return
     const selector = selectorFor(el)
     if (!selector || excluded.has(selector) || taken.has(selector)) return
@@ -1040,7 +1085,7 @@ function collectAdCandidates(
   }
   // 2. Ad/sponsor-named containers (token match).
   for (const el of document.querySelectorAll<HTMLElement>(
-    'div[class*="ad" i], div[id*="ad" i], div[class*="spons" i], div[class*="promo" i], section[class*="spons" i], article[class*="spons" i], aside[class*="ad" i], li[class*="spons" i]',
+    'div[class*="ad" i], div[id*="ad" i], section[class*="ad" i], section[id*="ad" i], div[class*="spons" i], div[class*="promo" i], section[class*="spons" i], article[class*="spons" i], aside[class*="ad" i], li[class*="spons" i], li[class*="ad" i]',
   )) {
     if (out.length >= 12) break
     if (
