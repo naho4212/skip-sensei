@@ -253,6 +253,32 @@ async function renderHiddenReview() {
   }
   wrap.hidden = false
   paintHiddenItems(tabId, items)
+  void renderFeedbackReset(tabId)
+}
+
+/**
+ * Every 👎 is stored per-site and silently keeps that thing visible forever —
+ * including feature rows like the slot collapser. Mistaken taps (👎-ing an ad
+ * out of instinct) used to be unrecoverable; this row surfaces the count and
+ * offers a one-tap undo.
+ */
+async function renderFeedbackReset(tabId: number) {
+  const row = $('hidden-reset')
+  let rejectedCount = 0
+  try {
+    const fb = await chrome.tabs.sendMessage(
+      tabId,
+      { type: 'skipSensei:getSiteFeedback' },
+      TOP_FRAME,
+    )
+    rejectedCount = fb?.rejectedCount ?? 0
+  } catch {
+    /* content script not ready */
+  }
+  row.hidden = rejectedCount === 0
+  if (rejectedCount > 0)
+    $('hidden-reset-text').textContent =
+      `${rejectedCount} “not an ad” choice${rejectedCount === 1 ? '' : 's'} saved for this site.`
 }
 
 function paintHiddenItems(tabId: number, items: HiddenElement[]) {
@@ -330,16 +356,16 @@ function hiddenItemRow(tabId: number, item: HiddenElement): HTMLLIElement {
   actions.className = 'hidden-actions'
   const up = document.createElement('button')
   up.className = 'hidden-btn'
-  up.textContent = '👍'
+  up.textContent = '👍 Ad'
   up.title = item.vetoed
     ? 'It is an ad — hide it from now on'
-    : 'Yes, this is an ad'
+    : 'Yes, this is an ad — keep it hidden'
   const down = document.createElement('button')
   down.className = 'hidden-btn'
-  down.textContent = '👎'
+  down.textContent = '👎 Not ad'
   down.title = item.vetoed
     ? 'Not an ad — never flag it here again'
-    : 'Not an ad — un-hide and never hide here'
+    : 'Not an ad — show it and never hide it on this site'
   up.addEventListener('click', () => {
     void chrome.tabs
       .sendMessage(
@@ -353,18 +379,21 @@ function hiddenItemRow(tabId: number, item: HiddenElement): HTMLLIElement {
     up.disabled = true
     down.disabled = true
   })
-  down.addEventListener('click', () => {
-    void chrome.tabs
-      .sendMessage(
+  down.addEventListener('click', async () => {
+    sendHighlight(tabId, null)
+    li.remove()
+    if ($<HTMLUListElement>('hidden-list').children.length === 0)
+      $('hidden-empty').hidden = false
+    try {
+      await chrome.tabs.sendMessage(
         tabId,
         { type: 'skipSensei:rejectHiddenSelector', selector: item.selector },
         TOP_FRAME,
       )
-      .catch(() => {})
-    sendHighlight(tabId, null)
-    li.remove()
-    if ($<HTMLUListElement>('hidden-list').children.length === 0)
-      $('hidden-review').hidden = true
+    } catch {
+      /* content script gone — nothing to record */
+    }
+    void renderFeedbackReset(tabId) // the new 👎 is now undoable
   })
   actions.append(up, down)
 
@@ -582,6 +611,26 @@ async function main() {
   void renderBlockerState()
   void renderSiteSection()
   void renderHiddenReview()
+
+  const resetBtn = $<HTMLButtonElement>('hidden-reset-btn')
+  resetBtn.addEventListener('click', async () => {
+    const tabId = await reviewTabId()
+    if (tabId === null) return
+    resetBtn.disabled = true
+    try {
+      const items: HiddenElement[] =
+        (await chrome.tabs.sendMessage(
+          tabId,
+          { type: 'skipSensei:resetSiteFeedback' },
+          TOP_FRAME,
+        )) ?? []
+      paintHiddenItems(tabId, items)
+      $('hidden-reset').hidden = true
+    } catch {
+      /* content script not ready */
+    }
+    resetBtn.disabled = false
+  })
 
   const scanBtn = $<HTMLButtonElement>('scan-ads-btn')
   scanBtn.addEventListener('click', async () => {

@@ -553,9 +553,11 @@ body.disabled main {
 .hidden-btn {
   border: none;
   background: transparent;
-  font-size: 15px;
-  line-height: 1;
-  padding: 3px 5px;
+  font-size: 11px;
+  color: var(--text-2);
+  white-space: nowrap;
+  line-height: 1.2;
+  padding: 3px 6px;
   border-radius: 6px;
   cursor: pointer;
 }
@@ -565,6 +567,22 @@ body.disabled main {
 .hidden-btn:disabled {
   opacity: 0.35;
   cursor: default;
+}
+/* Undo row for saved "not an ad" ratings on this site. */
+.hidden-reset {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 6px 16px 8px;
+  font-size: 11px;
+  color: var(--text-3);
+  line-height: 1.35;
+}
+#hidden-reset-btn {
+  font-size: 11px;
+  padding: 4px 10px;
+  flex-shrink: 0;
 }
 
 /* source badge: which detector found the segment */

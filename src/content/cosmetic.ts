@@ -3,6 +3,7 @@ import {
   addConfirmedGapfill,
   addGapfillSelectors,
   addRejectedGapfill,
+  clearRejectedGapfill,
   getConfirmedGapfill,
   getGapfillSelectors,
   getRejectedGapfill,
@@ -742,11 +743,34 @@ async function collapseEmptyAdSlots() {
     log('empty ad slots — collapsed:', tagged, 'branded:', branded)
 }
 
+let collapseObserver: MutationObserver | null = null
+let collapsePassScheduled = false
+
+/** Debounced collapse pass for slots that render AFTER the load-time passes —
+ * infinite scroll and lazy ad scripts insert reserved boxes minutes in. */
+function scheduleCollapsePass() {
+  if (collapsePassScheduled) return
+  collapsePassScheduled = true
+  setTimeout(() => {
+    collapsePassScheduled = false
+    void collapseEmptyAdSlots()
+  }, 1500)
+}
+
 async function scheduleSlotCollapse() {
   if (!(await blockingActive())) return
   // Two passes: slots settle at different times (lazy ad scripts give up).
   setTimeout(() => void collapseEmptyAdSlots(), 2000)
   setTimeout(() => void collapseEmptyAdSlots(), 6000)
+  // Then keep watching: lazy-rendered slots (scroll-triggered ad units) enter
+  // the DOM long after both passes. collapseEmptyAdSlots gates itself on the
+  // feature selector being active, so the observer is inert when it's off.
+  if (collapseObserver) return
+  collapseObserver = new MutationObserver(() => scheduleCollapsePass())
+  collapseObserver.observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+  })
 }
 
 // ---------------------------------------------------------------------------
@@ -1059,8 +1083,27 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   } else if (message?.type === 'skipSensei:scanForAds') {
     void scanForAds().then(sendResponse)
     return true // async response
+  } else if (message?.type === 'skipSensei:getSiteFeedback') {
+    void getRejectedGapfill(bareDomain()).then((rejected) =>
+      sendResponse({ rejectedCount: rejected.length }),
+    )
+    return true // async response
+  } else if (message?.type === 'skipSensei:resetSiteFeedback') {
+    void resetSiteFeedback().then(sendResponse)
+    return true // async response
   }
 })
+
+/** Undo every 👎 on this domain: re-enable the un-hidden selectors and any
+ * feature (collapser, sponsored-card scanner) a rating switched off, re-run
+ * them, and hand back the fresh review list. */
+async function resetSiteFeedback() {
+  await clearRejectedGapfill(bareDomain())
+  await apply() // rebuilds activeSelectors + styles, re-applies gapfill
+  await collapseEmptyAdSlots()
+  scanSponsoredCards()
+  return describeHiddenElements()
+}
 
 /**
  * Tell the service worker whether this tab has leftover ads (so it can badge

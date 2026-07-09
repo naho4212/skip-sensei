@@ -274,6 +274,8 @@ export type TabMessage =
   | { type: 'skipSensei:scanForAds' } // → HiddenElement[]
   | { type: 'skipSensei:rejectHiddenSelector'; selector: string }
   | { type: 'skipSensei:confirmHiddenSelector'; selector: string }
+  | { type: 'skipSensei:getSiteFeedback' } // → { rejectedCount: number }
+  | { type: 'skipSensei:resetSiteFeedback' } // → HiddenElement[]
 
 /** One hidden ad selector active on the page, for the popup review UI. */
 export interface HiddenElement {

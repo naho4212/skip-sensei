@@ -334,6 +334,16 @@ export async function addRejectedGapfill(domain: string, selector: string) {
   await chrome.storage.local.set({ [GAPFILL_REJECTED_KEY]: all })
 }
 
+/** Undo every "not an ad" rating on a domain — the popup's escape hatch for
+ * mistaken 👎s (which silently disable hiding rules and whole features like
+ * the slot collapser for the site). */
+export async function clearRejectedGapfill(domain: string) {
+  const result = await chrome.storage.local.get(GAPFILL_REJECTED_KEY)
+  const all: Record<string, string[]> = result[GAPFILL_REJECTED_KEY] ?? {}
+  delete all[domain]
+  await chrome.storage.local.set({ [GAPFILL_REJECTED_KEY]: all })
+}
+
 // Per-domain selectors the AI proposed but the safety guard refused to apply
 // (they looked like real UI). Shown in the popup review as "kept visible" so
 // the user can rate them. The domain key's PRESENCE (even with an empty list)
