@@ -96,10 +96,11 @@ const WALLS_BEFORE_BREAKER = 2
 const CLOAK_ID = 'skip-sensei-ad-cloak'
 const CLOAK_STYLE_ID = 'skip-sensei-ad-cloak-style'
 /**
- * Branded skip overlay (from the Ad Sensei design system's SkipOverlay
- * template): a dark cover with a spinning purple ensō ring, the ▶▶| skip
- * glyph popping into its center, "Skipping ad…", and an AD SENSEI kicker.
- * A quick accent slash sweeps across on mount to match the hero animation.
+ * Branded skip overlay — a faithful port of the Ad Sensei design system's
+ * SkipOverlay template (templates/skip-overlay, glyph variant): a dark cover,
+ * a slash sweep on mount, the brand ensō that draws in then spins as the
+ * loader, the skip glyph popping into its center, "Skipping ad…", and the
+ * AD SENSEI brand row. Geometry/timing match skip-spinner.jsx exactly.
  */
 const CLOAK_CSS = `
 #${CLOAK_ID} {
@@ -110,59 +111,52 @@ const CLOAK_CSS = `
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 20px;
-  background: #0b0b0f;
+  gap: 36px;
+  background: #0c0c0c;
   color: #f1f1f1;
-  font: 500 14px/1.4 "Roboto", "Arial", sans-serif;
+  font-family: Roboto, Arial, sans-serif;
   cursor: default;
   overflow: hidden;
 }
-/* accent slash sweep on mount */
-#${CLOAK_ID}::after {
-  content: "";
-  position: absolute;
-  top: 0; left: -60%;
-  width: 45%; height: 100%;
-  background: linear-gradient(100deg, transparent, rgba(139, 92, 246, 0.35), transparent);
-  transform: skewX(-18deg);
-  animation: skip-sensei-slash 0.7s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+#${CLOAK_ID} .so-anim { position: relative; width: 96px; height: 96px; }
+#${CLOAK_ID} .so-slash {
+  position: absolute; left: 50%; top: 50%;
+  width: 230.4px; height: 3px; margin-left: -115.2px; margin-top: -1.5px;
+  border-radius: 2px; transform-origin: center;
+  background: linear-gradient(90deg, transparent, #ffffff 45%, #7c3aed);
+  box-shadow: 0 0 14px #7c3aed;
+  animation: so-slash 0.7s ease-out 0.05s both;
 }
-@keyframes skip-sensei-slash { to { left: 130%; } }
-#${CLOAK_ID} .skip-sensei-ring {
-  position: relative;
-  width: 88px; height: 88px;
-  filter: drop-shadow(0 0 20px rgba(124, 58, 237, 0.55));
+#${CLOAK_ID} .so-enso {
+  position: absolute; inset: 0; overflow: visible;
+  animation: so-spin 1.5s linear infinite;
+  filter: drop-shadow(0 0 12px rgba(124, 58, 237, 0.4));
 }
-#${CLOAK_ID} .skip-sensei-ring svg { width: 100%; height: 100%; display: block; }
-#${CLOAK_ID} .skip-sensei-ring .enso {
-  fill: none;
-  stroke: #7c3aed;
-  stroke-width: 5;
-  stroke-linecap: round;
-  stroke-dasharray: 210 66;      /* ~300deg arc + gap → ensō */
-  transform-origin: 50% 50%;
-  animation: skip-sensei-spin 1.15s linear infinite,
-             skip-sensei-draw 0.55s ease-out both;
+#${CLOAK_ID} .so-enso circle {
+  animation: so-draw 0.8s cubic-bezier(0.33, 1, 0.68, 1) both;
 }
-#${CLOAK_ID} .skip-sensei-glyph {
-  position: absolute; inset: 0;
-  display: grid; place-items: center;
-  animation: skip-sensei-pop 0.5s cubic-bezier(0.2, 1.35, 0.4, 1) both;
+#${CLOAK_ID} .so-glyph {
+  position: absolute; left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
 }
-#${CLOAK_ID} .skip-sensei-glyph svg { width: 34px; height: auto; fill: #8b5cf6; }
-#${CLOAK_ID} .skip-sensei-label { font-size: 19px; font-weight: 500; }
-#${CLOAK_ID} .skip-sensei-kicker {
-  font-size: 11px; font-weight: 700; letter-spacing: 0.22em;
-  text-transform: uppercase; color: #7a7a7a;
+#${CLOAK_ID} .so-glyph .pop {
+  animation: so-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.55s both;
 }
-#${CLOAK_ID} .skip-sensei-kicker b { color: #8b5cf6; font-weight: 700; }
-@keyframes skip-sensei-spin { to { transform: rotate(360deg); } }
-@keyframes skip-sensei-draw { from { stroke-dasharray: 0 276; } to { stroke-dasharray: 210 66; } }
-@keyframes skip-sensei-pop { from { transform: scale(0.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+#${CLOAK_ID} .so-label {
+  font-size: 22px; font-weight: 400; color: #f1f1f1; letter-spacing: 0.2px;
+}
+#${CLOAK_ID} .so-brand {
+  display: flex; gap: 6px; font-size: 11px; font-weight: 700;
+  letter-spacing: 0.2em; margin-top: -14px;
+}
+#${CLOAK_ID} .so-brand .ad { color: #7c3aed; }
+#${CLOAK_ID} .so-brand .sensei { color: #6a6a6a; }
+@keyframes so-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+@keyframes so-draw { from { stroke-dasharray: 3 100; opacity: 0; } to { stroke-dasharray: 85 100; opacity: 1; } }
+@keyframes so-pop { 0% { transform: scale(0); } 70% { transform: scale(1.15); } 100% { transform: scale(1); } }
+@keyframes so-slash { 0% { opacity: 0; transform: rotate(122.6deg) scaleX(0.05); } 25% { opacity: 1; } 100% { opacity: 0; transform: rotate(122.6deg) scaleX(1); } }
 @media (prefers-reduced-motion: reduce) {
-  #${CLOAK_ID}::after,
-  #${CLOAK_ID} .skip-sensei-glyph { animation: none; }
-  #${CLOAK_ID} .skip-sensei-ring .enso { animation: skip-sensei-spin 1.4s linear infinite; }
+  #${CLOAK_ID} .so-anim, #${CLOAK_ID} .so-anim * { animation: none !important; }
 }
 `
 
@@ -441,21 +435,27 @@ export class AdEngine {
     }
     const cloak = document.createElement('div')
     cloak.id = CLOAK_ID
-    // Ensō ring loader (spins) + the ▶▶| skip glyph popping into its center,
-    // then the label and the AD SENSEI kicker.
+    // Structure/geometry ported verbatim from skip-spinner.jsx (glyph variant):
+    // slash sweep, spinning ensō (r42, pathLength 100, dasharray 85 100,
+    // rotate 18), and the two-triangle+bar skip glyph popping in the center.
     cloak.innerHTML = `
-      <div class="skip-sensei-ring">
-        <svg viewBox="0 0 100 100" aria-hidden="true">
-          <circle class="enso" cx="50" cy="50" r="44" transform="rotate(-90 50 50)" />
+      <div class="so-anim" aria-hidden="true">
+        <div class="so-slash"></div>
+        <svg class="so-enso" width="96" height="96" viewBox="0 0 100 100">
+          <circle cx="50" cy="50" r="42" fill="none" stroke="#7c3aed"
+            stroke-width="6.2" stroke-linecap="round" pathLength="100"
+            stroke-dasharray="85 100" transform="rotate(18 50 50)" />
         </svg>
-        <span class="skip-sensei-glyph">
-          <svg viewBox="0 0 24 17" aria-hidden="true">
-            <path d="M0 1.5l6 7-6 7v-14zm7.5 0l6 7-6 7v-14zm8.5 0h2.4v14H16v-14z" />
+        <div class="so-glyph"><div class="pop">
+          <svg width="38.4" height="23.04" viewBox="0 0 100 60">
+            <polygon points="0,0 34,30 0,60" fill="#7c3aed" />
+            <polygon points="38,0 72,30 38,60" fill="#7c3aed" />
+            <rect x="80" y="0" width="12" height="60" rx="5" fill="#7c3aed" />
           </svg>
-        </span>
+        </div></div>
       </div>
-      <span class="skip-sensei-label">Skipping ad…</span>
-      <span class="skip-sensei-kicker"><b>AD</b> SENSEI</span>
+      <div class="so-label">Skipping ad&hellip;</div>
+      <div class="so-brand"><span class="ad">AD</span><span class="sensei">SENSEI</span></div>
     `
     this.player?.appendChild(cloak)
     this.cloak = cloak
