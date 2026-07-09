@@ -120,12 +120,35 @@ const NETWORK_EXEMPT = ['youtube.com', 'youtube-nocookie.com', 'googlevideo.com'
  * high-priority allowAllRequests rule that exempts the whole page (and its
  * subframes) from the static block rules — i.e. "pause blocking on this site".
  */
+/**
+ * DNR requestDomains must be clean ASCII hostnames — no scheme, port, path, or
+ * spaces. updateDynamicRules validates the WHOLE rule atomically, so a single
+ * malformed entry rejects it and (on a fresh profile with no prior rule) would
+ * drop the NETWORK_EXEMPT YouTube exemption with it — network-blocking YouTube,
+ * which we must never do. Sanitize each entry and drop anything that isn't a
+ * plausible hostname so one bad allowlist input can't take the rule down.
+ */
+function normalizeHost(raw: string): string | null {
+  const s = raw
+    .trim()
+    .toLowerCase()
+    .replace(/^[a-z][a-z0-9+.-]*:\/\//, '') // scheme
+    .replace(/[/?#].*$/, '') // path / query / fragment
+    .replace(/:\d+$/, '') // port
+  if (
+    !/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/.test(s)
+  ) {
+    return null
+  }
+  return s
+}
+
 async function syncAllowlist(hostnames: string[]) {
   const existing = await chrome.declarativeNetRequest.getDynamicRules()
-  const domains = [
-    ...NETWORK_EXEMPT,
-    ...hostnames.map((h) => h.trim().toLowerCase()).filter(Boolean),
-  ].filter((h, i, arr) => arr.indexOf(h) === i) // dedupe
+  const domains = [...NETWORK_EXEMPT, ...hostnames]
+    .map(normalizeHost)
+    .filter((h): h is string => h !== null)
+    .filter((h, i, arr) => arr.indexOf(h) === i) // dedupe
 
   // A SINGLE allowAllRequests rule whose condition lists every paused hostname
   // in requestDomains — one dynamic rule no matter how large the allowlist
@@ -186,41 +209,49 @@ const COOKIE_SET = new Set(['cookies'])
 const lastPollTs = new Map<number, number>()
 
 interface BlockCallbacks {
-  /** Web ad blocks (filter-list ad rulesets) → the "Web ads" stat. */
-  onBlocks: (n: number) => void
-  /** Tracker/analytics blocks → the "Trackers" stat. */
-  onTrackers: (n: number) => void
-  /** Cookie-notice blocks → the "Cookies" stat. */
-  onCookies: (n: number) => void
+  /** One batched count per poll → the stats recorder. Delivered as a single
+   *  object so the recorder can do ONE serialized read-modify-write and never
+   *  drop a bucket's increment (ads/trackers/cookies land together). */
+  onCounts: (c: { ads: number; trackers: number; cookies: number }) => void
   /** Per ad+tracker block, with the tab id → the icon badge counter. */
   onTabBlock: (tabId: number) => void
 }
 
 async function pollTabBlocks(tabId: number, cb: BlockCallbacks) {
+  // Matched-rule info is per-TAB and Chrome retains it for ~5 min, so without a
+  // high-water mark a post-navigation poll would recount the previous page's
+  // matches. The mark is seeded at 'loading' (see initNetBlocker); a missing
+  // mark means we never saw this tab load, so start from now and count nothing
+  // retroactively (an undercount is safer than a double-count).
+  const since = lastPollTs.get(tabId) ?? Date.now()
   try {
-    const since = lastPollTs.get(tabId)
     const { rulesMatchedInfo } =
       await chrome.declarativeNetRequest.getMatchedRules({
         tabId,
-        ...(since !== undefined ? { minTimeStamp: since } : {}),
+        minTimeStamp: since,
       })
-    lastPollTs.set(tabId, Date.now())
+    let maxTs = since
     let ads = 0
     let trackers = 0
     let cookies = 0
     for (const info of rulesMatchedInfo) {
+      if (info.timeStamp > maxTs) maxTs = info.timeStamp
       const id = info.rule.rulesetId
       if (AD_SET.has(id)) ads++
       else if (TRACKER_SET.has(id)) trackers++
       else if (COOKIE_SET.has(id)) cookies++
     }
-    if (ads > 0) cb.onBlocks(ads)
-    if (trackers > 0) cb.onTrackers(trackers)
-    if (cookies > 0) cb.onCookies(cookies)
-    // Badge = everything actually blocked on the tab (ads + trackers).
+    // Advance the mark past the newest match counted (more precise than
+    // Date.now(), which could skip matches recorded while the call was in
+    // flight) so the next poll never recounts these.
+    lastPollTs.set(tabId, maxTs + 1)
+    if (ads || trackers || cookies) cb.onCounts({ ads, trackers, cookies })
     for (let i = 0; i < ads + trackers; i++) cb.onTabBlock(tabId)
   } catch {
-    // Feedback permission missing or tab gone — counting is best-effort.
+    // getMatchedRules is subject to a quota (20 calls / 10 min; ONLY
+    // user-gesture calls are exempt — the feedback permission does not exempt
+    // it). Under very heavy multi-tab browsing a poll can reject; counting is
+    // best-effort and simply resumes next interval. Blocking is unaffected.
   }
 }
 
@@ -235,8 +266,9 @@ export function initNetBlocker(cb: BlockCallbacks) {
   onSettingsChanged(() => void syncNetBlocker())
 
   chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
-    // New load → reset the per-tab counting window (block counts are per-load).
-    if (changeInfo.status === 'loading') lastPollTs.delete(tabId)
+    // Seed the counting high-water AT load start, so the post-load poll counts
+    // only this page's matches — not the previous page's still-retained ones.
+    if (changeInfo.status === 'loading') lastPollTs.set(tabId, Date.now())
     if (changeInfo.status === 'complete') void pollTabBlocks(tabId, cb)
   })
   chrome.tabs.onRemoved.addListener((tabId) => lastPollTs.delete(tabId))

@@ -47,6 +47,9 @@ export async function runColdStart(init: () => Promise<void>): Promise<void> {
     const healthy = got[GOOD_START] !== false
     await chrome.storage.local.set({ [GOOD_START]: false })
     if (healthy) {
+      // runtime.reload() unloads the extension, which clears storage.session
+      // (it's in-memory per extension load) — so the warm flag is gone and the
+      // next start genuinely re-runs cold init rather than no-opping.
       chrome.runtime.reload()
       return
     }

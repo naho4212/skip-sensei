@@ -230,6 +230,14 @@
   //    byte-for-byte unchanged, so non-ad media is never corrupted.
   // ---------------------------------------------------------------------------
 
+  // Match "ad"/"ads" only as a whole token (bounded by non-letters or ends),
+  // NOT as a substring — so "broadcast", "adaptation", "download", "loading",
+  // "header" etc. are never mistaken for ads. This is what keeps the DASH/HLS
+  // pruners from deleting legitimate media.
+  function hasAdToken(s) {
+    return /(^|[^a-z])ads?([^a-z]|$)/i.test(String(s))
+  }
+
   // 5) HLS playlist ad stripping.
   function m3uPrune(text) {
     try {
@@ -258,18 +266,24 @@
           continue
         }
 
-        // #EXT-X-DATERANGE lines explicitly tagged as ads (stitched-ad CLASS,
-        // SCTE-35 cue, or a ",ad" attribute marker).
-        if (
-          /^#EXT-X-DATERANGE/i.test(t) &&
-          /(CLASS="[^"]*ad[^"]*"|twitch-stitched-ad|SCTE35|SCTE-35|,ad(,|"|$))/i.test(t)
-        ) {
-          changed = true
-          continue
+        // #EXT-X-DATERANGE lines explicitly tagged as ads: a stitched-ad /
+        // ad-token CLASS, or an SCTE-35 splice. (Dropping a DATERANGE line
+        // removes only the metadata tag, not media segments.)
+        if (/^#EXT-X-DATERANGE/i.test(t)) {
+          var cls = t.match(/CLASS="([^"]*)"/i)
+          if (/twitch-stitched-ad|scte-?35/i.test(t) || (cls && hasAdToken(cls[1]))) {
+            changed = true
+            continue
+          }
         }
 
         out.push(line)
       }
+      // Unbalanced CUE-OUT — no closing CUE-IN in this playlist body (common in
+      // live/DVR refreshes where the pair spans two refreshes). We'd have
+      // dropped real trailing segments, so bail and return the playlist
+      // unchanged rather than corrupt it.
+      if (inAdCue) return text
       if (changed) {
         notify()
         return out.join('\n')
@@ -303,25 +317,28 @@
         return text
       }
 
-      // DASH MPD: remove <Period> elements that are ad periods — id contains
-      // "ad", or a SupplementalProperty signals an ad.
+      // DASH MPD: remove <Period> elements that are ad periods — id is an "ad"
+      // TOKEN, or a SupplementalProperty carries an SCTE-35 / ad-token signal.
+      // Token matching (not substring) is critical: "ad" is a substring of
+      // "broadcast", "adaptation-set-switching" (a real, non-ad DASH scheme),
+      // "download", etc., and substring matching would delete live content.
       if (name === 'MPD') {
         var periods = root.getElementsByTagName('Period')
         var toRemove = []
         for (var p = 0; p < periods.length; p++) {
           var period = periods[p]
           var isAd = false
-          var id = (period.getAttribute('id') || '').toLowerCase()
-          if (id.indexOf('ad') !== -1) isAd = true
+          if (hasAdToken(period.getAttribute('id') || '')) isAd = true
           if (!isAd) {
             var supps = period.getElementsByTagName('SupplementalProperty')
             for (var s = 0; s < supps.length; s++) {
-              var sig = (
-                (supps[s].getAttribute('schemeIdUri') || '') +
-                ' ' +
-                (supps[s].getAttribute('value') || '')
-              ).toLowerCase()
-              if (sig.indexOf('ad') !== -1) {
+              var scheme = supps[s].getAttribute('schemeIdUri') || ''
+              var val = supps[s].getAttribute('value') || ''
+              if (
+                /scte-?35/i.test(scheme) ||
+                hasAdToken(scheme) ||
+                hasAdToken(val)
+              ) {
                 isAd = true
                 break
               }
@@ -329,9 +346,14 @@
           }
           if (isAd) toRemove.push(period)
         }
-        if (toRemove.length) {
+        // Never strip EVERY period — a manifest that looks entirely like ads is
+        // almost certainly a false match; leave it intact rather than break all
+        // playback.
+        if (toRemove.length && toRemove.length < periods.length) {
           for (var r = 0; r < toRemove.length; r++) {
-            if (toRemove[r].parentNode) toRemove[r].parentNode.removeChild(toRemove[r])
+            if (toRemove[r].parentNode) {
+              toRemove[r].parentNode.removeChild(toRemove[r])
+            }
           }
           notify()
           return new XMLSerializer().serializeToString(doc)

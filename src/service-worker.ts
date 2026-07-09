@@ -61,25 +61,28 @@ async function recordSkip(kind: 'ad' | 'sponsor') {
   await chrome.storage.session.set({ [SESSION_STATS_KEY]: session })
 }
 
-async function recordWebBlocks(n: number) {
-  await incrementStat('allTimeWebAdsBlocked', n)
-  const session = await getSessionStats()
-  session.sessionWebAdsBlocked += n
-  await chrome.storage.session.set({ [SESSION_STATS_KEY]: session })
-}
+// Stat writes are serialized through this chain so concurrent polls (e.g. two
+// tabs finishing at once) can't lose an increment via interleaved
+// read-modify-write on the shared stats / session keys.
+let statChain: Promise<void> = Promise.resolve()
 
-async function recordTrackerBlocks(n: number) {
-  await incrementStat('allTimeTrackersBlocked', n)
-  const session = await getSessionStats()
-  session.sessionTrackersBlocked += n
-  await chrome.storage.session.set({ [SESSION_STATS_KEY]: session })
-}
-
-async function recordCookieBlocks(n: number) {
-  await incrementStat('allTimeCookiesBlocked', n)
-  const session = await getSessionStats()
-  session.sessionCookiesBlocked += n
-  await chrome.storage.session.set({ [SESSION_STATS_KEY]: session })
+function recordBlockCounts(c: {
+  ads: number
+  trackers: number
+  cookies: number
+}) {
+  statChain = statChain
+    .then(async () => {
+      if (c.ads) await incrementStat('allTimeWebAdsBlocked', c.ads)
+      if (c.trackers) await incrementStat('allTimeTrackersBlocked', c.trackers)
+      if (c.cookies) await incrementStat('allTimeCookiesBlocked', c.cookies)
+      const session = await getSessionStats()
+      session.sessionWebAdsBlocked += c.ads
+      session.sessionTrackersBlocked += c.trackers
+      session.sessionCookiesBlocked += c.cookies
+      await chrome.storage.session.set({ [SESSION_STATS_KEY]: session })
+    })
+    .catch(() => {})
 }
 
 // ---------------------------------------------------------------------------
@@ -568,9 +571,7 @@ void (async () => {
 
 // "Block all ads" engine: enforce DNR ruleset state; count blocks (stats + badge).
 initNetBlocker({
-  onBlocks: (n) => void recordWebBlocks(n),
-  onTrackers: (n) => void recordTrackerBlocks(n),
-  onCookies: (n) => void recordCookieBlocks(n),
+  onCounts: (c) => recordBlockCounts(c),
   onTabBlock: (tabId) => bumpTabBlocked(tabId),
 })
 
