@@ -311,6 +311,20 @@ export class AdEngine {
 
     const adShowing = this.adIsShowing()
     if (!adShowing) {
+      // Ad just ended → record how long it took to clear (read the method
+      // BEFORE endFastForward resets the flags). Ignore sub-0.3s flickers.
+      if (this.adShowingSince !== null) {
+        const seconds = (Date.now() - this.adShowingSince) / 1000
+        if (seconds >= 0.3) {
+          const method =
+            this.skipClickedAt !== null
+              ? 'skip button'
+              : this.fastForwarding
+                ? 'fast-forward'
+                : 'skipped'
+          this.reportAdTiming(seconds, method)
+        }
+      }
       this.endFastForward()
       this.removeCloak()
       this.adShowingSince = null
@@ -403,6 +417,25 @@ export class AdEngine {
       type: 'skipSensei:event',
       kind: 'self_heal',
       fields: { target, selector },
+    })
+  }
+
+  /**
+   * How long an ad took to clear, for testing/monitoring. Logged to the
+   * activity page (visible locally) and sent as an anonymous 'ad_skip_timing'
+   * diagnostics event (aggregatable), gated on the telemetry setting.
+   */
+  private reportAdTiming(seconds: number, method: string) {
+    const secs = seconds.toFixed(1)
+    void recordActivity(
+      'Skip YouTube ads',
+      `skipped an ad in ${secs}s (${method})`,
+      'youtube.com',
+    )
+    void this.send({
+      type: 'skipSensei:event',
+      kind: 'ad_skip_timing',
+      fields: { seconds: secs, method },
     })
   }
 
