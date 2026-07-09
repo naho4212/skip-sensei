@@ -459,8 +459,19 @@ body.disabled main {
   padding: 6px 0 4px;
   border-top: 1px solid var(--divider);
 }
-.hidden-hint {
-  margin: 2px 16px 8px;
+.hidden-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+}
+#scan-ads-btn {
+  font-size: 11px;
+  padding: 4px 10px;
+}
+.hidden-hint,
+.hidden-empty {
+  margin: 6px 16px 8px;
   font-size: 11px;
   color: var(--text-3);
   line-height: 1.35;
@@ -497,9 +508,32 @@ body.disabled main {
   max-width: 210px;
 }
 .hidden-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 10px;
   color: var(--text-3);
   font-family: var(--mono);
+}
+.hidden-src {
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+.hidden-src.src-ai {
+  color: var(--accent-bright);
+  background: rgba(124, 58, 237, 0.16);
+}
+.hidden-src.src-list {
+  color: #3ea6ff;
+  background: rgba(62, 166, 255, 0.14);
+}
+.hidden-src.src-youtube {
+  color: #ff6b6b;
+  background: rgba(255, 107, 107, 0.14);
 }
 .hidden-actions {
   display: flex;

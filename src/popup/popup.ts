@@ -216,28 +216,48 @@ function renderSegments(status: PageStatus) {
  * reviewed. 👎 un-hides it and blocks it here for good; 👍 confirms it. Both
  * feed the anonymous gapfill_feedback diagnostics.
  */
+async function reviewTabId(): Promise<number | null> {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+  // Only web pages have a content script to talk to.
+  if (!tab?.id || !/^https?:/.test(tab.url ?? '')) return null
+  return tab.id
+}
+
 async function renderHiddenReview() {
   const wrap = $('hidden-review')
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
-  let items: HiddenElement[] = []
-  if (tab?.id) {
-    try {
-      items =
-        (await chrome.tabs.sendMessage(tab.id, {
-          type: 'skipSensei:getHiddenElements',
-        })) ?? []
-    } catch {
-      items = []
-    }
+  const tabId = await reviewTabId()
+  if (tabId === null) {
+    wrap.hidden = true
+    return
   }
-  if (!tab?.id || items.length === 0) {
+  let items: HiddenElement[] = []
+  try {
+    items =
+      (await chrome.tabs.sendMessage(tabId, {
+        type: 'skipSensei:getHiddenElements',
+      })) ?? []
+  } catch {
+    // content script not ready (tab loaded before an extension reload)
     wrap.hidden = true
     return
   }
   wrap.hidden = false
-  $('hidden-title').textContent = `Hidden by AI here (${items.length})`
+  paintHiddenItems(tabId, items)
+}
+
+function paintHiddenItems(tabId: number, items: HiddenElement[]) {
+  $('hidden-title').textContent = items.length
+    ? `Hidden ads here (${items.length})`
+    : 'Hidden ads here'
   const list = $<HTMLUListElement>('hidden-list')
-  list.replaceChildren(...items.map((item) => hiddenItemRow(tab.id!, item)))
+  list.replaceChildren(...items.map((item) => hiddenItemRow(tabId, item)))
+  $('hidden-empty').hidden = items.length > 0
+}
+
+const SOURCE_TAG: Record<string, string> = {
+  ai: 'AI',
+  list: 'list',
+  youtube: 'YT',
 }
 
 function hiddenItemRow(tabId: number, item: HiddenElement): HTMLLIElement {
@@ -251,7 +271,12 @@ function hiddenItemRow(tabId: number, item: HiddenElement): HTMLLIElement {
   label.textContent = item.text || `<${item.tag}>`
   const meta = document.createElement('span')
   meta.className = 'hidden-meta'
-  meta.textContent = `${item.tag || '?'}${item.count > 1 ? ` ×${item.count}` : ''}`
+  const src = document.createElement('span')
+  src.className = `hidden-src src-${item.source}`
+  src.textContent = SOURCE_TAG[item.source] ?? item.source
+  const detail = document.createElement('span')
+  detail.textContent = `${item.tag || '?'}${item.count > 1 ? ` ×${item.count}` : ''}`
+  meta.append(src, detail)
   info.append(label, meta)
 
   const actions = document.createElement('div')
@@ -496,6 +521,25 @@ async function main() {
   void renderBlockerState()
   void renderSiteSection()
   void renderHiddenReview()
+
+  const scanBtn = $<HTMLButtonElement>('scan-ads-btn')
+  scanBtn.addEventListener('click', async () => {
+    const tabId = await reviewTabId()
+    if (tabId === null) return
+    scanBtn.disabled = true
+    scanBtn.textContent = 'Scanning…'
+    try {
+      const items: HiddenElement[] =
+        (await chrome.tabs.sendMessage(tabId, {
+          type: 'skipSensei:scanForAds',
+        })) ?? []
+      paintHiddenItems(tabId, items)
+    } catch {
+      /* content script not ready */
+    }
+    scanBtn.disabled = false
+    scanBtn.textContent = 'Scan for ads'
+  })
   // Analysis finishes async while the popup is open; 1s keeps the elapsed
   // timer ticking smoothly, and the blocked-ads count fresh.
   setInterval(() => {

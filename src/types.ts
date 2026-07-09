@@ -272,15 +272,18 @@ export type TabMessage =
       total: number
     }
   | { type: 'skipSensei:getHiddenElements' } // → HiddenElement[]
+  | { type: 'skipSensei:scanForAds' } // → HiddenElement[]
   | { type: 'skipSensei:rejectHiddenSelector'; selector: string }
   | { type: 'skipSensei:confirmHiddenSelector'; selector: string }
 
-/** One gap-filled selector active on the page, for the popup review UI. */
+/** One hidden ad selector active on the page, for the popup review UI. */
 export interface HiddenElement {
   selector: string
   count: number
   tag: string
   text: string
+  /** 'list' = filter-list selector, 'ai' = AI gap-filler, 'youtube' = YT ads. */
+  source: 'list' | 'ai' | 'youtube'
 }
 
 export type SponsorEngineStatus =

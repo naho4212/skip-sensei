@@ -145,6 +145,9 @@ async function blockingActive(): Promise<boolean> {
   )
 }
 
+/** Generic + YouTube selectors currently injected (for the popup review). */
+let activeSelectors: string[] = []
+
 async function apply() {
   const settings = await getSettings()
   const allowed = settings.masterEnabled && !isAllowlisted(settings.allowlist)
@@ -158,21 +161,24 @@ async function apply() {
     isYouTube() &&
     (settings.blockAllAds || settings.adEngineEnabled)
 
+  // Per-site "not an ad" selectors the user un-hid stay un-hidden.
+  const rejected = new Set(await getRejectedGapfill(bareDomain()))
   const selectors = [
     ...(genericOn ? SELECTORS : []),
     ...(ytOn ? YOUTUBE_SELECTORS : []),
-  ]
+  ].filter((s) => !rejected.has(s))
+  activeSelectors = selectors
 
   const existing = document.getElementById(STYLE_ID) as HTMLStyleElement | null
   if (selectors.length === 0) {
     existing?.remove()
     document.getElementById(GAPFILL_STYLE_ID)?.remove()
-    return
+  } else {
+    const style = existing ?? document.createElement('style')
+    style.id = STYLE_ID
+    style.textContent = buildCss(selectors)
+    if (!existing) (document.head ?? document.documentElement).appendChild(style)
   }
-  const style = existing ?? document.createElement('style')
-  style.id = STYLE_ID
-  style.textContent = buildCss(selectors)
-  if (!existing) (document.head ?? document.documentElement).appendChild(style)
   if (genericOn) void applyGapfill() // hide anything the AI found on prior visits
 
   if (ytOn) startAdBadgeScanner()
@@ -357,27 +363,44 @@ function pageHasLoadedAds(): boolean {
   return !!document.querySelector('ins.adsbygoogle[data-ad-status="filled"]')
 }
 
-/** Human-readable summary of what the gap-filler is hiding here, for review. */
+/** Human-readable summary of everything the extension is hiding on this page
+ * (filter-list + YouTube + AI gap-fill), for the popup review. Capped so a
+ * heavy ad page doesn't flood the popup. */
 function describeHiddenElements() {
-  return activeGapfill
-    .map((selector) => {
-      let els: Element[] = []
-      try {
-        els = Array.from(document.querySelectorAll(selector))
-      } catch {
-        /* invalid — skip */
-      }
-      const first = els[0]
-      return {
+  const isYt = isYouTube()
+  const sources: Array<{ selector: string; source: 'list' | 'ai' | 'youtube' }> =
+    [
+      ...activeSelectors.map((selector) => ({
         selector,
-        count: els.length,
-        tag: first ? first.tagName.toLowerCase() : '',
-        text: first
-          ? (first.textContent ?? '').trim().replace(/\s+/g, ' ').slice(0, 70)
-          : '',
-      }
+        source: (isYt && /^ytd-|^#masthead|skip-sensei-adcard/.test(selector)
+          ? 'youtube'
+          : 'list') as 'list' | 'youtube',
+      })),
+      ...activeGapfill.map((selector) => ({
+        selector,
+        source: 'ai' as const,
+      })),
+    ]
+  const out = []
+  for (const { selector, source } of sources) {
+    let els: Element[] = []
+    try {
+      els = Array.from(document.querySelectorAll(selector))
+    } catch {
+      continue
+    }
+    if (els.length === 0) continue
+    const first = els[0]
+    out.push({
+      selector,
+      source,
+      count: els.length,
+      tag: first.tagName.toLowerCase(),
+      text: (first.textContent ?? '').trim().replace(/\s+/g, ' ').slice(0, 70),
     })
-    .filter((x) => x.count > 0)
+    if (out.length >= 25) break
+  }
+  return out
 }
 
 /** User marked a hidden selector "not an ad": un-hide it, block it here for
@@ -390,7 +413,8 @@ async function rejectHiddenSelector(selector: string) {
     domain,
     current.filter((s) => s !== selector),
   )
-  await applyGapfill() // re-render without it → un-hides immediately
+  await apply() // re-inject filter-list/YouTube style without it
+  await applyGapfill() // and the gap-fill style → un-hides immediately
   reportGapfillFeedback(selector, 'not-ad')
 }
 
@@ -419,6 +443,9 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   } else if (message?.type === 'skipSensei:confirmHiddenSelector') {
     reportGapfillFeedback(message.selector, 'ad')
     sendResponse({ ok: true })
+  } else if (message?.type === 'skipSensei:scanForAds') {
+    void scanForAds().then(sendResponse)
+    return true // async response
   }
 })
 
@@ -505,6 +532,30 @@ async function runGapfill() {
     log('gap-filler hid', selectors.length, 'ad element(s):', selectors)
     void applyGapfill()
   }
+}
+
+/**
+ * On-demand gap-filler for the popup "Scan for ads" button — ignores the
+ * once-per-domain guard so the user can test the AI on any page and review
+ * what it proposes. Returns the current hidden-element summary.
+ */
+async function scanForAds() {
+  const settings = await getSettings()
+  if (settings.aiEnhancements && !settings.localOnlyMode) {
+    const html = collectAdSuspects()
+    if (html.trim()) {
+      const selectors: string[] | null = await chrome.runtime
+        .sendMessage({
+          type: 'skipSensei:findAdSelectors',
+          html,
+          domain: bareDomain(),
+        })
+        .catch(() => null)
+      if (selectors?.length) log('manual scan proposed:', selectors)
+    }
+  }
+  await applyGapfill()
+  return describeHiddenElements()
 }
 
 function onPageReady() {
