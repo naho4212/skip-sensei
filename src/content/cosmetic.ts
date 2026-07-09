@@ -140,6 +140,25 @@ function isGoogleSearch(): boolean {
   return /(^|\.)google\.[a-z]{2,3}(\.[a-z]{2})?$/.test(location.hostname)
 }
 
+/**
+ * Pinterest sponsored pins: first-party ads again — cosmetic-only. Pinterest's
+ * class names are hashed and rotate every build, so key off the stable bits:
+ * the pin wrapper ([data-grid-item]) and the ad label's title attribute
+ * ("Sponsored" / "Promoted by …"), which organic pins never carry. Verified
+ * live: matches exactly the sponsored pins, zero organic. Note: hiding leaves
+ * a blank slot until Pinterest's masonry relayouts on scroll — the grid
+ * positions are precomputed, and only Pinterest's own code can re-flow them.
+ * English-locale labels only for now.
+ */
+const PINTEREST_SELECTORS = [
+  '[data-grid-item]:has([title="Sponsored" i])',
+  '[data-grid-item]:has([title^="Promoted by" i])',
+]
+
+function isPinterest(): boolean {
+  return /(^|\.)pinterest\.[a-z]{2,3}(\.[a-z]{2})?$/.test(location.hostname)
+}
+
 const GAPFILL_STYLE_ID = 'skip-sensei-gapfill'
 
 function isValidSelectorList(list: string[]): string[] {
@@ -197,6 +216,7 @@ async function apply() {
   const selectors = [
     ...(genericOn ? SELECTORS : []),
     ...(genericOn && isGoogleSearch() ? GOOGLE_SEARCH_SELECTORS : []),
+    ...(genericOn && isPinterest() ? PINTEREST_SELECTORS : []),
     ...(ytOn ? YOUTUBE_SELECTORS : []),
   ].filter((s) => !rejected.has(s))
   activeSelectors = selectors
