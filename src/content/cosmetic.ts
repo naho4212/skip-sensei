@@ -255,6 +255,13 @@ function buildPlaceholderCss(selectors: string[]): string {
 
 const SLOT_BRAND_CLASS = 'skip-sensei-slot-brand'
 
+/** Empty ad slots whose space the page won't give back (see
+ * collapseEmptyAdSlots): kept at size, contents blanked, brand overlay in. */
+const BRANDED_SLOT_CLASS = 'skip-sensei-branded-slot'
+const BRANDED_SLOT_CSS =
+  `.${BRANDED_SLOT_CLASS}{position:relative!important}` +
+  `.${BRANDED_SLOT_CLASS} > :not(.${SLOT_BRAND_CLASS}){visibility:hidden!important}`
+
 /** Luminance of an element's background, or null if transparent/unparsable. */
 function bgLuminance(el: Element | null): number | null {
   if (!el) return null
@@ -275,14 +282,15 @@ function pageIsDark(): boolean {
   return lum !== null && lum < 128
 }
 
-/** Build the overlay per the AdBlockedSlot template (dark/light variants). */
-function buildSlotBrand(): HTMLElement {
+/** Build the overlay per the AdBlockedSlot template (dark/light variants).
+ * radius: 12px per the template; Pinterest passes 16 to match its cards. */
+function buildSlotBrand(radius = 12): HTMLElement {
   const dark = pageIsDark()
   const overlay = document.createElement('div')
   overlay.className = SLOT_BRAND_CLASS
   overlay.style.cssText =
     'position:absolute;inset:0;box-sizing:border-box;display:flex;' +
-    'align-items:center;justify-content:center;border-radius:16px;' +
+    `align-items:center;justify-content:center;border-radius:${radius}px;` +
     `background:${dark ? 'rgba(124,58,237,0.02)' : 'rgba(124,58,237,0.015)'};` +
     `border:1px dashed ${dark ? 'rgba(241,241,241,0.05)' : 'rgba(12,12,12,0.05)'};` +
     'pointer-events:none;font-family:Roboto,Arial,sans-serif;'
@@ -319,10 +327,11 @@ let activePlaceholders: string[] = []
 function injectPlaceholderOverlays() {
   if (!document.body) return // document_start — nothing to overlay yet
   // Remove overlays whose slot no longer matches (selector rejected/toggled).
+  // Branded empty slots (collapser's) are managed by collapseEmptyAdSlots.
   for (const overlay of document.querySelectorAll(`.${SLOT_BRAND_CLASS}`)) {
     const slot = overlay.parentElement
-    if (!slot || !activePlaceholders.some((s) => slot.matches(s)))
-      overlay.remove()
+    if (!slot || slot.classList.contains(BRANDED_SLOT_CLASS)) continue
+    if (!activePlaceholders.some((s) => slot.matches(s))) overlay.remove()
   }
   for (const sel of activePlaceholders) {
     let slots: NodeListOf<Element>
@@ -333,7 +342,7 @@ function injectPlaceholderOverlays() {
     }
     for (const slot of slots) {
       if (!slot.querySelector(`:scope > .${SLOT_BRAND_CLASS}`))
-        slot.appendChild(buildSlotBrand())
+        slot.appendChild(buildSlotBrand(16))
     }
   }
 }
@@ -429,7 +438,9 @@ async function apply() {
     const style = existing ?? document.createElement('style')
     style.id = STYLE_ID
     style.textContent =
-      buildCss(hideSelectors) + buildPlaceholderCss(placeholderSelectors)
+      buildCss(hideSelectors) +
+      buildPlaceholderCss(placeholderSelectors) +
+      (genericOn ? BRANDED_SLOT_CSS : '')
     if (!existing) (document.head ?? document.documentElement).appendChild(style)
   }
   if (genericOn) void applyGapfill() // hide anything the AI found on prior visits
@@ -709,17 +720,37 @@ function collapseEmptyAdSlots() {
     }
   }
   let tagged = 0
+  let branded = 0
   const collapse = (el: HTMLElement, guard: string) => {
-    if (el.classList.contains(EMPTY_SLOT_CLASS)) return
+    if (
+      el.classList.contains(EMPTY_SLOT_CLASS) ||
+      el.classList.contains(BRANDED_SLOT_CLASS)
+    )
+      return
     if (el.closest(guard)) return
-    if (isEmptyAdSlot(el)) {
-      el.classList.add(EMPTY_SLOT_CLASS)
+    if (!isEmptyAdSlot(el)) return
+    // Collapse, then check the page actually reclaimed the space. A slot in
+    // a fixed rail (the parent still reserves the area) collapses into dead
+    // white space — there, fill the slot with the branded AdBlockedSlot
+    // instead so the void reads as intentional.
+    const parent = el.parentElement
+    const before = parent?.getBoundingClientRect().height ?? 0
+    el.classList.add(EMPTY_SLOT_CLASS)
+    const after = parent?.getBoundingClientRect().height ?? 0
+    if (parent && before - after < 40) {
+      el.classList.remove(EMPTY_SLOT_CLASS)
+      el.classList.add(BRANDED_SLOT_CLASS)
+      if (!el.querySelector(`:scope > .${SLOT_BRAND_CLASS}`))
+        el.appendChild(buildSlotBrand())
+      branded++
+    } else {
       tagged++
     }
   }
   for (const el of named) collapse(el, 'form')
   for (const el of labelled) collapse(el, 'nav, header, footer, form')
-  if (tagged > 0) log('collapsed', tagged, 'empty ad slot(s)')
+  if (tagged + branded > 0)
+    log('empty ad slots — collapsed:', tagged, 'branded:', branded)
 }
 
 async function scheduleSlotCollapse() {
