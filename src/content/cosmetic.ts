@@ -385,15 +385,22 @@ function isSafeGapfillSelector(sel: string): boolean {
   if (els.length === 0) return true // nothing here now — harmless
   if (els.length > 6) return false // too broad to be "a few ads"
   return els.every((el) => {
-    const tag = el.tagName.toLowerCase()
-    if (tag === 'a' || tag === 'button' || tag === 'nav' || tag === 'header')
-      return false
+    // Interactive/form elements are never the right thing to hide as "an ad"
+    // (telemetry caught the AI proposing a job-application address input).
     if (
-      el.closest(
-        'nav, header, [role="navigation"], [role="banner"], [role="menu"], [role="menubar"]',
+      el.matches(
+        'a, button, nav, header, input, select, textarea, form, label, fieldset',
       )
     )
       return false
+    if (
+      el.closest(
+        'form, nav, header, [role="navigation"], [role="banner"], [role="menu"], [role="menubar"]',
+      )
+    )
+      return false
+    // A container holding form fields is functional UI, not an ad unit.
+    if (el.querySelector('input, select, textarea')) return false
     // A container holding several links is navigation, not an ad unit.
     if (el.querySelectorAll('a[href], button').length >= 3) return false
     return true
@@ -701,8 +708,22 @@ async function requestAndProcessProposals() {
   if (proposals === null) return // transient failure — retry next visit
   const rejected = new Set(await getRejectedGapfill(domain))
   const valid = isValidSelectorList(proposals).filter((s) => !rejected.has(s))
-  const kept = valid.filter(isSafeGapfillSelector)
-  const vetoed = valid.filter((s) => !kept.includes(s))
+  // A proposal that matches nothing RIGHT NOW is a hallucination artifact,
+  // not a dormant ad rule — the AI was shown elements that exist. Caching it
+  // would inject a selector that could silently start hiding real UI when an
+  // SPA renders new content (telemetry: div[data-testid="page-header"] was
+  // "kept" on claude.ai only because the real header is a <header> tag).
+  const matching = valid.filter((s) => {
+    try {
+      return document.querySelector(s) !== null
+    } catch {
+      return false
+    }
+  })
+  if (matching.length < valid.length)
+    log('discarded', valid.length - matching.length, 'zero-match AI proposal(s)')
+  const kept = matching.filter(isSafeGapfillSelector)
+  const vetoed = matching.filter((s) => !kept.includes(s))
   if (kept.length > 0) await addGapfillSelectors(domain, kept)
   await setVetoedGapfill(domain, vetoed) // also marks the domain as scanned
   if (kept.length > 0) {
@@ -740,6 +761,9 @@ async function requestAndProcessProposals() {
 
 async function runGapfill() {
   if (!(await blockingActive())) return
+  // YouTube is covered by curated selectors + the badge scanner; AI proposals
+  // there risk the player (telemetry: it proposed #img and .style-scope).
+  if (isYouTube()) return
   const settings = await getSettings()
   if (!settings.aiEnhancements) return
   // Already scanned this domain (kept selectors were applied on load, vetoed
@@ -757,7 +781,7 @@ async function runGapfill() {
  */
 async function scanForAds() {
   const settings = await getSettings()
-  if (settings.aiEnhancements && !settings.localOnlyMode) {
+  if (settings.aiEnhancements && !settings.localOnlyMode && !isYouTube()) {
     await requestAndProcessProposals()
   }
   await applyGapfill()
