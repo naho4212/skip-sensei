@@ -518,7 +518,23 @@ function stopAdBadgeScanner() {
  *  - matches a container that holds several links (a menu/nav, not an ad).
  * Cheap and DOM-specific, so it also self-heals a bad cached selector.
  */
+/** Framework layout-utility class (Tailwind and kin). A selector built ONLY
+ * from these says nothing about ad-ness and can match any div after the next
+ * re-render — telemetry caught `div.flex.flex-col.gap-12` cached as an "ad"
+ * on weather.com. */
+const UTILITY_CLASS_RE =
+  /^(flex|grid|block|inline(-\w+)?|relative|absolute|fixed|sticky|static|isolate|container|group|peer|truncate|hidden|visible|flex-\w+|grid-\w+|items-\w+|justify-\w+|content-\w+|self-\w+|place-\w+|gap(-\w+)?|space-[xy]-\w+|[pm][trblxyse]?-\w+|[wh]-\w+|min-[wh]-\w+|max-[wh]-\w+|size-\w+|text-\w+|font-\w+|leading-\w+|tracking-\w+|bg-\w+|border(-\w+)?|rounded(-\w+)?|shadow(-\w+)?|ring(-\w+)?|outline(-\w+)?|opacity-\w+|z-\w+|order-\w+|col(-\w+)?|row(-\w+)?|overflow(-\w+)?|object-\w+|transition(-\w+)?|duration-\w+|ease-\w+|cursor-\w+|select-\w+|pointer-events-\w+|sr-only|mx-auto|my-auto)$/
+
+/** True when a `tag.a.b.c` selector's classes are all layout utilities. */
+function isUtilityOnlySelector(sel: string): boolean {
+  const m = sel.match(/^[a-z][a-z0-9]*((?:\.[A-Za-z][\w-]*)+)$/)
+  if (!m) return false
+  const classes = m[1].slice(1).split('.')
+  return classes.every((c) => UTILITY_CLASS_RE.test(c))
+}
+
 function isSafeGapfillSelector(sel: string): boolean {
+  if (isUtilityOnlySelector(sel)) return false
   let els: Element[]
   try {
     els = Array.from(document.querySelectorAll(sel))
@@ -1198,7 +1214,9 @@ function selectorFor(el: HTMLElement): string | null {
   const classes = [...el.classList]
     .filter((c) => /^[A-Za-z][\w-]*$/.test(c) && !c.startsWith('skip-sensei'))
     .slice(0, 4)
-  if (classes.length > 0) {
+  // At least one class must be semantic — a handle made only of layout
+  // utilities (.flex.gap-12) matches different elements every re-render.
+  if (classes.length > 0 && !classes.every((c) => UTILITY_CLASS_RE.test(c))) {
     const s = `${el.tagName.toLowerCase()}.${classes.map((c) => CSS.escape(c)).join('.')}`
     const matches = document.querySelectorAll(s)
     // >1 match is fine — repeated units of the same ad widget — but a broad
