@@ -530,6 +530,21 @@ chrome.runtime.onInstalled.addListener(async (details) => {
   }
 })
 
+// One-time amnesty for saved "not an ad" ratings. Every rating collected
+// before Jul 9 2026 came from unlabeled 👍/👎 buttons that users read as
+// "rate the ad" — so ads got 👎'd, which un-hid them and silently disabled
+// whole features per-site (.skip-sensei-empty-slot in a rejected list kills
+// the slot collapser for the domain). The buttons are labeled now and the
+// popup has an Undo row; wipe the poisoned store once and let clean ratings
+// accumulate.
+const REJECTED_AMNESTY_FLAG = 'skipSensei.rejectedAmnestyV1'
+void (async () => {
+  const got = await chrome.storage.local.get(REJECTED_AMNESTY_FLAG)
+  if (got[REJECTED_AMNESTY_FLAG]) return
+  await chrome.storage.local.remove('skipSensei.gapfillRejected')
+  await chrome.storage.local.set({ [REJECTED_AMNESTY_FLAG]: true })
+})()
+
 // "Block all ads" engine: enforce DNR ruleset state; count blocks (stats + badge).
 initNetBlocker(
   (n) => void recordWebBlocks(n),
