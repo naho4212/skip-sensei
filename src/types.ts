@@ -271,6 +271,17 @@ export type TabMessage =
       done: number
       total: number
     }
+  | { type: 'skipSensei:getHiddenElements' } // → HiddenElement[]
+  | { type: 'skipSensei:rejectHiddenSelector'; selector: string }
+  | { type: 'skipSensei:confirmHiddenSelector'; selector: string }
+
+/** One gap-filled selector active on the page, for the popup review UI. */
+export interface HiddenElement {
+  selector: string
+  count: number
+  tag: string
+  text: string
+}
 
 export type SponsorEngineStatus =
   | 'off'

@@ -9,6 +9,7 @@ import {
   updateSettings,
 } from '../storage'
 import type {
+  HiddenElement,
   Message,
   PageStatus,
   SessionStats,
@@ -208,6 +209,87 @@ function renderSegments(status: PageStatus) {
       return li
     }),
   )
+}
+
+/**
+ * Feedback loop: show what the AI gap-filler hid on this site so it can be
+ * reviewed. 👎 un-hides it and blocks it here for good; 👍 confirms it. Both
+ * feed the anonymous gapfill_feedback diagnostics.
+ */
+async function renderHiddenReview() {
+  const wrap = $('hidden-review')
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+  let items: HiddenElement[] = []
+  if (tab?.id) {
+    try {
+      items =
+        (await chrome.tabs.sendMessage(tab.id, {
+          type: 'skipSensei:getHiddenElements',
+        })) ?? []
+    } catch {
+      items = []
+    }
+  }
+  if (!tab?.id || items.length === 0) {
+    wrap.hidden = true
+    return
+  }
+  wrap.hidden = false
+  $('hidden-title').textContent = `Hidden by AI here (${items.length})`
+  const list = $<HTMLUListElement>('hidden-list')
+  list.replaceChildren(...items.map((item) => hiddenItemRow(tab.id!, item)))
+}
+
+function hiddenItemRow(tabId: number, item: HiddenElement): HTMLLIElement {
+  const li = document.createElement('li')
+  li.className = 'hidden-item'
+
+  const info = document.createElement('div')
+  info.className = 'hidden-info'
+  const label = document.createElement('span')
+  label.className = 'hidden-label'
+  label.textContent = item.text || `<${item.tag}>`
+  const meta = document.createElement('span')
+  meta.className = 'hidden-meta'
+  meta.textContent = `${item.tag || '?'}${item.count > 1 ? ` ×${item.count}` : ''}`
+  info.append(label, meta)
+
+  const actions = document.createElement('div')
+  actions.className = 'hidden-actions'
+  const up = document.createElement('button')
+  up.className = 'hidden-btn'
+  up.textContent = '👍'
+  up.title = 'Yes, this is an ad'
+  const down = document.createElement('button')
+  down.className = 'hidden-btn'
+  down.textContent = '👎'
+  down.title = 'Not an ad — un-hide and never hide here'
+  up.addEventListener('click', () => {
+    void chrome.tabs
+      .sendMessage(tabId, {
+        type: 'skipSensei:confirmHiddenSelector',
+        selector: item.selector,
+      })
+      .catch(() => {})
+    li.classList.add('confirmed')
+    up.disabled = true
+    down.disabled = true
+  })
+  down.addEventListener('click', () => {
+    void chrome.tabs
+      .sendMessage(tabId, {
+        type: 'skipSensei:rejectHiddenSelector',
+        selector: item.selector,
+      })
+      .catch(() => {})
+    li.remove()
+    if ($<HTMLUListElement>('hidden-list').children.length === 0)
+      $('hidden-review').hidden = true
+  })
+  actions.append(up, down)
+
+  li.append(info, actions)
+  return li
 }
 
 async function fetchSessionStats(): Promise<SessionStats | null> {
@@ -413,6 +495,7 @@ async function main() {
   void renderVideoStatus()
   void renderBlockerState()
   void renderSiteSection()
+  void renderHiddenReview()
   // Analysis finishes async while the popup is open; 1s keeps the elapsed
   // timer ticking smoothly, and the blocked-ads count fresh.
   setInterval(() => {

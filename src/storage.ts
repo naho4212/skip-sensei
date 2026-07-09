@@ -315,6 +315,25 @@ export async function setGapfillSelectors(domain: string, selectors: string[]) {
   await chrome.storage.local.set({ [GAPFILL_KEY]: all })
 }
 
+// Per-domain selectors the USER marked "not an ad" — never re-hidden or
+// re-suggested by the gap-filler. The human-correction safety net.
+const GAPFILL_REJECTED_KEY = 'skipSensei.gapfillRejected'
+
+export async function getRejectedGapfill(domain: string): Promise<string[]> {
+  const result = await chrome.storage.local.get(GAPFILL_REJECTED_KEY)
+  const all: Record<string, string[]> = result[GAPFILL_REJECTED_KEY] ?? {}
+  return all[domain] ?? []
+}
+
+export async function addRejectedGapfill(domain: string, selector: string) {
+  const result = await chrome.storage.local.get(GAPFILL_REJECTED_KEY)
+  const all: Record<string, string[]> = result[GAPFILL_REJECTED_KEY] ?? {}
+  const list = new Set(all[domain] ?? [])
+  list.add(selector)
+  all[domain] = [...list].slice(-50)
+  await chrome.storage.local.set({ [GAPFILL_REJECTED_KEY]: all })
+}
+
 // ---------------------------------------------------------------------------
 // Cloud LLM usage tracking — monthly tokens/requests + daily request count.
 // ---------------------------------------------------------------------------

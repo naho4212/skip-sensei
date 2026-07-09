@@ -1,6 +1,8 @@
 import { log } from '../log'
 import {
+  addRejectedGapfill,
   getGapfillSelectors,
+  getRejectedGapfill,
   getSettings,
   onSettingsChanged,
   setGapfillSelectors,
@@ -299,15 +301,22 @@ function isSafeGapfillSelector(sel: string): boolean {
   })
 }
 
+/** Currently-applied gap-fill selectors on this page (for the popup review). */
+let activeGapfill: string[] = []
+
 /** Apply this domain's AI-discovered ad selectors (from prior visits). */
 async function applyGapfill() {
-  const raw = isValidSelectorList(await getGapfillSelectors(bareDomain()))
+  const rejected = new Set(await getRejectedGapfill(bareDomain()))
+  const raw = isValidSelectorList(await getGapfillSelectors(bareDomain())).filter(
+    (s) => !rejected.has(s),
+  )
   const safe = raw.filter(isSafeGapfillSelector)
   // Purge selectors that turned out to hit real UI so they never apply again.
   if (safe.length !== raw.length) {
     log('purged unsafe gap-fill selectors:', raw.filter((s) => !safe.includes(s)))
     void setGapfillSelectors(bareDomain(), safe)
   }
+  activeGapfill = safe
   const existing = document.getElementById(GAPFILL_STYLE_ID)
   if (safe.length === 0) {
     existing?.remove()
@@ -348,9 +357,68 @@ function pageHasLoadedAds(): boolean {
   return !!document.querySelector('ins.adsbygoogle[data-ad-status="filled"]')
 }
 
+/** Human-readable summary of what the gap-filler is hiding here, for review. */
+function describeHiddenElements() {
+  return activeGapfill
+    .map((selector) => {
+      let els: Element[] = []
+      try {
+        els = Array.from(document.querySelectorAll(selector))
+      } catch {
+        /* invalid — skip */
+      }
+      const first = els[0]
+      return {
+        selector,
+        count: els.length,
+        tag: first ? first.tagName.toLowerCase() : '',
+        text: first
+          ? (first.textContent ?? '').trim().replace(/\s+/g, ' ').slice(0, 70)
+          : '',
+      }
+    })
+    .filter((x) => x.count > 0)
+}
+
+/** User marked a hidden selector "not an ad": un-hide it, block it here for
+ * good, and report the correction. */
+async function rejectHiddenSelector(selector: string) {
+  const domain = bareDomain()
+  await addRejectedGapfill(domain, selector)
+  const current = await getGapfillSelectors(domain)
+  await setGapfillSelectors(
+    domain,
+    current.filter((s) => s !== selector),
+  )
+  await applyGapfill() // re-render without it → un-hides immediately
+  reportGapfillFeedback(selector, 'not-ad')
+}
+
+function reportGapfillFeedback(selector: string, verdict: 'ad' | 'not-ad') {
+  try {
+    void chrome.runtime.sendMessage({
+      type: 'skipSensei:event',
+      kind: 'gapfill_feedback',
+      fields: { domain: bareDomain(), selector, verdict },
+    })
+  } catch {
+    /* orphaned — nothing to report to */
+  }
+}
+
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type === 'skipSensei:pageHasAds') {
     sendResponse(pageHasLoadedAds())
+  } else if (message?.type === 'skipSensei:getHiddenElements') {
+    sendResponse(describeHiddenElements())
+  } else if (message?.type === 'skipSensei:rejectHiddenSelector') {
+    void rejectHiddenSelector(message.selector).then(() =>
+      sendResponse({ ok: true }),
+    )
+    return true // async response
+  } else if (message?.type === 'skipSensei:confirmHiddenSelector') {
+    reportGapfillFeedback(message.selector, 'ad')
+    sendResponse({ ok: true })
   }
 })
 
