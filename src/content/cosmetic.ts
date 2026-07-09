@@ -618,7 +618,14 @@ function pageHasLoadedAds(): boolean {
 const EMPTY_SLOT_CLASS = 'skip-sensei-empty-slot'
 const SLOT_NAME_RE =
   /(^|[-_ ])ads?([-_ ]|$)|advert|sponsor|adsense|doubleclick|(^|[-_ ])gpt([-_ ]|$)|dfp/i
+// camelCase ad tokens (weather.com's WX_Bot300AdX1). Deliberately
+// case-SENSITIVE: with /i this would match "LoadTime"/"ReadMore".
+const SLOT_NAME_CAMEL_RE = /(\d|[a-z])Ad[A-Z0-9]/
 const SLOT_LABEL_RE = /^(ad|ads|advertisement|sponsored)$/i
+
+function hasAdNameToken(s: string): boolean {
+  return SLOT_NAME_RE.test(s) || SLOT_NAME_CAMEL_RE.test(s)
+}
 
 function isEmptyAdSlot(el: HTMLElement): boolean {
   const rect = el.getBoundingClientRect()
@@ -632,12 +639,23 @@ function isEmptyAdSlot(el: HTMLElement): boolean {
     if ((img as HTMLImageElement).naturalWidth > 8) return false
   for (const frame of el.querySelectorAll<HTMLIFrameElement>('iframe')) {
     const src = frame.src.toLowerCase()
-    if (
-      src &&
-      !src.startsWith('about:') &&
-      !AD_IFRAME_HINTS.some((h) => src.includes(h))
-    )
-      return false
+    if (!src || src.startsWith('about:')) continue
+    if (AD_IFRAME_HINTS.some((h) => src.includes(h))) continue
+    const fr = frame.getBoundingClientRect()
+    if (fr.width < 8 || fr.height < 8) continue // invisible frame — no content
+    // Same-origin frames (weather.com renders ads into first-party blob:
+    // iframes) can be inspected: an empty document is still a husk.
+    let empty = false
+    try {
+      const doc = frame.contentDocument
+      empty =
+        !!doc &&
+        (doc.body?.innerText ?? '').trim() === '' &&
+        ![...doc.images].some((i) => i.naturalWidth > 8)
+    } catch {
+      empty = false // cross-origin — assume it has content
+    }
+    if (!empty) return false
   }
   // The only text allowed is the slot's own "AD"-style label.
   const text = (el.innerText ?? '').trim()
@@ -660,8 +678,7 @@ async function collapseEmptyAdSlots() {
   for (const el of document.querySelectorAll<HTMLElement>(
     'div[id*="ad" i], div[class*="ad" i], aside[id*="ad" i], aside[class*="ad" i], section[id*="ad" i], section[class*="ad" i]',
   )) {
-    if (SLOT_NAME_RE.test(el.id) || SLOT_NAME_RE.test(el.className))
-      named.add(el)
+    if (hasAdNameToken(el.id) || hasAdNameToken(el.className)) named.add(el)
   }
   // Label-based candidates: a bare "AD" tag marks the slot; walk up to the
   // reserved box. These get the stricter no-nav/header guard since walking
