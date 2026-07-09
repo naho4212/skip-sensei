@@ -21,6 +21,12 @@ import type {
 const $ = <T extends HTMLElement>(id: string) =>
   document.getElementById(id) as T
 
+// The cosmetic content script runs in every iframe (all_frames). A frameless
+// sendMessage races all of them and resolves with whichever frame answers
+// first — on iframe-heavy pages (weather.com) an empty ad frame wins and the
+// popup paints "nothing hidden". Always talk to the top frame.
+const TOP_FRAME = { frameId: 0 }
+
 const masterToggle = $<HTMLInputElement>('master-toggle')
 const adToggle = $<HTMLInputElement>('ad-engine-toggle')
 const sponsorToggle = $<HTMLInputElement>('sponsor-engine-toggle')
@@ -88,9 +94,11 @@ async function pageHasLoadedAds(): Promise<boolean> {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
   if (!tab?.id) return false
   try {
-    return await chrome.tabs.sendMessage(tab.id, {
-      type: 'skipSensei:pageHasAds',
-    })
+    return await chrome.tabs.sendMessage(
+      tab.id,
+      { type: 'skipSensei:pageHasAds' },
+      TOP_FRAME,
+    )
   } catch {
     return false
   }
@@ -233,9 +241,11 @@ async function renderHiddenReview() {
   let items: HiddenElement[] = []
   try {
     items =
-      (await chrome.tabs.sendMessage(tabId, {
-        type: 'skipSensei:getHiddenElements',
-      })) ?? []
+      (await chrome.tabs.sendMessage(
+        tabId,
+        { type: 'skipSensei:getHiddenElements' },
+        TOP_FRAME,
+      )) ?? []
   } catch {
     // content script not ready (tab loaded before an extension reload)
     wrap.hidden = true
@@ -272,6 +282,7 @@ function sendHighlight(tabId: number, selector: string | null) {
     if (!highlightPort || highlightPortTab !== tabId) {
       highlightPort = chrome.tabs.connect(tabId, {
         name: 'skipSensei:highlight',
+        ...TOP_FRAME,
       })
       highlightPortTab = tabId
       highlightPort.onDisconnect.addListener(() => {
@@ -331,10 +342,11 @@ function hiddenItemRow(tabId: number, item: HiddenElement): HTMLLIElement {
     : 'Not an ad — un-hide and never hide here'
   up.addEventListener('click', () => {
     void chrome.tabs
-      .sendMessage(tabId, {
-        type: 'skipSensei:confirmHiddenSelector',
-        selector: item.selector,
-      })
+      .sendMessage(
+        tabId,
+        { type: 'skipSensei:confirmHiddenSelector', selector: item.selector },
+        TOP_FRAME,
+      )
       .catch(() => {})
     sendHighlight(tabId, null)
     li.classList.add('confirmed')
@@ -343,10 +355,11 @@ function hiddenItemRow(tabId: number, item: HiddenElement): HTMLLIElement {
   })
   down.addEventListener('click', () => {
     void chrome.tabs
-      .sendMessage(tabId, {
-        type: 'skipSensei:rejectHiddenSelector',
-        selector: item.selector,
-      })
+      .sendMessage(
+        tabId,
+        { type: 'skipSensei:rejectHiddenSelector', selector: item.selector },
+        TOP_FRAME,
+      )
       .catch(() => {})
     sendHighlight(tabId, null)
     li.remove()
@@ -405,7 +418,11 @@ async function renderVideoStatus() {
   $('video-section').hidden = false
   const message: TabMessage = { type: 'skipSensei:getPageStatus' }
   try {
-    const status: PageStatus = await chrome.tabs.sendMessage(tab.id, message)
+    const status: PageStatus = await chrome.tabs.sendMessage(
+      tab.id,
+      message,
+      TOP_FRAME,
+    )
     if (!status.isWatchPage) {
       videoStatusEl.textContent = 'Not watching a video.'
       segmentListEl.replaceChildren()
@@ -574,9 +591,11 @@ async function main() {
     scanBtn.textContent = 'Scanning…'
     try {
       const items: HiddenElement[] =
-        (await chrome.tabs.sendMessage(tabId, {
-          type: 'skipSensei:scanForAds',
-        })) ?? []
+        (await chrome.tabs.sendMessage(
+          tabId,
+          { type: 'skipSensei:scanForAds' },
+          TOP_FRAME,
+        )) ?? []
       paintHiddenItems(tabId, items)
     } catch {
       /* content script not ready */

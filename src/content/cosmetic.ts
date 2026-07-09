@@ -1037,6 +1037,11 @@ function reportGapfillFeedback(selector: string, verdict: 'ad' | 'not-ad') {
 }
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  // This script runs in every iframe. Only the top frame owns the popup
+  // conversation — a subframe answering first would hand the popup its own
+  // (empty) hidden-elements list, and confirm/reject would write feedback
+  // under the iframe's domain instead of the site's.
+  if (window !== window.top) return
   if (message?.type === 'skipSensei:pageHasAds') {
     sendResponse(pageHasLoadedAds())
   } else if (message?.type === 'skipSensei:getHiddenElements') {
@@ -1069,6 +1074,10 @@ async function reportReloadState() {
     settings.blockAllAds &&
     !isAllowlisted(settings.allowlist)
   const needsReload = blocking && pageHasLoadedAds()
+  // The badge is last-write-wins per tab: a subframe's "false" (its tiny DOM
+  // has no ad iframes) must not clobber the top frame's "true". Subframes may
+  // only ever ADD a reload hint.
+  if (window !== window.top && !needsReload) return
   chrome.runtime
     .sendMessage({ type: 'skipSensei:tabNeedsReload', needsReload })
     .catch(() => {})
@@ -1286,6 +1295,9 @@ async function requestAndProcessProposals() {
 }
 
 async function runGapfill() {
+  // Top frame only: each ad iframe would otherwise run its own scan — extra
+  // LLM calls, and results stored under the IFRAME's domain, not the site's.
+  if (window !== window.top) return
   if (!(await blockingActive())) return
   // YouTube is covered by curated selectors + the badge scanner; AI proposals
   // there risk the player (telemetry: it proposed #img and .style-scope).
