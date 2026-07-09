@@ -232,17 +232,32 @@ function buildCss(selectors: string[]): string {
   return `${selectors.join(',')}{display:none!important}`
 }
 
-/** Placeholder mode: keep the slot's size and blank its content — for masonry
- * layouts where collapsing would leave a bare hole anyway. The visible brand
- * overlay is a DOM element (see injectPlaceholderOverlays); CSS alone can't
- * render the two-tone wordmark from the design system's AdBlockedSlot spec. */
-function buildPlaceholderCss(selectors: string[]): string {
+/** Placeholder mode: keep the slot's size, blank its content, and render the
+ * AdBlockedSlot brand — for masonry layouts where collapsing would leave a
+ * bare hole anyway. Pure CSS on purpose: these slots live inside React-owned
+ * virtualized feeds that strip injected DOM children on every re-render (the
+ * "some ads have no overlay" bug), but pseudo-elements are style-driven and
+ * can't be removed. The two-tone wordmark comes from a background-clip
+ * gradient split at the "AD "/"SENSEI" boundary. */
+function buildPlaceholderCss(selectors: string[], dark: boolean): string {
   if (selectors.length === 0) return ''
   const slots = selectors.join(',')
   const children = selectors.map((s) => `${s} > *`).join(',')
+  const boxes = selectors.map((s) => `${s}::before`).join(',')
+  const marks = selectors.map((s) => `${s}::after`).join(',')
+  const senseiColor = dark ? '#f1f1f1' : '#0c0c0c'
   return (
     `${slots}{position:relative!important}` +
-    `${children}{visibility:hidden!important}`
+    `${children}{visibility:hidden!important}` +
+    `${boxes}{content:"";position:absolute;inset:0;border-radius:16px;` +
+    `background:${dark ? 'rgba(124,58,237,0.02)' : 'rgba(124,58,237,0.015)'};` +
+    `border:1px dashed ${dark ? 'rgba(241,241,241,0.05)' : 'rgba(12,12,12,0.05)'}}` +
+    `${marks}{content:"AD SENSEI";position:absolute;inset:0;display:flex;` +
+    `align-items:center;justify-content:center;` +
+    `font:900 15px/1 Roboto,Arial,sans-serif;letter-spacing:-0.02em;` +
+    `white-space:nowrap;opacity:0.3;pointer-events:none;` +
+    `background:linear-gradient(90deg,#7c3aed 2.15ch,${senseiColor} 2.15ch);` +
+    `-webkit-background-clip:text;background-clip:text;color:transparent}`
   )
 }
 
@@ -321,66 +336,6 @@ function buildSlotBrand(radius = 12): HTMLElement {
   return overlay
 }
 
-/** Currently-active placeholder selectors (set by apply). */
-let activePlaceholders: string[] = []
-
-function injectPlaceholderOverlays() {
-  if (!document.body) return // document_start — nothing to overlay yet
-  // Remove overlays whose slot no longer matches (selector rejected/toggled).
-  // Branded empty slots (collapser's) are managed by collapseEmptyAdSlots.
-  for (const overlay of document.querySelectorAll(`.${SLOT_BRAND_CLASS}`)) {
-    const slot = overlay.parentElement
-    if (!slot || slot.classList.contains(BRANDED_SLOT_CLASS)) continue
-    if (!activePlaceholders.some((s) => slot.matches(s))) overlay.remove()
-  }
-  for (const sel of activePlaceholders) {
-    let slots: NodeListOf<Element>
-    try {
-      slots = document.querySelectorAll(sel)
-    } catch {
-      continue
-    }
-    for (const slot of slots) {
-      if (!slot.querySelector(`:scope > .${SLOT_BRAND_CLASS}`))
-        slot.appendChild(buildSlotBrand(16))
-    }
-  }
-}
-
-let placeholderObserver: MutationObserver | null = null
-let placeholderScanScheduled = false
-
-function schedulePlaceholderScan() {
-  if (placeholderScanScheduled) return
-  placeholderScanScheduled = true
-  setTimeout(() => {
-    placeholderScanScheduled = false
-    injectPlaceholderOverlays()
-  }, 500)
-}
-
-/** Keep overlays present as the site virtualizes/re-renders its feed. */
-function startPlaceholderObserver() {
-  injectPlaceholderOverlays()
-  if (placeholderObserver) return
-  placeholderObserver = new MutationObserver(() => schedulePlaceholderScan())
-  placeholderObserver.observe(document.documentElement, {
-    childList: true,
-    subtree: true,
-  })
-}
-
-function stopPlaceholderObserver() {
-  placeholderObserver?.disconnect()
-  placeholderObserver = null
-  // Only remove PLACEHOLDER-mode overlays. The empty-slot collapser's
-  // branded slots own their overlays — removing them here was the bug that
-  // left "branded" slots blank (apply() re-runs 2s after load and stops the
-  // observer on every non-placeholder site).
-  document.querySelectorAll(`.${SLOT_BRAND_CLASS}`).forEach((el) => {
-    if (!el.parentElement?.classList.contains(BRANDED_SLOT_CLASS)) el.remove()
-  })
-}
 
 function isAllowlisted(allowlist: string[]): boolean {
   const host = location.hostname
@@ -434,7 +389,6 @@ async function apply() {
     .flatMap((site) => site.selectors)
     .filter((s) => !rejected.has(s))
   activeSelectors = [...hideSelectors, ...placeholderSelectors]
-  activePlaceholders = placeholderSelectors
 
   const existing = document.getElementById(STYLE_ID) as HTMLStyleElement | null
   if (activeSelectors.length === 0) {
@@ -445,14 +399,11 @@ async function apply() {
     style.id = STYLE_ID
     style.textContent =
       buildCss(hideSelectors) +
-      buildPlaceholderCss(placeholderSelectors) +
+      buildPlaceholderCss(placeholderSelectors, pageIsDark()) +
       (genericOn ? BRANDED_SLOT_CSS : '')
     if (!existing) (document.head ?? document.documentElement).appendChild(style)
   }
   if (genericOn) void applyGapfill() // hide anything the AI found on prior visits
-
-  if (placeholderSelectors.length > 0) startPlaceholderObserver()
-  else stopPlaceholderObserver()
 
   if (ytOn) startAdBadgeScanner()
   else stopAdBadgeScanner()
