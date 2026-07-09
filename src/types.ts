@@ -245,9 +245,9 @@ export type Message =
       description: string
     } // → string | null (AI-found CSS selector)
   | {
-      type: 'skipSensei:findAdSelectors'
-      html: string
-    } // → string[] (raw AI proposals; the content script vets, caches, and logs)
+      type: 'skipSensei:verifyAdCandidates'
+      candidates: Array<{ index: number; html: string }>
+    } // → number[] (indexes the AI confirmed as ads; fail-closed empty)
   | { type: 'skipSensei:reviewPopup'; html: string } // → boolean (hide this overlay?)
   | { type: 'skipSensei:logActivity'; feature: string; action: string } // content-script action → activity log
   | { type: 'skipSensei:findConsentReject'; html: string } // → string | null (reject-button selector)

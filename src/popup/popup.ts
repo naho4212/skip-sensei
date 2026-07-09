@@ -310,7 +310,7 @@ function hiddenItemRow(tabId: number, item: HiddenElement): HTMLLIElement {
     kept.className = 'hidden-src src-vetoed'
     kept.textContent = 'kept visible'
     kept.title =
-      'The AI flagged this as an ad, but the safety guard kept it visible because it looks like real UI'
+      'Looks ad-like, but the AI wasn’t sure it’s an ad, so it stays visible. 👍 hides it here from now on.'
     meta.append(kept)
   }
   info.append(label, meta)
@@ -398,9 +398,11 @@ async function renderVideoStatus() {
   reloadTabEl.hidden = true
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
   if (!tab?.id || !tab.url?.includes('youtube.com')) {
-    videoStatusEl.textContent = 'Open a YouTube video to start skipping.'
+    // Off YouTube the video section is just noise — hide it entirely.
+    $('video-section').hidden = true
     return
   }
+  $('video-section').hidden = false
   const message: TabMessage = { type: 'skipSensei:getPageStatus' }
   try {
     const status: PageStatus = await chrome.tabs.sendMessage(tab.id, message)

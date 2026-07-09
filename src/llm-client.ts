@@ -286,19 +286,30 @@ export async function findElementSelector(
   }
 }
 
-const GAPFILL_SYSTEM_PROMPT = `You find advertisement elements in an HTML fragment from a web page. Ads include banner/display ads, sponsored promo blocks, ad iframes, and native "advertisement"/"sponsored" units — NOT the page's real content, navigation, or its own product listings on a shopping site. Return ONLY JSON: {"selectors":["<css>", ...]} — CSS selectors (valid for querySelectorAll) that match ONLY ad containers, preferring stable attributes (class, id, aria-label, data-*). Be conservative: if unsure whether something is an ad, leave it out. If there are no ads, return {"selectors":[]}. No prose, no markdown.`
+const AD_VERIFY_SYSTEM_PROMPT = `You review suspected advertisement elements found on a web page. Each numbered candidate is an HTML snippet that carried an ad signal (ad-network iframe, ad/sponsor class name, or a "Sponsored" label). Confirm which candidates are DEFINITELY advertisements: banner/display ads, sponsored/promoted third-party content units, ad iframes. Anything that is or might be the site's own UI or real content — navigation, headers, article/product cards, buttons, forms, the site's own feature promos you'd expect a user to want — is NOT an ad. Return ONLY JSON: {"ads":[<candidate numbers>]}. When unsure about a candidate, leave it out. If none are ads, return {"ads":[]}. No prose, no markdown.`
 
 /**
- * AI gap-filler: ask the LLM which elements in `html` are ads the filter lists
- * missed. Returns CSS selectors to hide. Conservative by construction.
+ * AI gap-filler verifier (v2): the content script finds candidates
+ * deterministically and generates the selectors itself — the AI only gets a
+ * veto per candidate and can never introduce an element or a selector of its
+ * own. Returns the candidate indexes confirmed as ads; on any failure or
+ * doubt the answer is "not an ad", so failure always means an ad might show,
+ * never that real UI gets hidden.
  */
-export async function findAdSelectors(
-  html: string,
+export async function verifyAdCandidates(
+  candidates: Array<{ index: number; html: string }>,
   settings: Settings,
   signal: AbortSignal,
-): Promise<string[]> {
-  const prompt = `Page ad-like fragment:\n${html.slice(0, 9000)}`
-  const raw = await completeSmart(GAPFILL_SYSTEM_PROMPT, prompt, settings, signal)
+): Promise<number[]> {
+  const body = candidates
+    .map((c) => `#${c.index}:\n${c.html.slice(0, 700)}`)
+    .join('\n\n')
+  const raw = await completeSmart(
+    AD_VERIFY_SYSTEM_PROMPT,
+    `Candidates:\n${body}`.slice(0, 9000),
+    settings,
+    signal,
+  )
   const cleaned = raw
     .trim()
     .replace(/^```(?:json)?\s*/i, '')
@@ -308,11 +319,11 @@ export async function findAdSelectors(
   if (first === -1 || last <= first) return []
   try {
     const parsed = JSON.parse(cleaned.slice(first, last + 1))
-    if (!Array.isArray(parsed.selectors)) return []
-    return parsed.selectors
-      .filter((s: unknown): s is string => typeof s === 'string' && !!s.trim())
-      .map((s: string) => s.trim())
-      .slice(0, 12)
+    if (!Array.isArray(parsed.ads)) return []
+    const known = new Set(candidates.map((c) => c.index))
+    return parsed.ads
+      .map((n: unknown) => Number(n))
+      .filter((n: number) => Number.isInteger(n) && known.has(n))
   } catch {
     return []
   }

@@ -931,85 +931,171 @@ function scheduleReloadChecks() {
   setTimeout(() => void reportReloadState(), 4000)
 }
 
-/**
- * AI gap-filler: after the page settles, look for ad content the filter lists
- * missed (ad-network iframes, "advertisement"/"sponsored"-labelled blocks) and
- * ask the AI which elements to hide. Cached per domain so it's a one-time cost
- * per site, and only runs when aiEnhancements is on. Conservative: only sends
- * a compact fragment of ad-suspect regions, never the whole page.
- */
-const AD_SUSPECT_HINTS = [
-  'doubleclick',
-  'googlesyndication',
-  'adnxs',
-  'amazon-adsystem',
-  'adservice',
-  '/ads/',
-  '/adserver',
-]
+// ---------------------------------------------------------------------------
+// AI gap-filler v2: deterministic candidates, AI verification.
+//
+// The old design asked the AI to FIND ads in suspect HTML and hand back CSS
+// selectors. Telemetry showed it hallucinating site UI as "ads" on ~15
+// domains (headers, sign-up buttons, job listings, a form input) — the
+// safety guard was all that stood between it and hiding real content. Now:
+//   1. Deterministic rules build the candidate set from hard ad signals
+//      (ad-network iframe, ad/sponsor name token, exact "Sponsored" label).
+//   2. WE generate the selector for each candidate — the AI never supplies
+//      CSS.
+//   3. The AI's only power is a veto: "is candidate #n an ad? unsure → no."
+// Every failure mode fails toward "an ad might show", never "real UI hidden".
+// No candidates → no LLM call at all (this is what keeps claude.ai quiet).
+// ---------------------------------------------------------------------------
 
-function collectAdSuspects(): string {
-  const parts: string[] = []
-  const seen = new Set<Element>()
-  const add = (el: Element | null) => {
-    if (!el || seen.has(el)) return
-    seen.add(el)
-    // Send a shallow outline (tag + attributes + a little context), not deep subtrees.
-    parts.push(el.outerHTML.slice(0, 600))
+/** Ad/sponsor name as a TOKEN — substring matching is how "download" used to
+ * become an ad suspect (…downlo-AD…). */
+const CANDIDATE_NAME_RE =
+  /(^|[-_ ])(ads?|advert(isement)?s?|sponsored?|promoted)([-_ ]|$)/i
+/** Exact ad-disclosure label text (leaf nodes only). */
+const CANDIDATE_LABEL_RE =
+  /^(sponsored|advertisement|paid content|paid post|promoted)$/i
+
+/** Deterministic not-UI filter, applied to candidate ELEMENTS before the AI
+ * ever sees them. Mirrors isSafeGapfillSelector but works on the element. */
+function isSafeCandidate(el: HTMLElement): boolean {
+  if (
+    el.matches(
+      'a, button, nav, header, footer, main, input, select, textarea, form, label, fieldset, body, html',
+    )
+  )
+    return false
+  if (
+    el.closest(
+      'form, nav, header, footer, [role="navigation"], [role="banner"], [role="menu"], [role="menubar"]',
+    )
+  )
+    return false
+  if (el.querySelector('input, select, textarea')) return false
+  const r = el.getBoundingClientRect()
+  if (r.width < 60 || r.height < 20 || r.height > 1200) return false
+  // A near-viewport-sized box is a page section, not an ad unit.
+  if (r.width >= window.innerWidth * 0.98 && r.height >= window.innerHeight * 0.8)
+    return false
+  return true
+}
+
+/** Generate OUR selector for a candidate — id, then stable classes, then a
+ * data attribute. Returns null when there's no stable handle: we skip the
+ * candidate rather than build a brittle positional path. */
+function selectorFor(el: HTMLElement): string | null {
+  if (el.id && /^[A-Za-z][\w-]*$/.test(el.id)) {
+    const s = `#${CSS.escape(el.id)}`
+    if (document.querySelectorAll(s).length === 1) return s
   }
-  // Ad-network iframes and their containers.
+  const classes = [...el.classList]
+    .filter((c) => /^[A-Za-z][\w-]*$/.test(c))
+    .slice(0, 4)
+  if (classes.length > 0) {
+    const s = `${el.tagName.toLowerCase()}.${classes.map((c) => CSS.escape(c)).join('.')}`
+    const matches = document.querySelectorAll(s)
+    // >1 match is fine — repeated units of the same ad widget — but a broad
+    // selector is a miss, not a candidate.
+    if (matches.length >= 1 && matches.length <= 6) return s
+  }
+  for (const attr of ['data-testid', 'data-test-id', 'data-component-type']) {
+    const v = el.getAttribute(attr)
+    if (v && v.length <= 60) {
+      const s = `${el.tagName.toLowerCase()}[${attr}="${v.replace(/"/g, '\\"')}"]`
+      try {
+        const matches = document.querySelectorAll(s)
+        if (matches.length >= 1 && matches.length <= 6) return s
+      } catch {
+        /* unusable attribute value */
+      }
+    }
+  }
+  return null
+}
+
+interface GapfillCandidate {
+  el: HTMLElement
+  selector: string
+}
+
+function collectAdCandidates(
+  excluded: Set<string>,
+): GapfillCandidate[] {
+  const out: GapfillCandidate[] = []
+  const seen = new Set<Element>()
+  const taken = new Set<string>()
+  const push = (el: Element | null) => {
+    if (!(el instanceof HTMLElement) || seen.has(el) || out.length >= 12) return
+    seen.add(el)
+    if (!isSafeCandidate(el)) return
+    const selector = selectorFor(el)
+    if (!selector || excluded.has(selector) || taken.has(selector)) return
+    taken.add(selector)
+    out.push({ el, selector })
+  }
+  // 1. Containers of ad-network iframes the DNR lists let through.
   for (const frame of document.querySelectorAll<HTMLIFrameElement>('iframe[src]')) {
     const src = frame.src.toLowerCase()
-    if (AD_SUSPECT_HINTS.some((h) => src.includes(h))) add(frame.parentElement ?? frame)
+    if (AD_IFRAME_HINTS.some((h) => src.includes(h)))
+      push(frame.parentElement ?? frame)
   }
-  // Elements self-labelled as ads/sponsored that our static selectors missed.
-  for (const el of document.querySelectorAll(
-    '[class*="sponsor" i],[class*="promo" i],[aria-label*="advert" i],[data-testid*="ad" i]',
+  // 2. Ad/sponsor-named containers (token match).
+  for (const el of document.querySelectorAll<HTMLElement>(
+    'div[class*="ad" i], div[id*="ad" i], div[class*="spons" i], div[class*="promo" i], section[class*="spons" i], article[class*="spons" i], aside[class*="ad" i], li[class*="spons" i]',
   )) {
-    if (parts.length > 20) break
-    if (el instanceof HTMLElement && el.offsetHeight > 30) add(el)
+    if (out.length >= 12) break
+    if (
+      CANDIDATE_NAME_RE.test(el.id) ||
+      CANDIDATE_NAME_RE.test(el.getAttribute('class') ?? '')
+    )
+      push(el)
   }
-  return parts.join('\n')
+  // 3. Cards carrying an exact ad-disclosure label ("Sponsored", …).
+  for (const label of document.querySelectorAll('span, div, p, small, b, em')) {
+    if (out.length >= 12) break
+    if (label.children.length > 0) continue
+    if (!CANDIDATE_LABEL_RE.test((label.textContent ?? '').trim())) continue
+    let card = label.parentElement
+    for (let i = 0; i < 4 && card; i++) {
+      const r = card.getBoundingClientRect()
+      if (r.height >= 60 && r.height <= 1000 && r.width >= 120) break
+      card = card.parentElement
+    }
+    push(card)
+  }
+  return out
 }
 
 /**
- * Ask the AI for ad selectors and process its proposals HERE, where the DOM
- * truth lives: the safety guard splits them into kept (hidden + cached) and
- * vetoed (kept visible, reviewable in the popup), and the activity log records
- * what actually happened — not what the AI claimed. Vetoed proposals persist
- * so the once-per-domain guard still holds when everything gets vetoed
- * (otherwise the purge re-empties the cache and the scan loops forever,
- * burning an LLM call per page load — the claude.ai bug).
+ * Gap-filler v2 pipeline: deterministic candidates → AI veto → hide the
+ * confirmed ones. AI-declined candidates persist as "vetoed" (reviewable in
+ * the popup with 👍 to override) and mark the domain as scanned so the
+ * once-per-domain guard holds even when nothing gets hidden.
  */
 async function requestAndProcessProposals() {
   const domain = bareDomain()
-  const html = collectAdSuspects()
-  if (!html.trim()) {
+  const rejected = await getRejectedGapfill(domain)
+  const cached = await getGapfillSelectors(domain)
+  const excluded = new Set([...rejected, ...cached])
+  const candidates = collectAdCandidates(excluded)
+  if (candidates.length === 0) {
     await setVetoedGapfill(domain, []) // nothing ad-like — remember we looked
     return
   }
-  const proposals: string[] | null = await chrome.runtime
-    .sendMessage({ type: 'skipSensei:findAdSelectors', html })
+  const verdict: number[] | null = await chrome.runtime
+    .sendMessage({
+      type: 'skipSensei:verifyAdCandidates',
+      candidates: candidates.map((c, index) => ({
+        index,
+        html: c.el.outerHTML.slice(0, 700),
+      })),
+    })
     .catch(() => null)
-  if (proposals === null) return // transient failure — retry next visit
-  const rejected = new Set(await getRejectedGapfill(domain))
-  const valid = isValidSelectorList(proposals).filter((s) => !rejected.has(s))
-  // A proposal that matches nothing RIGHT NOW is a hallucination artifact,
-  // not a dormant ad rule — the AI was shown elements that exist. Caching it
-  // would inject a selector that could silently start hiding real UI when an
-  // SPA renders new content (telemetry: div[data-testid="page-header"] was
-  // "kept" on claude.ai only because the real header is a <header> tag).
-  const matching = valid.filter((s) => {
-    try {
-      return document.querySelector(s) !== null
-    } catch {
-      return false
-    }
-  })
-  if (matching.length < valid.length)
-    log('discarded', valid.length - matching.length, 'zero-match AI proposal(s)')
-  const kept = matching.filter(isSafeGapfillSelector)
-  const vetoed = matching.filter((s) => !kept.includes(s))
+  if (verdict === null) return // transient failure — retry next visit
+  const approved = new Set(verdict)
+  const kept = candidates.filter((_, i) => approved.has(i)).map((c) => c.selector)
+  const vetoed = candidates
+    .filter((_, i) => !approved.has(i))
+    .map((c) => c.selector)
   if (kept.length > 0) await addGapfillSelectors(domain, kept)
   await setVetoedGapfill(domain, vetoed) // also marks the domain as scanned
   if (kept.length > 0) {
@@ -1021,28 +1107,27 @@ async function requestAndProcessProposals() {
     )
   }
   if (vetoed.length > 0) {
-    log('safety guard kept', vetoed.length, 'AI proposal(s) visible:', vetoed)
+    log('AI declined', vetoed.length, 'ad candidate(s):', vetoed)
     void recordActivity(
       'AI enhancements',
-      `AI flagged ${vetoed.length} element(s) but the safety guard kept them visible (they look like real UI) — rate them in the popup`,
+      `${vetoed.length} ad-like element(s) stayed visible — the AI wasn't sure they're ads. Rate them in the popup`,
       domain,
     )
   }
-  if (kept.length + vetoed.length > 0) {
-    // Which sites the lists miss, what the AI matched, and what the guard
-    // refused — recurring patterns promote into shipped rules or prompt fixes.
-    void chrome.runtime
-      .sendMessage({
-        type: 'skipSensei:event',
-        kind: 'gapfill',
-        fields: {
-          domain,
-          kept: kept.slice(0, 5).join(' , '),
-          vetoed: vetoed.slice(0, 5).join(' , '),
-        },
-      })
-      .catch(() => {})
-  }
+  // Which sites the lists miss and what the AI confirmed vs declined —
+  // recurring patterns promote into shipped rules or prompt fixes.
+  void chrome.runtime
+    .sendMessage({
+      type: 'skipSensei:event',
+      kind: 'gapfill',
+      fields: {
+        domain,
+        candidates: String(candidates.length),
+        kept: kept.slice(0, 5).join(' , '),
+        vetoed: vetoed.slice(0, 5).join(' , '),
+      },
+    })
+    .catch(() => {})
 }
 
 async function runGapfill() {

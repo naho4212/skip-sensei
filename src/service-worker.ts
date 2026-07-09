@@ -1,7 +1,7 @@
 import {
   analyzeTranscript,
   builtinAvailability,
-  findAdSelectors,
+  verifyAdCandidates,
   findConsentReject,
   findElementSelector,
   RateLimitError,
@@ -304,18 +304,19 @@ async function reviewPopupMsg(html: string, host?: string): Promise<boolean> {
 }
 
 /**
- * Gap-filler: ask the LLM for ad selectors the filter lists missed. Returns
- * the raw proposals — the CONTENT SCRIPT decides what actually gets hidden
- * (safety guard), caches the survivors, and logs/reports the honest outcome.
- * Caching or logging here would claim "found N ads" for proposals the guard
- * then vetoes as real UI (the claude.ai false-positive loop).
+ * Gap-filler v2: the content script finds ad candidates deterministically and
+ * generates the selectors itself; the AI only vetoes ("is this an ad? when
+ * unsure, no"). Returns confirmed candidate indexes; [] on any failure, so
+ * failure means an ad might show — never that real UI gets hidden.
  */
-async function findAds(html: string): Promise<string[]> {
+async function verifyCandidates(
+  candidates: Array<{ index: number; html: string }>,
+): Promise<number[]> {
   const settings = await getSettings()
   if (!settings.aiEnhancements) return []
   const controller = new AbortController()
   try {
-    return await findAdSelectors(html, settings, controller.signal)
+    return await verifyAdCandidates(candidates, settings, controller.signal)
   } catch {
     return []
   }
@@ -421,8 +422,8 @@ chrome.runtime.onMessage.addListener(
       case 'skipSensei:findSelector':
         void findSelector(message.html, message.description).then(sendResponse)
         return true
-      case 'skipSensei:findAdSelectors':
-        void findAds(message.html).then(sendResponse)
+      case 'skipSensei:verifyAdCandidates':
+        void verifyCandidates(message.candidates).then(sendResponse)
         return true
       case 'skipSensei:reviewPopup':
         void reviewPopupMsg(message.html, senderHost(sender)).then(sendResponse)
