@@ -439,6 +439,12 @@ async function main() {
     })
   }
 
+  const malwareEl = $<HTMLInputElement>('block-malware')
+  malwareEl.checked = loaded.blockMalware
+  malwareEl.addEventListener('change', () => {
+    void save({ blockMalware: malwareEl.checked })
+  })
+
   // URL-tracking stripping needs broad host access to rewrite URLs — request
   // it at the moment the user turns the toggle on (a user gesture), and revert
   // the toggle if they decline.

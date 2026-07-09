@@ -1,13 +1,13 @@
 {
   "name": "skip-sensei",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "description": "Skip YouTube ads and AI-detected creator sponsor segments, and block ads & trackers across the web.",
   "type": "module",
   "scripts": {
     "dev": "npm run rulesets && vite",
     "build": "npm run rulesets && tsc --noEmit && vite build",
-    "rulesets": "node scripts/build-rulesets.mjs",
+    "rulesets": "node scripts/build-rulesets.mjs && node scripts/build-malware-ruleset.mjs",
     "package": "npm run build && node scripts/package-zip.mjs",
     "typecheck": "tsc --noEmit"
   },

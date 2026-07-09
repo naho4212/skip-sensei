@@ -6,7 +6,7 @@ import { defineManifest } from '@crxjs/vite-plugin'
 export default defineManifest({
   manifest_version: 3,
   name: 'Ad Sensei',
-  version: '0.2.0',
+  version: '0.2.1',
   description:
     'Skip YouTube ads and AI-detected creator sponsor segments, and block ads & trackers across the web.',
   icons: {
@@ -110,6 +110,8 @@ export default defineManifest({
         enabled: false,
         path: 'rulesets/url_tracking.json',
       },
+      // URLhaus (abuse.ch) malware domains — scripts/build-malware-ruleset.mjs
+      { id: 'malware', enabled: false, path: 'rulesets/malware.json' },
     ],
   },
   // URL-tracking-param stripping uses redirect rules, which require host

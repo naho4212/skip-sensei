@@ -15,6 +15,16 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.2.1',
+    date: '2026-07-09',
+    items: [
+      'Blocks malware & phishing domains (URLhaus live list) — on by default, refreshed with every filter update',
+      'Clearer ratings: "👍 Ad" / "👎 Not ad" buttons, plus one-tap Undo for saved choices per site',
+      'Blocked-ad placeholders are easier to see, and empty ad slots that appear while you scroll now collapse too',
+      'Popup: the hidden-ads review is now a collapsible section',
+    ],
+  },
+  {
     version: '0.2.0',
     date: '2026-07-08',
     items: [

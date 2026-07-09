@@ -62,6 +62,13 @@ export async function syncNetBlocker(): Promise<BlockerState> {
     master && settings.blockUrlTracking,
     'URL tracking protection',
   )
+  // Malware/phishing domain blocking (URLhaus) is protection, not ad
+  // blocking — standalone and on by default.
+  await setRulesets(
+    ['malware'],
+    master && settings.blockMalware,
+    'malware blocking',
+  )
 
   try {
     await syncAllowlist(settings.allowlist)

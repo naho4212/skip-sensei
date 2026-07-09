@@ -28,6 +28,9 @@ export interface Settings {
   blockSocial: boolean
   /** Block popups / notification prompts. Off by default. */
   blockPopups: boolean
+  /** Block known malware/phishing domains (URLhaus list). On by default —
+   * pure protection, independent of ad blocking. */
+  blockMalware: boolean
   /** Hostnames where "Block all ads" is paused (not blocked). */
   allowlist: string[]
   /** Segments below this confidence are never skipped. */
@@ -83,6 +86,7 @@ export const DEFAULT_SETTINGS: Settings = {
   blockCookieNotices: false,
   blockSocial: false,
   blockPopups: false,
+  blockMalware: true,
   allowlist: [],
   confidenceThreshold: 0.7,
   sponsorBlockEnabled: true,
