@@ -95,6 +95,12 @@ const WALLS_BEFORE_BREAKER = 2
  */
 const CLOAK_ID = 'skip-sensei-ad-cloak'
 const CLOAK_STYLE_ID = 'skip-sensei-ad-cloak-style'
+/**
+ * Branded skip overlay (from the Ad Sensei design system's SkipOverlay
+ * template): a dark cover with a spinning purple ensō ring, the ▶▶| skip
+ * glyph popping into its center, "Skipping ad…", and an AD SENSEI kicker.
+ * A quick accent slash sweeps across on mount to match the hero animation.
+ */
 const CLOAK_CSS = `
 #${CLOAK_ID} {
   position: absolute;
@@ -104,22 +110,59 @@ const CLOAK_CSS = `
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 14px;
-  background: #0f0f0f;
-  color: rgba(255, 255, 255, 0.85);
+  gap: 20px;
+  background: #0b0b0f;
+  color: #f1f1f1;
   font: 500 14px/1.4 "Roboto", "Arial", sans-serif;
   cursor: default;
+  overflow: hidden;
 }
-#${CLOAK_ID} .skip-sensei-cloak-spinner {
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.25);
-  border-top-color: #fff;
-  animation: skip-sensei-cloak-spin 0.8s linear infinite;
+/* accent slash sweep on mount */
+#${CLOAK_ID}::after {
+  content: "";
+  position: absolute;
+  top: 0; left: -60%;
+  width: 45%; height: 100%;
+  background: linear-gradient(100deg, transparent, rgba(139, 92, 246, 0.35), transparent);
+  transform: skewX(-18deg);
+  animation: skip-sensei-slash 0.7s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
-@keyframes skip-sensei-cloak-spin {
-  to { transform: rotate(360deg); }
+@keyframes skip-sensei-slash { to { left: 130%; } }
+#${CLOAK_ID} .skip-sensei-ring {
+  position: relative;
+  width: 88px; height: 88px;
+  filter: drop-shadow(0 0 20px rgba(124, 58, 237, 0.55));
+}
+#${CLOAK_ID} .skip-sensei-ring svg { width: 100%; height: 100%; display: block; }
+#${CLOAK_ID} .skip-sensei-ring .enso {
+  fill: none;
+  stroke: #7c3aed;
+  stroke-width: 5;
+  stroke-linecap: round;
+  stroke-dasharray: 210 66;      /* ~300deg arc + gap → ensō */
+  transform-origin: 50% 50%;
+  animation: skip-sensei-spin 1.15s linear infinite,
+             skip-sensei-draw 0.55s ease-out both;
+}
+#${CLOAK_ID} .skip-sensei-glyph {
+  position: absolute; inset: 0;
+  display: grid; place-items: center;
+  animation: skip-sensei-pop 0.5s cubic-bezier(0.2, 1.35, 0.4, 1) both;
+}
+#${CLOAK_ID} .skip-sensei-glyph svg { width: 34px; height: auto; fill: #8b5cf6; }
+#${CLOAK_ID} .skip-sensei-label { font-size: 19px; font-weight: 500; }
+#${CLOAK_ID} .skip-sensei-kicker {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.22em;
+  text-transform: uppercase; color: #7a7a7a;
+}
+#${CLOAK_ID} .skip-sensei-kicker b { color: #8b5cf6; font-weight: 700; }
+@keyframes skip-sensei-spin { to { transform: rotate(360deg); } }
+@keyframes skip-sensei-draw { from { stroke-dasharray: 0 276; } to { stroke-dasharray: 210 66; } }
+@keyframes skip-sensei-pop { from { transform: scale(0.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  #${CLOAK_ID}::after,
+  #${CLOAK_ID} .skip-sensei-glyph { animation: none; }
+  #${CLOAK_ID} .skip-sensei-ring .enso { animation: skip-sensei-spin 1.4s linear infinite; }
 }
 `
 
@@ -398,11 +441,22 @@ export class AdEngine {
     }
     const cloak = document.createElement('div')
     cloak.id = CLOAK_ID
-    const spinner = document.createElement('div')
-    spinner.className = 'skip-sensei-cloak-spinner'
-    const label = document.createElement('span')
-    label.textContent = 'Skipping ad…'
-    cloak.append(spinner, label)
+    // Ensō ring loader (spins) + the ▶▶| skip glyph popping into its center,
+    // then the label and the AD SENSEI kicker.
+    cloak.innerHTML = `
+      <div class="skip-sensei-ring">
+        <svg viewBox="0 0 100 100" aria-hidden="true">
+          <circle class="enso" cx="50" cy="50" r="44" transform="rotate(-90 50 50)" />
+        </svg>
+        <span class="skip-sensei-glyph">
+          <svg viewBox="0 0 24 17" aria-hidden="true">
+            <path d="M0 1.5l6 7-6 7v-14zm7.5 0l6 7-6 7v-14zm8.5 0h2.4v14H16v-14z" />
+          </svg>
+        </span>
+      </div>
+      <span class="skip-sensei-label">Skipping ad…</span>
+      <span class="skip-sensei-kicker"><b>AD</b> SENSEI</span>
+    `
     this.player?.appendChild(cloak)
     this.cloak = cloak
   }
