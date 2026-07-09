@@ -232,23 +232,139 @@ function buildCss(selectors: string[]): string {
   return `${selectors.join(',')}{display:none!important}`
 }
 
-/** Placeholder mode: keep the slot's size, blank its content, and label it —
- * for masonry layouts where collapsing would leave a bare hole anyway. */
+/** Placeholder mode: keep the slot's size and blank its content — for masonry
+ * layouts where collapsing would leave a bare hole anyway. The visible brand
+ * overlay is a DOM element (see injectPlaceholderOverlays); CSS alone can't
+ * render the two-tone wordmark from the design system's AdBlockedSlot spec. */
 function buildPlaceholderCss(selectors: string[]): string {
   if (selectors.length === 0) return ''
   const slots = selectors.join(',')
   const children = selectors.map((s) => `${s} > *`).join(',')
-  const labels = selectors.map((s) => `${s}::after`).join(',')
   return (
     `${slots}{position:relative!important}` +
-    `${children}{visibility:hidden!important}` +
-    `${labels}{content:"Ad hidden";position:absolute;inset:0;display:flex;` +
-    `align-items:center;justify-content:center;` +
-    `font:500 11px/1 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;` +
-    `letter-spacing:0.04em;text-transform:uppercase;` +
-    `color:rgba(128,128,136,0.55);border:1.5px dashed rgba(128,128,136,0.3);` +
-    `border-radius:16px;pointer-events:none}`
+    `${children}{visibility:hidden!important}`
   )
+}
+
+// ---------------------------------------------------------------------------
+// Blocked-ad slot branding — implements the design system's
+// templates/ad-blocked-slot/AdBlockedSlot.dc.html: a subtle "AD SENSEI"
+// wordmark + "ad skipped" note centered in the blanked slot, themed to the
+// page. Injected as DOM (not ::after) because the wordmark is two-tone.
+// ---------------------------------------------------------------------------
+
+const SLOT_BRAND_CLASS = 'skip-sensei-slot-brand'
+
+/** Luminance of an element's background, or null if transparent/unparsable. */
+function bgLuminance(el: Element | null): number | null {
+  if (!el) return null
+  const bg = getComputedStyle(el).backgroundColor
+  const m = bg.match(
+    /rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:[,\s/]+([\d.]+))?\s*\)/,
+  )
+  if (!m) return null
+  if (m[4] !== undefined && parseFloat(m[4]) === 0) return null // transparent
+  return 0.2126 * +m[1] + 0.7152 * +m[2] + 0.0722 * +m[3]
+}
+
+function pageIsDark(): boolean {
+  // body is often `transparent` (e.g. Pinterest) — fall through to <html>;
+  // if both are transparent the page shows the white canvas → light.
+  const lum =
+    bgLuminance(document.body) ?? bgLuminance(document.documentElement)
+  return lum !== null && lum < 128
+}
+
+/** Build the overlay per the AdBlockedSlot template (dark/light variants). */
+function buildSlotBrand(): HTMLElement {
+  const dark = pageIsDark()
+  const overlay = document.createElement('div')
+  overlay.className = SLOT_BRAND_CLASS
+  overlay.style.cssText =
+    'position:absolute;inset:0;box-sizing:border-box;display:flex;' +
+    'align-items:center;justify-content:center;border-radius:16px;' +
+    `background:${dark ? 'rgba(124,58,237,0.02)' : 'rgba(124,58,237,0.015)'};` +
+    `border:1px dashed ${dark ? 'rgba(241,241,241,0.05)' : 'rgba(12,12,12,0.05)'};` +
+    'pointer-events:none;font-family:Roboto,Arial,sans-serif;'
+  // The placeholder CSS hides all slot children; the overlay must opt out.
+  overlay.style.setProperty('visibility', 'visible', 'important')
+
+  const row = document.createElement('div')
+  row.style.cssText =
+    'display:flex;align-items:baseline;gap:10px;user-select:none;'
+  const mark = document.createElement('div')
+  mark.style.cssText =
+    'font-weight:900;letter-spacing:-0.02em;font-size:15px;line-height:1;' +
+    'white-space:nowrap;opacity:0.3;'
+  const ad = document.createElement('span')
+  ad.style.color = '#7c3aed'
+  ad.textContent = 'AD'
+  const sensei = document.createElement('span')
+  sensei.style.color = dark ? '#f1f1f1' : '#0c0c0c'
+  sensei.textContent = ' SENSEI'
+  mark.append(ad, sensei)
+  const note = document.createElement('div')
+  note.style.cssText =
+    'font-size:11px;font-weight:400;letter-spacing:0.04em;' +
+    `color:${dark ? 'rgba(241,241,241,0.28)' : 'rgba(12,12,12,0.28)'};`
+  note.textContent = 'ad skipped'
+  row.append(mark, note)
+  overlay.append(row)
+  return overlay
+}
+
+/** Currently-active placeholder selectors (set by apply). */
+let activePlaceholders: string[] = []
+
+function injectPlaceholderOverlays() {
+  if (!document.body) return // document_start — nothing to overlay yet
+  // Remove overlays whose slot no longer matches (selector rejected/toggled).
+  for (const overlay of document.querySelectorAll(`.${SLOT_BRAND_CLASS}`)) {
+    const slot = overlay.parentElement
+    if (!slot || !activePlaceholders.some((s) => slot.matches(s)))
+      overlay.remove()
+  }
+  for (const sel of activePlaceholders) {
+    let slots: NodeListOf<Element>
+    try {
+      slots = document.querySelectorAll(sel)
+    } catch {
+      continue
+    }
+    for (const slot of slots) {
+      if (!slot.querySelector(`:scope > .${SLOT_BRAND_CLASS}`))
+        slot.appendChild(buildSlotBrand())
+    }
+  }
+}
+
+let placeholderObserver: MutationObserver | null = null
+let placeholderScanScheduled = false
+
+function schedulePlaceholderScan() {
+  if (placeholderScanScheduled) return
+  placeholderScanScheduled = true
+  setTimeout(() => {
+    placeholderScanScheduled = false
+    injectPlaceholderOverlays()
+  }, 500)
+}
+
+/** Keep overlays present as the site virtualizes/re-renders its feed. */
+function startPlaceholderObserver() {
+  injectPlaceholderOverlays()
+  if (placeholderObserver) return
+  placeholderObserver = new MutationObserver(() => schedulePlaceholderScan())
+  placeholderObserver.observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+  })
+}
+
+function stopPlaceholderObserver() {
+  placeholderObserver?.disconnect()
+  placeholderObserver = null
+  document.querySelectorAll(`.${SLOT_BRAND_CLASS}`).forEach((el) => el.remove())
 }
 
 function isAllowlisted(allowlist: string[]): boolean {
@@ -303,6 +419,7 @@ async function apply() {
     .flatMap((site) => site.selectors)
     .filter((s) => !rejected.has(s))
   activeSelectors = [...hideSelectors, ...placeholderSelectors]
+  activePlaceholders = placeholderSelectors
 
   const existing = document.getElementById(STYLE_ID) as HTMLStyleElement | null
   if (activeSelectors.length === 0) {
@@ -316,6 +433,9 @@ async function apply() {
     if (!existing) (document.head ?? document.documentElement).appendChild(style)
   }
   if (genericOn) void applyGapfill() // hide anything the AI found on prior visits
+
+  if (placeholderSelectors.length > 0) startPlaceholderObserver()
+  else stopPlaceholderObserver()
 
   if (ytOn) startAdBadgeScanner()
   else stopAdBadgeScanner()
