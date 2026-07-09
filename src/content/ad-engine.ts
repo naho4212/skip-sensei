@@ -193,6 +193,7 @@ export class AdEngine {
   /** Stuck-ad watchdog: last observed playback position and when it moved. */
   private ffLastTime = -1
   private ffLastAdvanceAt = 0
+  private ffLastSeekAt = 0
   private stuckRecoveries = 0
   private cloak: HTMLElement | null = null
   /** Enforcement walls dismissed this session (aggressive-mode circuit breaker). */
@@ -316,6 +317,7 @@ export class AdEngine {
       this.skipClickedAt = null
       this.healInFlight = false
       this.ffLastTime = -1
+      this.ffLastSeekAt = 0
       this.stuckRecoveries = 0
       return
     }
@@ -565,13 +567,14 @@ export class AdEngine {
   }
 
   /**
-   * No skip button (yet): burn through the un-skippable portion.
-   *
-   * Seeking into UN-buffered ad content stalls the player (a multi-second
-   * black-frame freeze), and seeking to exact duration parks it in an "ended"
-   * state that never loads the main video. So we only ever seek to the end of
-   * what's already BUFFERED (instant, no stall) and otherwise rely on a high
-   * playback rate + mute to blast through the rest smoothly.
+   * No skip button (yet): burn through the un-skippable portion by seeking
+   * STRAIGHT TO THE END of the ad. Loading just the final segment takes ~1s
+   * regardless of ad length, whereas fast-forwarding the whole ad at 16x is
+   * bounded by how fast the ad downloads (a 30s ad can take many seconds).
+   * We leave a hair before the exact end so 'ended' fires naturally (seeking
+   * to exactly duration parks the player in an 'ended' state that never
+   * transitions to the main video). A high playback rate + mute is the
+   * fallback while the end segment loads, or if YouTube resets the seek.
    */
   private fastForwardAd() {
     const video = document.querySelector<HTMLVideoElement>(VIDEO)
@@ -584,7 +587,11 @@ export class AdEngine {
     // stays up — rewind a hair at normal speed so YouTube's own
     // end-of-ad transition can fire, instead of pushing harder.
     const now = Date.now()
-    if (video.currentTime !== this.ffLastTime) {
+    if (video.seeking) {
+      // A seek to the end of an unbuffered ad legitimately freezes
+      // currentTime while the segment loads — that's progress, not a wedge.
+      this.ffLastAdvanceAt = now
+    } else if (video.currentTime !== this.ffLastTime) {
       this.ffLastTime = video.currentTime
       this.ffLastAdvanceAt = now
     } else if (
@@ -611,13 +618,18 @@ export class AdEngine {
     // ad forever. Ended-but-parked is the watchdog's job above.
     if (video.paused && !video.ended) void video.play().catch(() => {})
 
-    // Jump to the end of the buffered range (leaving a hair so 'ended' fires
-    // naturally), but never into unbuffered territory.
-    const buffered = video.buffered
-    if (buffered.length > 0) {
-      const bufferedEnd = buffered.end(buffered.length - 1)
-      const target = Math.min(bufferedEnd - 0.1, video.duration - 0.35)
-      if (target > video.currentTime + 0.5) video.currentTime = target
+    // Jump straight to the end of the ad — loading only the final segment,
+    // not the whole ad. Retry at most every 1.5s (not while a seek is in
+    // flight): if YouTube resets the seek on a non-seekable ad, this stops it
+    // fighting itself, and the 16x rate above still burns through in between.
+    const target = video.duration - 0.4
+    if (
+      !video.seeking &&
+      target > video.currentTime + 1 &&
+      now - this.ffLastSeekAt > 1500
+    ) {
+      this.ffLastSeekAt = now
+      video.currentTime = target
     }
 
     if (!this.fastForwarding) {
