@@ -116,6 +116,30 @@ function isYouTube(): boolean {
   return /(^|\.)youtube\.com$/.test(location.hostname)
 }
 
+/**
+ * Google search "Sponsored" results: like YouTube's promoted items, they're
+ * first-party HTML served inline from google.com itself — there's no
+ * ad-network request for the DNR lists to block (and blocking google.com
+ * would break search). Only cosmetic hiding works. These ids/classes are
+ * Google's own ad-container markers, stable for years and used ONLY for paid
+ * units — organic results never carry them. Applied on Google search domains
+ * only.
+ */
+const GOOGLE_SEARCH_SELECTORS = [
+  '#tads', // top "Sponsored" text-ad block
+  '#tadsb', // bottom "Sponsored" block (newer id)
+  '#bottomads', // bottom "Sponsored" block (classic id)
+  '[data-text-ad]', // individual text ad
+  '.commercial-unit-desktop-top', // shopping/product-listing ads, top
+  '.commercial-unit-desktop-rhs', // shopping ads, right-hand side
+  '.cu-container', // shopping ad unit container
+]
+
+function isGoogleSearch(): boolean {
+  // google.com, google.de, google.co.uk, … (any national TLD)
+  return /(^|\.)google\.[a-z]{2,3}(\.[a-z]{2})?$/.test(location.hostname)
+}
+
 const GAPFILL_STYLE_ID = 'skip-sensei-gapfill'
 
 function isValidSelectorList(list: string[]): string[] {
@@ -172,6 +196,7 @@ async function apply() {
   const rejected = new Set(await getRejectedGapfill(bareDomain()))
   const selectors = [
     ...(genericOn ? SELECTORS : []),
+    ...(genericOn && isGoogleSearch() ? GOOGLE_SEARCH_SELECTORS : []),
     ...(ytOn ? YOUTUBE_SELECTORS : []),
   ].filter((s) => !rejected.has(s))
   activeSelectors = selectors
