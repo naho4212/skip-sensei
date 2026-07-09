@@ -135,11 +135,6 @@ const GOOGLE_SEARCH_SELECTORS = [
   '.cu-container', // shopping ad unit container
 ]
 
-function isGoogleSearch(): boolean {
-  // google.com, google.de, google.co.uk, … (any national TLD)
-  return /(^|\.)google\.[a-z]{2,3}(\.[a-z]{2})?$/.test(location.hostname)
-}
-
 /**
  * Pinterest sponsored pins: first-party ads again — cosmetic-only. Pinterest's
  * class names are hashed and rotate every build, so key off the stable bits:
@@ -155,9 +150,52 @@ const PINTEREST_SELECTORS = [
   '[data-grid-item]:has([title^="Promoted by" i])',
 ]
 
-function isPinterest(): boolean {
-  return /(^|\.)pinterest\.[a-z]{2,3}(\.[a-z]{2})?$/.test(location.hostname)
-}
+/**
+ * Amazon sponsored results & brand/video ad units. .AdHolder is Amazon's own
+ * marker on every advertising widget (also what EasyList keys on); verified
+ * live: 17 units on a search page, every one ad content, zero organic.
+ * sp-sponsored-result is an older per-result marker kept as belt-and-braces.
+ */
+const AMAZON_SELECTORS = [
+  '.AdHolder',
+  '[data-component-type="sp-sponsored-result"]',
+]
+
+/**
+ * Reddit promoted posts: ad-only custom elements (same pattern as YouTube's
+ * ad renderers — the tag name itself is the ad marker), plus old.reddit's
+ * .promotedlink. Verified live: 5 shreddit-ad-post in the r/all feed.
+ */
+const REDDIT_SELECTORS = [
+  'shreddit-ad-post',
+  'shreddit-comments-page-ad',
+  'shreddit-sidebar-ad',
+  'shreddit-dynamic-ad-link',
+  '.promotedlink',
+]
+
+/**
+ * Bing search ads: .b_ad has been Bing's ad-block container for a decade
+ * (EasyList's marker too). Verified live: 3 ad blocks hidden, organic
+ * .b_algo results untouched.
+ */
+const BING_SELECTORS = ['.b_ad']
+
+/**
+ * First-party ad platforms: the site sells its own ads and serves them
+ * inline from its own domain as regular content — there is no ad-network
+ * request for the DNR lists to block, so cosmetic hiding is the only tool.
+ * Each entry uses the site's own stable ad-only markers, live-verified.
+ * (YouTube is handled separately above with its own toggle semantics.)
+ */
+const FIRST_PARTY_AD_SITES: Array<{ hosts: RegExp; selectors: string[] }> = [
+  // google.com, google.de, google.co.uk, … (any national TLD)
+  { hosts: /(^|\.)google\.[a-z]{2,3}(\.[a-z]{2})?$/, selectors: GOOGLE_SEARCH_SELECTORS },
+  { hosts: /(^|\.)pinterest\.[a-z]{2,3}(\.[a-z]{2})?$/, selectors: PINTEREST_SELECTORS },
+  { hosts: /(^|\.)amazon\.[a-z]{2,3}(\.[a-z]{2})?$/, selectors: AMAZON_SELECTORS },
+  { hosts: /(^|\.)reddit\.com$/, selectors: REDDIT_SELECTORS },
+  { hosts: /(^|\.)bing\.com$/, selectors: BING_SELECTORS },
+]
 
 const GAPFILL_STYLE_ID = 'skip-sensei-gapfill'
 
@@ -215,8 +253,11 @@ async function apply() {
   const rejected = new Set(await getRejectedGapfill(bareDomain()))
   const selectors = [
     ...(genericOn ? SELECTORS : []),
-    ...(genericOn && isGoogleSearch() ? GOOGLE_SEARCH_SELECTORS : []),
-    ...(genericOn && isPinterest() ? PINTEREST_SELECTORS : []),
+    ...(genericOn
+      ? FIRST_PARTY_AD_SITES.filter((site) =>
+          site.hosts.test(location.hostname),
+        ).flatMap((site) => site.selectors)
+      : []),
     ...(ytOn ? YOUTUBE_SELECTORS : []),
   ].filter((s) => !rejected.has(s))
   activeSelectors = selectors
