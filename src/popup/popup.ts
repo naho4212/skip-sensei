@@ -231,6 +231,18 @@ async function reviewTabId(): Promise<number | null> {
   return tab.id
 }
 
+// Collapsed by default — the review list is an occasional tool, not a
+// glanceable stat, and it was pushing Share/coffee off-screen. Remembered
+// across popup opens.
+const HIDDEN_COLLAPSED_KEY = 'skipSensei.hiddenReviewCollapsed'
+
+function setHiddenCollapsed(collapsed: boolean) {
+  $('hidden-body').hidden = collapsed
+  $('hidden-chevron').textContent = collapsed ? '▸' : '▾'
+  $('hidden-toggle').setAttribute('aria-expanded', String(!collapsed))
+  localStorage.setItem(HIDDEN_COLLAPSED_KEY, collapsed ? '1' : '0')
+}
+
 async function renderHiddenReview() {
   const wrap = $('hidden-review')
   const tabId = await reviewTabId()
@@ -612,6 +624,11 @@ async function main() {
   void renderSiteSection()
   void renderHiddenReview()
 
+  setHiddenCollapsed(localStorage.getItem(HIDDEN_COLLAPSED_KEY) !== '0')
+  $('hidden-toggle').addEventListener('click', () =>
+    setHiddenCollapsed(!$('hidden-body').hidden),
+  )
+
   const resetBtn = $<HTMLButtonElement>('hidden-reset-btn')
   resetBtn.addEventListener('click', async () => {
     const tabId = await reviewTabId()
@@ -646,6 +663,7 @@ async function main() {
           TOP_FRAME,
         )) ?? []
       paintHiddenItems(tabId, items)
+      setHiddenCollapsed(false) // show what the scan found
     } catch {
       /* content script not ready */
     }

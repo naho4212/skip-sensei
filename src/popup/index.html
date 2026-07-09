@@ -145,16 +145,21 @@
 
       <section class="hidden-review" id="hidden-review" hidden>
         <div class="hidden-head">
-          <span class="section-title" id="hidden-title">Hidden ads here</span>
+          <button type="button" class="hidden-toggle" id="hidden-toggle" aria-expanded="false">
+            <span class="hidden-chevron" id="hidden-chevron">▸</span>
+            <span class="section-title" id="hidden-title">Hidden ads here</span>
+          </button>
           <button type="button" id="scan-ads-btn" class="mini-btn">Scan for ads</button>
         </div>
-        <p class="hidden-hint">What the extension hid on this page. “👎 Not ad” shows it again and stops hiding it on this site.</p>
-        <ul class="hidden-list" id="hidden-list"></ul>
-        <p class="hidden-empty" id="hidden-empty" hidden>Nothing hidden here. Tap “Scan for ads” to check this page with AI.</p>
-        <p class="hidden-reset" id="hidden-reset" hidden>
-          <span id="hidden-reset-text"></span>
-          <button type="button" id="hidden-reset-btn" class="mini-btn">Undo</button>
-        </p>
+        <div id="hidden-body" hidden>
+          <p class="hidden-hint">What the extension hid on this page. “👎 Not ad” shows it again and stops hiding it on this site.</p>
+          <ul class="hidden-list" id="hidden-list"></ul>
+          <p class="hidden-empty" id="hidden-empty" hidden>Nothing hidden here. Tap “Scan for ads” to check this page with AI.</p>
+          <p class="hidden-reset" id="hidden-reset" hidden>
+            <span id="hidden-reset-text"></span>
+            <button type="button" id="hidden-reset-btn" class="mini-btn">Undo</button>
+          </p>
+        </div>
       </section>
 
       <section class="current" id="video-section">
