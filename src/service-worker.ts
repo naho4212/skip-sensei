@@ -8,8 +8,13 @@ import {
   resolveProvider,
   reviewPopup,
 } from './llm-client'
-import { getBlockerState, initNetBlocker } from './net-blocker'
-import { initPruneRegistration } from './prune-register'
+import { getBlockerState, initNetBlocker, syncNetBlocker } from './net-blocker'
+import { initPruneRegistration, syncPruneRegistration } from './prune-register'
+import {
+  initScriptletRegistration,
+  syncScriptletRegistration,
+} from './scriptlet-register'
+import { isColdStart, runColdStart } from './lifecycle'
 import { fetchSponsorBlockSegments } from './sponsorblock'
 import { initErrorReporting, reportError, reportEvent } from './error-reporting'
 import {
@@ -39,6 +44,8 @@ const EMPTY_SESSION: SessionStats = {
   sessionAdSkips: 0,
   sessionSponsorSkips: 0,
   sessionWebAdsBlocked: 0,
+  sessionTrackersBlocked: 0,
+  sessionCookiesBlocked: 0,
 }
 
 async function getSessionStats(): Promise<SessionStats> {
@@ -58,6 +65,20 @@ async function recordWebBlocks(n: number) {
   await incrementStat('allTimeWebAdsBlocked', n)
   const session = await getSessionStats()
   session.sessionWebAdsBlocked += n
+  await chrome.storage.session.set({ [SESSION_STATS_KEY]: session })
+}
+
+async function recordTrackerBlocks(n: number) {
+  await incrementStat('allTimeTrackersBlocked', n)
+  const session = await getSessionStats()
+  session.sessionTrackersBlocked += n
+  await chrome.storage.session.set({ [SESSION_STATS_KEY]: session })
+}
+
+async function recordCookieBlocks(n: number) {
+  await incrementStat('allTimeCookiesBlocked', n)
+  const session = await getSessionStats()
+  session.sessionCookiesBlocked += n
   await chrome.storage.session.set({ [SESSION_STATS_KEY]: session })
 }
 
@@ -546,14 +567,33 @@ void (async () => {
 })()
 
 // "Block all ads" engine: enforce DNR ruleset state; count blocks (stats + badge).
-initNetBlocker(
-  (n) => void recordWebBlocks(n),
-  (tabId) => bumpTabBlocked(tabId),
-)
+initNetBlocker({
+  onBlocks: (n) => void recordWebBlocks(n),
+  onTrackers: (n) => void recordTrackerBlocks(n),
+  onCookies: (n) => void recordCookieBlocks(n),
+  onTabBlock: (tabId) => bumpTabBlocked(tabId),
+})
 
 // Aggressive-mode YouTube pruner: (un)register the MAIN-world content script
 // to match the aggressivePruning setting.
 initPruneRegistration()
+
+// Anti-adblock scriptlet layer: (un)register the MAIN-world scriptlet bundle
+// for the broad web (dormant until broad host permission is granted).
+initScriptletRegistration()
+
+// Cold-start gate: DNR ruleset state and chrome.scripting registrations persist
+// across service-worker restarts, so we only run the full sync on a genuine
+// cold start (browser launch / install / update) — not on every idle wake.
+// (onInstalled/onStartup/onSettingsChanged still re-sync on their own events.)
+void (async () => {
+  if (!(await isColdStart())) return
+  await runColdStart(async () => {
+    await syncNetBlocker()
+    await syncPruneRegistration()
+    await syncScriptletRegistration()
+  })
+})()
 
 // Sanitized crash reporting for anything nobody caught (usage analytics come
 // from Chrome Web Store stats, not from the extension).

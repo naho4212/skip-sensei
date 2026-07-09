@@ -13,7 +13,10 @@
             d="M0 1.5l6 7-6 7v-14zm7.5 0l6 7-6 7v-14zm8.5 0h2.4v14H16v-14z"
           />
         </svg>
-        <h1 class="wordmark"><span class="ad">AD</span> SENSEI</h1>
+        <div class="brand-text">
+          <h1 class="wordmark"><span class="ad">AD</span> SENSEI</h1>
+          <span class="brand-status" id="brand-status">Protection active</span>
+        </div>
       </div>
       <div class="header-actions">
         <button
@@ -25,7 +28,7 @@
         >
           ↻
         </button>
-        <label class="switch" title="Master toggle">
+        <label class="switch" title="Turn Ad Sensei on or off">
           <input type="checkbox" id="master-toggle" />
           <span class="slider"></span>
         </label>
@@ -46,123 +49,168 @@
     </section>
 
     <main>
-      <section class="engines">
-        <label class="row">
-          <span
-            >Skip YouTube ads<span
-              class="info"
-              tabindex="0"
-              data-tip="Automatically skips YouTube's own ads — clicks “Skip” the moment it appears and fast-forwards the rest."
-              >ⓘ</span
-            ></span
+      <!-- Active site: prominent at the top. Shown only for the general
+           "Block all ads" engine on a real web page. -->
+      <section class="site-hero" id="site-section" hidden>
+        <div class="site-hero-info">
+          <span class="site-status" id="site-status">Blocking active</span>
+          <span class="site-host" id="site-host"></span>
+          <span class="page-blocked" id="page-blocked"></span>
+        </div>
+        <label class="power" title="Pause ad blocking on this site">
+          <input type="checkbox" id="pause-site-toggle" />
+          <span class="power-btn" aria-hidden="true">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                d="M12 3v9"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.2"
+                stroke-linecap="round"
+              />
+              <path
+                d="M7.4 6.4a7 7 0 1 0 9.2 0"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.2"
+                stroke-linecap="round"
+              />
+            </svg>
+          </span>
+        </label>
+      </section>
+
+      <div class="blocker-note" id="blocker-note" hidden>
+        <span id="blocker-note-text"></span>
+        <button class="mini-btn" id="blocker-reload" hidden>↻ Reload</button>
+      </div>
+
+      <!-- Analytics -->
+      <section class="stat-row">
+        <div class="stat-card">
+          <span class="stat-num" id="alltime-youtube">0</span>
+          <span class="stat-label">YouTube</span>
+          <span class="stat-sub"
+            ><span id="session-youtube">0</span> this session</span
           >
+        </div>
+        <div class="stat-card">
+          <span class="stat-num" id="alltime-web-blocks">0</span>
+          <span class="stat-label">Web ads</span>
+          <span class="stat-sub"
+            ><span id="session-web-blocks">0</span> this session</span
+          >
+        </div>
+        <div class="stat-card">
+          <span class="stat-num" id="alltime-trackers">0</span>
+          <span class="stat-label">Trackers</span>
+          <span class="stat-sub"
+            ><span id="session-trackers">0</span> this session</span
+          >
+        </div>
+        <div class="stat-card">
+          <span class="stat-num" id="alltime-cookies">0</span>
+          <span class="stat-label">Cookies</span>
+          <span class="stat-sub"
+            ><span id="session-cookies">0</span> this session</span
+          >
+        </div>
+      </section>
+
+      <!-- Controls -->
+      <section class="controls">
+        <label class="ctl-row">
+          <span class="ctl-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M5 4l11 8-11 8z" />
+              <line x1="19" y1="5" x2="19" y2="19" />
+            </svg>
+          </span>
+          <span class="ctl-text">
+            <span class="ctl-title"
+              >Skip YouTube ads<span
+                class="info"
+                tabindex="0"
+                data-tip="Automatically skips YouTube's own ads — clicks “Skip” the moment it appears and fast-forwards the rest."
+                >ⓘ</span
+              ></span
+            >
+            <span class="ctl-sub">Auto-skip YouTube's own ads</span>
+          </span>
           <span class="switch">
             <input type="checkbox" id="ad-engine-toggle" />
             <span class="slider"></span>
           </span>
         </label>
-        <label class="row">
-          <span
-            >Skip sponsor segments<span
-              class="info"
-              tabindex="0"
-              data-tip="Detects creator-read sponsor segments by AI-analyzing the video transcript, then skips playback past them — even on brand-new uploads."
-              >ⓘ</span
-            ></span
-          >
+
+        <label class="ctl-row">
+          <span class="ctl-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0l-7-7A2 2 0 0 1 3 12.2V5a2 2 0 0 1 2-2h7.2a2 2 0 0 1 1.4.6l7 7a2 2 0 0 1 0 2.8Z" />
+              <circle cx="7.5" cy="7.5" r="1.3" />
+            </svg>
+          </span>
+          <span class="ctl-text">
+            <span class="ctl-title"
+              >Skip sponsor segments<span
+                class="info"
+                tabindex="0"
+                data-tip="Detects creator-read sponsor segments by AI-analyzing the video transcript, then skips playback past them — even on brand-new uploads."
+                >ⓘ</span
+              ></span
+            >
+            <span class="ctl-sub">AI-skip creator ad reads</span>
+          </span>
           <span class="switch">
             <input type="checkbox" id="sponsor-engine-toggle" />
             <span class="slider"></span>
           </span>
         </label>
-        <label class="row">
-          <span
-            >Block all ads<span
-              class="info"
-              tabindex="0"
-              data-tip="Blocks ads (and optionally trackers) across all websites using filter lists. Configure extra lists in settings."
-              >ⓘ</span
-            ></span
-          >
+
+        <label class="ctl-row">
+          <span class="ctl-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 3l7 3v5c0 4.5-3 7.6-7 9-4-1.4-7-4.5-7-9V6z" />
+              <line x1="9" y1="9" x2="15" y2="15" />
+            </svg>
+          </span>
+          <span class="ctl-text">
+            <span class="ctl-title"
+              >Block all ads<span
+                class="info"
+                tabindex="0"
+                data-tip="Blocks ads (and optionally trackers) across all websites using filter lists. Configure extra lists in settings."
+                >ⓘ</span
+              ></span
+            >
+            <span class="ctl-sub">Filter-list blocking, every site</span>
+          </span>
           <span class="switch">
             <input type="checkbox" id="block-ads-toggle" />
             <span class="slider"></span>
           </span>
         </label>
-        <div class="blocker-note" id="blocker-note" hidden>
-          <span id="blocker-note-text"></span>
-          <button class="mini-btn" id="blocker-reload" hidden>↻ Reload</button>
-        </div>
-        <a href="#" id="open-options" class="row link-row">
-          <span>AI &amp; skipping settings</span>
+
+        <a href="#" id="open-options" class="ctl-row link-row">
+          <span class="ctl-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="4" y1="8" x2="20" y2="8" />
+              <line x1="4" y1="16" x2="20" y2="16" />
+              <circle cx="10" cy="8" r="2.4" />
+              <circle cx="15" cy="16" r="2.4" />
+            </svg>
+          </span>
+          <span class="ctl-text">
+            <span class="ctl-title">AI + privacy settings</span>
+            <span class="ctl-sub">Providers, categories, privacy</span>
+          </span>
           <span class="chevron" aria-hidden="true">›</span>
         </a>
       </section>
 
-      <div class="section-title">Skipped</div>
-      <section class="stats">
-        <table class="stats-table">
-          <thead>
-            <tr>
-              <th></th>
-              <th>Session</th>
-              <th>All time</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>YouTube ads</td>
-              <td id="session-ad-skips">0</td>
-              <td id="alltime-ad-skips">0</td>
-            </tr>
-            <tr>
-              <td>Sponsor segments</td>
-              <td id="session-sponsor-skips">0</td>
-              <td id="alltime-sponsor-skips">0</td>
-            </tr>
-            <tr>
-              <td>Web ads blocked</td>
-              <td id="session-web-blocks">0</td>
-              <td id="alltime-web-blocks">0</td>
-            </tr>
-          </tbody>
-        </table>
-      </section>
-
-      <section class="site" id="site-section" hidden>
-        <div class="site-head">
-          <span id="site-host"></span>
-          <span class="page-blocked" id="page-blocked"></span>
-        </div>
-        <label class="row compact" id="pause-row">
-          <span>Pause ad blocking here</span>
-          <span class="switch">
-            <input type="checkbox" id="pause-site-toggle" />
-            <span class="slider"></span>
-          </span>
-        </label>
-      </section>
-
-      <section class="hidden-review" id="hidden-review" hidden>
-        <div class="hidden-head">
-          <button type="button" class="hidden-toggle" id="hidden-toggle" aria-expanded="false">
-            <span class="hidden-chevron" id="hidden-chevron">▸</span>
-            <span class="section-title" id="hidden-title">Hidden ads here</span>
-          </button>
-          <button type="button" id="scan-ads-btn" class="mini-btn">Scan for ads</button>
-        </div>
-        <div id="hidden-body" hidden>
-          <p class="hidden-hint">What the extension hid on this page. “👎 Not ad” shows it again and stops hiding it on this site.</p>
-          <ul class="hidden-list" id="hidden-list"></ul>
-          <p class="hidden-empty" id="hidden-empty" hidden>Nothing hidden here. Tap “Scan for ads” to check this page with AI.</p>
-          <p class="hidden-reset" id="hidden-reset" hidden>
-            <span id="hidden-reset-text"></span>
-            <button type="button" id="hidden-reset-btn" class="mini-btn">Undo</button>
-          </p>
-        </div>
-      </section>
-
+      <!-- Current YouTube video -->
       <section class="current" id="video-section">
+        <div class="section-title">This video</div>
         <p class="status">
           <span id="video-status"></span>
           <button id="reload-tab" hidden>Reload page</button>
@@ -173,8 +221,44 @@
         <ul class="segments" id="segment-list"></ul>
       </section>
 
+      <!-- AI hidden-ads review -->
+      <section class="hidden-review" id="hidden-review" hidden>
+        <div class="hidden-head">
+          <button
+            type="button"
+            class="hidden-toggle"
+            id="hidden-toggle"
+            aria-expanded="false"
+          >
+            <span class="hidden-chevron" id="hidden-chevron">▸</span>
+            <span class="section-title" id="hidden-title">Hidden ads here</span>
+          </button>
+          <button type="button" id="scan-ads-btn" class="mini-btn">
+            Scan for ads
+          </button>
+        </div>
+        <div id="hidden-body" hidden>
+          <p class="hidden-hint">
+            What the extension hid on this page. “👎 Not ad” shows it again and
+            stops hiding it on this site.
+          </p>
+          <ul class="hidden-list" id="hidden-list"></ul>
+          <p class="hidden-empty" id="hidden-empty" hidden>
+            Nothing hidden here. Tap “Scan for ads” to check this page with AI.
+          </p>
+          <p class="hidden-reset" id="hidden-reset" hidden>
+            <span id="hidden-reset-text"></span>
+            <button type="button" id="hidden-reset-btn" class="mini-btn">
+              Undo
+            </button>
+          </p>
+        </div>
+      </section>
+
       <footer>
-        <button type="button" id="share-btn" class="footer-link">↗ Share</button>
+        <button type="button" id="share-btn" class="footer-link">
+          ↗ Share
+        </button>
         <span class="footer-sep">·</span>
         <a
           href="https://buymeacoffee.com/singlefin"

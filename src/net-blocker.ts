@@ -122,23 +122,35 @@ const NETWORK_EXEMPT = ['youtube.com', 'youtube-nocookie.com', 'googlevideo.com'
  */
 async function syncAllowlist(hostnames: string[]) {
   const existing = await chrome.declarativeNetRequest.getDynamicRules()
-  const addRules = [
+  const domains = [
     ...NETWORK_EXEMPT,
     ...hostnames.map((h) => h.trim().toLowerCase()).filter(Boolean),
-  ]
-    .filter((h, i, arr) => arr.indexOf(h) === i) // dedupe
-    .map((hostname, i) => ({
-      id: i + 1,
-      priority: ALLOWLIST_PRIORITY,
-      action: { type: 'allowAllRequests' as chrome.declarativeNetRequest.RuleActionType },
-      condition: {
-        requestDomains: [hostname],
-        resourceTypes: [
-          'main_frame',
-          'sub_frame',
-        ] as chrome.declarativeNetRequest.ResourceType[],
-      },
-    }))
+  ].filter((h, i, arr) => arr.indexOf(h) === i) // dedupe
+
+  // A SINGLE allowAllRequests rule whose condition lists every paused hostname
+  // in requestDomains — one dynamic rule no matter how large the allowlist
+  // grows, instead of one rule per hostname. (allowAllRequests on a page's
+  // main_frame/sub_frame exempts the whole page + its subframes from the
+  // static block rules.)
+  const addRules =
+    domains.length === 0
+      ? []
+      : [
+          {
+            id: 1,
+            priority: ALLOWLIST_PRIORITY,
+            action: {
+              type: 'allowAllRequests' as chrome.declarativeNetRequest.RuleActionType,
+            },
+            condition: {
+              requestDomains: domains,
+              resourceTypes: [
+                'main_frame',
+                'sub_frame',
+              ] as chrome.declarativeNetRequest.ResourceType[],
+            },
+          },
+        ]
   await chrome.declarativeNetRequest.updateDynamicRules({
     removeRuleIds: existing.map((r) => r.id),
     addRules,
@@ -157,48 +169,75 @@ export async function getBlockerState(): Promise<BlockerState> {
   return { enabled: blockAllAds, active, error: lastError }
 }
 
-const BLOCK_RULESET_IDS = new Set([...AD_RULESET_IDS, ...TRACKER_RULESET_IDS])
+const AD_SET = new Set(AD_RULESET_IDS)
+const TRACKER_SET = new Set(TRACKER_RULESET_IDS)
+const COOKIE_SET = new Set(['cookies'])
 
 /**
- * Count blocked web-ad requests for the popup stats. onRuleMatchedDebug fires
- * per matched rule for unpacked extensions (which is how this is loaded).
- * Matches are batched in memory and flushed to storage to avoid hammering it.
+ * Count blocked web-ad requests for the popup stats + per-tab badge.
+ *
+ * We poll declarativeNetRequest.getMatchedRules() when a tab finishes loading.
+ * Unlike onRuleMatchedDebug — which the docs restrict to UNPACKED extensions,
+ * so it silently never fires in a packed Web Store build — getMatchedRules
+ * works in production. It needs the declarativeNetRequestFeedback permission,
+ * which we hold (and which also lifts the API's call-rate quota). A per-tab
+ * high-water timestamp keeps us from recounting the same matches.
  */
-let pendingBlocks = 0
-let flushTimer: ReturnType<typeof setTimeout> | null = null
+const lastPollTs = new Map<number, number>()
 
-function scheduleFlush(onBlocks: (n: number) => void) {
-  if (flushTimer !== null) return
-  flushTimer = setTimeout(() => {
-    flushTimer = null
-    const n = pendingBlocks
-    pendingBlocks = 0
-    if (n > 0) onBlocks(n)
-  }, 3000)
+interface BlockCallbacks {
+  /** Web ad blocks (filter-list ad rulesets) → the "Web ads" stat. */
+  onBlocks: (n: number) => void
+  /** Tracker/analytics blocks → the "Trackers" stat. */
+  onTrackers: (n: number) => void
+  /** Cookie-notice blocks → the "Cookies" stat. */
+  onCookies: (n: number) => void
+  /** Per ad+tracker block, with the tab id → the icon badge counter. */
+  onTabBlock: (tabId: number) => void
+}
+
+async function pollTabBlocks(tabId: number, cb: BlockCallbacks) {
+  try {
+    const since = lastPollTs.get(tabId)
+    const { rulesMatchedInfo } =
+      await chrome.declarativeNetRequest.getMatchedRules({
+        tabId,
+        ...(since !== undefined ? { minTimeStamp: since } : {}),
+      })
+    lastPollTs.set(tabId, Date.now())
+    let ads = 0
+    let trackers = 0
+    let cookies = 0
+    for (const info of rulesMatchedInfo) {
+      const id = info.rule.rulesetId
+      if (AD_SET.has(id)) ads++
+      else if (TRACKER_SET.has(id)) trackers++
+      else if (COOKIE_SET.has(id)) cookies++
+    }
+    if (ads > 0) cb.onBlocks(ads)
+    if (trackers > 0) cb.onTrackers(trackers)
+    if (cookies > 0) cb.onCookies(cookies)
+    // Badge = everything actually blocked on the tab (ads + trackers).
+    for (let i = 0; i < ads + trackers; i++) cb.onTabBlock(tabId)
+  } catch {
+    // Feedback permission missing or tab gone — counting is best-effort.
+  }
 }
 
 /**
- * Wire up: enforce on startup, install, settings change.
- * @param onBlocks   batched total block count → for the running stats
- * @param onTabBlock per-block callback with the tab id → for the icon badge
+ * Wire up: enforce on startup, install, settings change; count blocks per tab
+ * load. The initial sync is driven by the service worker's cold-start gate
+ * (see lifecycle.ts) so a mid-session SW wake doesn't redundantly re-sync.
  */
-export function initNetBlocker(
-  onBlocks: (n: number) => void,
-  onTabBlock: (tabId: number) => void,
-) {
+export function initNetBlocker(cb: BlockCallbacks) {
   chrome.runtime.onInstalled.addListener(() => void syncNetBlocker())
   chrome.runtime.onStartup.addListener(() => void syncNetBlocker())
   onSettingsChanged(() => void syncNetBlocker())
 
-  // Only fires in unpacked/dev extensions; silently absent otherwise.
-  chrome.declarativeNetRequest.onRuleMatchedDebug?.addListener((info) => {
-    if (BLOCK_RULESET_IDS.has(info.rule.rulesetId)) {
-      pendingBlocks++
-      scheduleFlush(onBlocks)
-      const tabId = info.request.tabId
-      if (tabId !== undefined && tabId >= 0) onTabBlock(tabId)
-    }
+  chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+    // New load → reset the per-tab counting window (block counts are per-load).
+    if (changeInfo.status === 'loading') lastPollTs.delete(tabId)
+    if (changeInfo.status === 'complete') void pollTabBlocks(tabId, cb)
   })
-
-  void syncNetBlocker()
+  chrome.tabs.onRemoved.addListener((tabId) => lastPollTs.delete(tabId))
 }

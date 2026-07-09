@@ -401,6 +401,7 @@ async function main() {
     ['block-cookie-notices', 'blockCookieNotices'],
     ['block-social', 'blockSocial'],
     ['block-popups', 'blockPopups'],
+    ['defuse-anti-adblock', 'defuseAntiAdblock'],
     ['telemetry', 'telemetryEnabled'],
   ]
   const loaded = await getSettings()
