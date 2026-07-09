@@ -1,11 +1,18 @@
 import { log } from '../log'
 import {
+  addConfirmedGapfill,
+  addGapfillSelectors,
   addRejectedGapfill,
+  getConfirmedGapfill,
   getGapfillSelectors,
   getRejectedGapfill,
   getSettings,
+  getVetoedGapfill,
   onSettingsChanged,
+  recordActivity,
+  removeVetoedGapfill,
   setGapfillSelectors,
+  setVetoedGapfill,
 } from '../storage'
 import { initConsent } from './consent'
 import { initPopupReviewer } from './popup-reviewer'
@@ -309,20 +316,31 @@ function isSafeGapfillSelector(sel: string): boolean {
 
 /** Currently-applied gap-fill selectors on this page (for the popup review). */
 let activeGapfill: string[] = []
+/** AI proposals the safety guard refused to apply (for the popup review). */
+let activeVetoed: string[] = []
 
 /** Apply this domain's AI-discovered ad selectors (from prior visits). */
 async function applyGapfill() {
-  const rejected = new Set(await getRejectedGapfill(bareDomain()))
-  const raw = isValidSelectorList(await getGapfillSelectors(bareDomain())).filter(
+  const domain = bareDomain()
+  const rejected = new Set(await getRejectedGapfill(domain))
+  // User pressed "it IS an ad" on a guard-vetoed selector — trust them.
+  const confirmed = new Set(await getConfirmedGapfill(domain))
+  const raw = isValidSelectorList(await getGapfillSelectors(domain)).filter(
     (s) => !rejected.has(s),
   )
-  const safe = raw.filter(isSafeGapfillSelector)
-  // Purge selectors that turned out to hit real UI so they never apply again.
+  const safe = raw.filter((s) => confirmed.has(s) || isSafeGapfillSelector(s))
+  // Move selectors that turned out to hit real UI to the vetoed list so they
+  // never apply, but stay reviewable in the popup.
   if (safe.length !== raw.length) {
-    log('purged unsafe gap-fill selectors:', raw.filter((s) => !safe.includes(s)))
-    void setGapfillSelectors(bareDomain(), safe)
+    const unsafe = raw.filter((s) => !safe.includes(s))
+    log('safety guard vetoed cached gap-fill selectors:', unsafe)
+    await setGapfillSelectors(domain, safe)
+    await setVetoedGapfill(domain, unsafe)
   }
   activeGapfill = safe
+  activeVetoed = ((await getVetoedGapfill(domain)) ?? []).filter(
+    (s) => !rejected.has(s),
+  )
   const existing = document.getElementById(GAPFILL_STYLE_ID)
   if (safe.length === 0) {
     existing?.remove()
@@ -368,21 +386,30 @@ function pageHasLoadedAds(): boolean {
  * heavy ad page doesn't flood the popup. */
 function describeHiddenElements() {
   const isYt = isYouTube()
-  const sources: Array<{ selector: string; source: 'list' | 'ai' | 'youtube' }> =
-    [
-      ...activeSelectors.map((selector) => ({
-        selector,
-        source: (isYt && /^ytd-|^#masthead|skip-sensei-adcard/.test(selector)
-          ? 'youtube'
-          : 'list') as 'list' | 'youtube',
-      })),
-      ...activeGapfill.map((selector) => ({
-        selector,
-        source: 'ai' as const,
-      })),
-    ]
+  const sources: Array<{
+    selector: string
+    source: 'list' | 'ai' | 'youtube'
+    vetoed?: boolean
+  }> = [
+    ...activeSelectors.map((selector) => ({
+      selector,
+      source: (isYt && /^ytd-|^#masthead|skip-sensei-adcard/.test(selector)
+        ? 'youtube'
+        : 'list') as 'list' | 'youtube',
+    })),
+    ...activeGapfill.map((selector) => ({
+      selector,
+      source: 'ai' as const,
+    })),
+    // AI proposals the safety guard kept visible — reviewable, not hidden.
+    ...activeVetoed.map((selector) => ({
+      selector,
+      source: 'ai' as const,
+      vetoed: true,
+    })),
+  ]
   const out = []
-  for (const { selector, source } of sources) {
+  for (const { selector, source, vetoed } of sources) {
     let els: Element[] = []
     try {
       els = Array.from(document.querySelectorAll(selector))
@@ -394,6 +421,7 @@ function describeHiddenElements() {
     out.push({
       selector,
       source,
+      ...(vetoed ? { vetoed } : {}),
       count: els.length,
       tag: first.tagName.toLowerCase(),
       text: (first.textContent ?? '').trim().replace(/\s+/g, ' ').slice(0, 70),
@@ -408,6 +436,7 @@ function describeHiddenElements() {
 async function rejectHiddenSelector(selector: string) {
   const domain = bareDomain()
   await addRejectedGapfill(domain, selector)
+  await removeVetoedGapfill(domain, selector)
   const current = await getGapfillSelectors(domain)
   await setGapfillSelectors(
     domain,
@@ -416,6 +445,19 @@ async function rejectHiddenSelector(selector: string) {
   await apply() // re-inject filter-list/YouTube style without it
   await applyGapfill() // and the gap-fill style → un-hides immediately
   reportGapfillFeedback(selector, 'not-ad')
+}
+
+/** User confirmed a hidden element is an ad — and, for a guard-vetoed
+ * proposal, overrode the guard: hide it here from now on. */
+async function confirmHiddenSelector(selector: string) {
+  const domain = bareDomain()
+  if (activeVetoed.includes(selector)) {
+    await addConfirmedGapfill(domain, selector)
+    await addGapfillSelectors(domain, [selector])
+    await removeVetoedGapfill(domain, selector)
+    await applyGapfill() // hides it immediately (confirmed skips the guard)
+  }
+  reportGapfillFeedback(selector, 'ad')
 }
 
 function reportGapfillFeedback(selector: string, verdict: 'ad' | 'not-ad') {
@@ -441,8 +483,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     )
     return true // async response
   } else if (message?.type === 'skipSensei:confirmHiddenSelector') {
-    reportGapfillFeedback(message.selector, 'ad')
-    sendResponse({ ok: true })
+    void confirmHiddenSelector(message.selector).then(() =>
+      sendResponse({ ok: true }),
+    )
+    return true // async response
   } else if (message?.type === 'skipSensei:scanForAds') {
     void scanForAds().then(sendResponse)
     return true // async response
@@ -512,26 +556,75 @@ function collectAdSuspects(): string {
   return parts.join('\n')
 }
 
+/**
+ * Ask the AI for ad selectors and process its proposals HERE, where the DOM
+ * truth lives: the safety guard splits them into kept (hidden + cached) and
+ * vetoed (kept visible, reviewable in the popup), and the activity log records
+ * what actually happened — not what the AI claimed. Vetoed proposals persist
+ * so the once-per-domain guard still holds when everything gets vetoed
+ * (otherwise the purge re-empties the cache and the scan loops forever,
+ * burning an LLM call per page load — the claude.ai bug).
+ */
+async function requestAndProcessProposals() {
+  const domain = bareDomain()
+  const html = collectAdSuspects()
+  if (!html.trim()) {
+    await setVetoedGapfill(domain, []) // nothing ad-like — remember we looked
+    return
+  }
+  const proposals: string[] | null = await chrome.runtime
+    .sendMessage({ type: 'skipSensei:findAdSelectors', html })
+    .catch(() => null)
+  if (proposals === null) return // transient failure — retry next visit
+  const rejected = new Set(await getRejectedGapfill(domain))
+  const valid = isValidSelectorList(proposals).filter((s) => !rejected.has(s))
+  const kept = valid.filter(isSafeGapfillSelector)
+  const vetoed = valid.filter((s) => !kept.includes(s))
+  if (kept.length > 0) await addGapfillSelectors(domain, kept)
+  await setVetoedGapfill(domain, vetoed) // also marks the domain as scanned
+  if (kept.length > 0) {
+    log('gap-filler hid', kept.length, 'ad element(s):', kept)
+    void recordActivity(
+      'AI enhancements',
+      `hid ${kept.length} ad element(s) the filter lists missed`,
+      domain,
+    )
+  }
+  if (vetoed.length > 0) {
+    log('safety guard kept', vetoed.length, 'AI proposal(s) visible:', vetoed)
+    void recordActivity(
+      'AI enhancements',
+      `AI flagged ${vetoed.length} element(s) but the safety guard kept them visible (they look like real UI) — rate them in the popup`,
+      domain,
+    )
+  }
+  if (kept.length + vetoed.length > 0) {
+    // Which sites the lists miss, what the AI matched, and what the guard
+    // refused — recurring patterns promote into shipped rules or prompt fixes.
+    void chrome.runtime
+      .sendMessage({
+        type: 'skipSensei:event',
+        kind: 'gapfill',
+        fields: {
+          domain,
+          kept: kept.slice(0, 5).join(' , '),
+          vetoed: vetoed.slice(0, 5).join(' , '),
+        },
+      })
+      .catch(() => {})
+  }
+}
+
 async function runGapfill() {
   if (!(await blockingActive())) return
   const settings = await getSettings()
   if (!settings.aiEnhancements) return
-  // Already learned this domain — the cached selectors were applied on load;
-  // don't spend another LLM call.
+  // Already scanned this domain (kept selectors were applied on load, vetoed
+  // ones await review in the popup) — don't spend another LLM call.
   if ((await getGapfillSelectors(bareDomain())).length > 0) return
-  const html = collectAdSuspects()
-  if (!html.trim()) return
-  const selectors: string[] | null = await chrome.runtime
-    .sendMessage({
-      type: 'skipSensei:findAdSelectors',
-      html,
-      domain: bareDomain(),
-    })
-    .catch(() => null)
-  if (selectors && selectors.length > 0) {
-    log('gap-filler hid', selectors.length, 'ad element(s):', selectors)
-    void applyGapfill()
-  }
+  if ((await getVetoedGapfill(bareDomain())) !== null) return
+  await requestAndProcessProposals()
+  await applyGapfill()
 }
 
 /**
@@ -542,17 +635,7 @@ async function runGapfill() {
 async function scanForAds() {
   const settings = await getSettings()
   if (settings.aiEnhancements && !settings.localOnlyMode) {
-    const html = collectAdSuspects()
-    if (html.trim()) {
-      const selectors: string[] | null = await chrome.runtime
-        .sendMessage({
-          type: 'skipSensei:findAdSelectors',
-          html,
-          domain: bareDomain(),
-        })
-        .catch(() => null)
-      if (selectors?.length) log('manual scan proposed:', selectors)
-    }
+    await requestAndProcessProposals()
   }
   await applyGapfill()
   return describeHiddenElements()

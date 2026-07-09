@@ -247,8 +247,7 @@ export type Message =
   | {
       type: 'skipSensei:findAdSelectors'
       html: string
-      domain: string
-    } // → string[] (AI-found ad selectors, also cached for the domain)
+    } // → string[] (raw AI proposals; the content script vets, caches, and logs)
   | { type: 'skipSensei:reviewPopup'; html: string } // → boolean (hide this overlay?)
   | { type: 'skipSensei:logActivity'; feature: string; action: string } // content-script action → activity log
   | { type: 'skipSensei:findConsentReject'; html: string } // → string | null (reject-button selector)
@@ -284,6 +283,9 @@ export interface HiddenElement {
   text: string
   /** 'list' = filter-list selector, 'ai' = AI gap-filler, 'youtube' = YT ads. */
   source: 'list' | 'ai' | 'youtube'
+  /** AI proposed it but the safety guard kept it visible (looks like real UI).
+   * Shown in the review so the user can 👍 (hide it anyway) or 👎 (dismiss). */
+  vetoed?: boolean
 }
 
 export type SponsorEngineStatus =

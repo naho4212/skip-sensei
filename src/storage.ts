@@ -334,6 +334,62 @@ export async function addRejectedGapfill(domain: string, selector: string) {
   await chrome.storage.local.set({ [GAPFILL_REJECTED_KEY]: all })
 }
 
+// Per-domain selectors the AI proposed but the safety guard refused to apply
+// (they looked like real UI). Shown in the popup review as "kept visible" so
+// the user can rate them. The domain key's PRESENCE (even with an empty list)
+// means "the gap-filler already scanned this domain" — that's what stops the
+// once-per-domain AI scan from re-running forever on sites where every
+// proposal gets vetoed.
+const GAPFILL_VETOED_KEY = 'skipSensei.gapfillVetoed'
+
+/** null = this domain has never been AI-scanned; [] = scanned, nothing vetoed. */
+export async function getVetoedGapfill(domain: string): Promise<string[] | null> {
+  const result = await chrome.storage.local.get(GAPFILL_VETOED_KEY)
+  const all: Record<string, string[]> = result[GAPFILL_VETOED_KEY] ?? {}
+  return all[domain] ?? null
+}
+
+export async function setVetoedGapfill(domain: string, selectors: string[]) {
+  const result = await chrome.storage.local.get(GAPFILL_VETOED_KEY)
+  const all: Record<string, string[]> = result[GAPFILL_VETOED_KEY] ?? {}
+  const existing = new Set(all[domain] ?? [])
+  for (const s of selectors) existing.add(s)
+  all[domain] = [...existing].slice(0, 12)
+  const domains = Object.keys(all)
+  if (domains.length > 300) {
+    for (const d of domains.slice(0, domains.length - 300)) delete all[d]
+  }
+  await chrome.storage.local.set({ [GAPFILL_VETOED_KEY]: all })
+}
+
+/** Drop one selector after the user rated it; keeps the domain key (= scanned). */
+export async function removeVetoedGapfill(domain: string, selector: string) {
+  const result = await chrome.storage.local.get(GAPFILL_VETOED_KEY)
+  const all: Record<string, string[]> = result[GAPFILL_VETOED_KEY] ?? {}
+  if (!all[domain]) return
+  all[domain] = all[domain].filter((s) => s !== selector)
+  await chrome.storage.local.set({ [GAPFILL_VETOED_KEY]: all })
+}
+
+// Per-domain selectors the USER confirmed as ads after the safety guard vetoed
+// them ("it IS an ad — hide it"). Exempt from the guard on future applies.
+const GAPFILL_CONFIRMED_KEY = 'skipSensei.gapfillConfirmed'
+
+export async function getConfirmedGapfill(domain: string): Promise<string[]> {
+  const result = await chrome.storage.local.get(GAPFILL_CONFIRMED_KEY)
+  const all: Record<string, string[]> = result[GAPFILL_CONFIRMED_KEY] ?? {}
+  return all[domain] ?? []
+}
+
+export async function addConfirmedGapfill(domain: string, selector: string) {
+  const result = await chrome.storage.local.get(GAPFILL_CONFIRMED_KEY)
+  const all: Record<string, string[]> = result[GAPFILL_CONFIRMED_KEY] ?? {}
+  const list = new Set(all[domain] ?? [])
+  list.add(selector)
+  all[domain] = [...list].slice(-50)
+  await chrome.storage.local.set({ [GAPFILL_CONFIRMED_KEY]: all })
+}
+
 // ---------------------------------------------------------------------------
 // Cloud LLM usage tracking — monthly tokens/requests + daily request count.
 // ---------------------------------------------------------------------------

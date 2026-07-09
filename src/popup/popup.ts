@@ -246,8 +246,9 @@ async function renderHiddenReview() {
 }
 
 function paintHiddenItems(tabId: number, items: HiddenElement[]) {
-  $('hidden-title').textContent = items.length
-    ? `Hidden ads here (${items.length})`
+  const hiddenCount = items.filter((i) => !i.vetoed).length
+  $('hidden-title').textContent = hiddenCount
+    ? `Hidden ads here (${hiddenCount})`
     : 'Hidden ads here'
   const list = $<HTMLUListElement>('hidden-list')
   list.replaceChildren(...items.map((item) => hiddenItemRow(tabId, item)))
@@ -262,7 +263,7 @@ const SOURCE_TAG: Record<string, string> = {
 
 function hiddenItemRow(tabId: number, item: HiddenElement): HTMLLIElement {
   const li = document.createElement('li')
-  li.className = 'hidden-item'
+  li.className = item.vetoed ? 'hidden-item vetoed' : 'hidden-item'
 
   const info = document.createElement('div')
   info.className = 'hidden-info'
@@ -277,6 +278,14 @@ function hiddenItemRow(tabId: number, item: HiddenElement): HTMLLIElement {
   const detail = document.createElement('span')
   detail.textContent = `${item.tag || '?'}${item.count > 1 ? ` ×${item.count}` : ''}`
   meta.append(src, detail)
+  if (item.vetoed) {
+    const kept = document.createElement('span')
+    kept.className = 'hidden-src src-vetoed'
+    kept.textContent = 'kept visible'
+    kept.title =
+      'The AI flagged this as an ad, but the safety guard kept it visible because it looks like real UI'
+    meta.append(kept)
+  }
   info.append(label, meta)
 
   const actions = document.createElement('div')
@@ -284,11 +293,15 @@ function hiddenItemRow(tabId: number, item: HiddenElement): HTMLLIElement {
   const up = document.createElement('button')
   up.className = 'hidden-btn'
   up.textContent = '👍'
-  up.title = 'Yes, this is an ad'
+  up.title = item.vetoed
+    ? 'It is an ad — hide it from now on'
+    : 'Yes, this is an ad'
   const down = document.createElement('button')
   down.className = 'hidden-btn'
   down.textContent = '👎'
-  down.title = 'Not an ad — un-hide and never hide here'
+  down.title = item.vetoed
+    ? 'Not an ad — never flag it here again'
+    : 'Not an ad — un-hide and never hide here'
   up.addEventListener('click', () => {
     void chrome.tabs
       .sendMessage(tabId, {

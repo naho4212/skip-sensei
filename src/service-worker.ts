@@ -13,7 +13,6 @@ import { initPruneRegistration } from './prune-register'
 import { fetchSponsorBlockSegments } from './sponsorblock'
 import { initErrorReporting, reportError, reportEvent } from './error-reporting'
 import {
-  addGapfillSelectors,
   getCachedAnalysis,
   getSettings,
   incrementStat,
@@ -304,28 +303,19 @@ async function reviewPopupMsg(html: string, host?: string): Promise<boolean> {
   }
 }
 
-/** Gap-filler: ask the LLM for ad selectors the filter lists missed; cache them. */
-async function findAds(html: string, domain: string): Promise<string[]> {
+/**
+ * Gap-filler: ask the LLM for ad selectors the filter lists missed. Returns
+ * the raw proposals — the CONTENT SCRIPT decides what actually gets hidden
+ * (safety guard), caches the survivors, and logs/reports the honest outcome.
+ * Caching or logging here would claim "found N ads" for proposals the guard
+ * then vetoes as real UI (the claude.ai false-positive loop).
+ */
+async function findAds(html: string): Promise<string[]> {
   const settings = await getSettings()
   if (!settings.aiEnhancements) return []
   const controller = new AbortController()
   try {
-    const selectors = await findAdSelectors(html, settings, controller.signal)
-    if (selectors.length > 0) {
-      await addGapfillSelectors(domain, selectors)
-      void recordActivity(
-        'AI enhancements',
-        `found ${selectors.length} ad element(s) the filter lists missed`,
-        domain,
-      )
-      // Signals which sites the filter lists miss + what the AI matched, so
-      // recurring patterns can be promoted into shipped rules.
-      void reportEvent('gapfill', {
-        domain,
-        selectors: selectors.slice(0, 5).join(' , '),
-      })
-    }
-    return selectors
+    return await findAdSelectors(html, settings, controller.signal)
   } catch {
     return []
   }
@@ -432,7 +422,7 @@ chrome.runtime.onMessage.addListener(
         void findSelector(message.html, message.description).then(sendResponse)
         return true
       case 'skipSensei:findAdSelectors':
-        void findAds(message.html, message.domain).then(sendResponse)
+        void findAds(message.html).then(sendResponse)
         return true
       case 'skipSensei:reviewPopup':
         void reviewPopupMsg(message.html, senderHost(sender)).then(sendResponse)

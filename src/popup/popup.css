@@ -535,6 +535,16 @@ body.disabled main {
   color: #ff6b6b;
   background: rgba(255, 107, 107, 0.14);
 }
+/* AI proposal the safety guard refused to hide (looks like real UI). */
+.hidden-src.src-vetoed {
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.14);
+  text-transform: none;
+  letter-spacing: 0;
+}
+.hidden-item.vetoed .hidden-label {
+  opacity: 0.65;
+}
 .hidden-actions {
   display: flex;
   gap: 4px;
