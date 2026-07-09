@@ -254,12 +254,14 @@ function buildPlaceholderCss(selectors: string[], dark: boolean): string {
     `${slots}{position:relative!important}` +
     `${children}{visibility:hidden!important}` +
     `${boxes}{content:"";position:absolute;inset:0;border-radius:16px;` +
-    `background:${dark ? 'rgba(124,58,237,0.02)' : 'rgba(124,58,237,0.015)'};` +
-    `border:1px dashed ${dark ? 'rgba(241,241,241,0.05)' : 'rgba(12,12,12,0.05)'}}` +
+    `background:${dark ? 'rgba(124,58,237,0.05)' : 'rgba(124,58,237,0.04)'};` +
+    `border:1px dashed ${dark ? 'rgba(241,241,241,0.14)' : 'rgba(12,12,12,0.14)'}}` +
+    // 0.55, not the design system's 0.3: at 0.3 users read the card as an
+    // unstyled blank hole (reported twice) — the mark has to say "handled".
     `${marks}{content:"AD SENSEI";position:absolute;inset:0;display:flex;` +
     `align-items:center;justify-content:center;` +
     `font:900 15px/1 Roboto,Arial,sans-serif;letter-spacing:-0.02em;` +
-    `white-space:nowrap;opacity:0.3;pointer-events:none;` +
+    `white-space:nowrap;opacity:0.55;pointer-events:none;` +
     `background:linear-gradient(90deg,#7c3aed 2.15ch,${senseiColor} 2.15ch);` +
     `-webkit-background-clip:text;background-clip:text;color:transparent}`
   )
@@ -310,8 +312,8 @@ function buildSlotBrand(radius = 12): HTMLElement {
   overlay.style.cssText =
     'position:absolute;inset:0;box-sizing:border-box;display:flex;' +
     `align-items:center;justify-content:center;border-radius:${radius}px;` +
-    `background:${dark ? 'rgba(124,58,237,0.02)' : 'rgba(124,58,237,0.015)'};` +
-    `border:1px dashed ${dark ? 'rgba(241,241,241,0.05)' : 'rgba(12,12,12,0.05)'};` +
+    `background:${dark ? 'rgba(124,58,237,0.05)' : 'rgba(124,58,237,0.04)'};` +
+    `border:1px dashed ${dark ? 'rgba(241,241,241,0.14)' : 'rgba(12,12,12,0.14)'};` +
     'pointer-events:none;font-family:Roboto,Arial,sans-serif;'
   // The placeholder CSS hides all slot children; the overlay must opt out.
   overlay.style.setProperty('visibility', 'visible', 'important')
@@ -321,8 +323,9 @@ function buildSlotBrand(radius = 12): HTMLElement {
     'display:flex;align-items:baseline;gap:10px;user-select:none;'
   const mark = document.createElement('div')
   mark.style.cssText =
+    // 0.55 matches the placeholder mark — 0.3 read as a blank hole.
     'font-weight:900;letter-spacing:-0.02em;font-size:15px;line-height:1;' +
-    'white-space:nowrap;opacity:0.3;'
+    'white-space:nowrap;opacity:0.55;'
   const ad = document.createElement('span')
   ad.style.color = '#7c3aed'
   ad.textContent = 'AD'
@@ -333,7 +336,7 @@ function buildSlotBrand(radius = 12): HTMLElement {
   const note = document.createElement('div')
   note.style.cssText =
     'font-size:11px;font-weight:400;letter-spacing:0.04em;' +
-    `color:${dark ? 'rgba(241,241,241,0.28)' : 'rgba(12,12,12,0.28)'};`
+    `color:${dark ? 'rgba(241,241,241,0.45)' : 'rgba(12,12,12,0.45)'};`
   note.textContent = 'ad skipped'
   row.append(mark, note)
   overlay.append(row)
