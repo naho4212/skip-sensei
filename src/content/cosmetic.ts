@@ -71,6 +71,9 @@ const SELECTORS = [
   '[data-ad-unit]',
   '[data-ad-region]',
   '[aria-label="Advertisement" i]',
+  // Husks the empty-ad-slot collapser tags (see collapseEmptyAdSlots): space
+  // a site reserved for an ad that network blocking stopped from loading.
+  '.skip-sensei-empty-slot',
 ]
 
 /**
@@ -187,11 +190,25 @@ const BING_SELECTORS = ['.b_ad']
  * request for the DNR lists to block, so cosmetic hiding is the only tool.
  * Each entry uses the site's own stable ad-only markers, live-verified.
  * (YouTube is handled separately above with its own toggle semantics.)
+ *
+ * mode 'placeholder': for layouts that can't reflow (Pinterest's masonry
+ * precomputes absolute pin positions — display:none leaves a bare hole only
+ * Pinterest's own code could close). Instead of hiding, the slot keeps its
+ * size and shows a subtle "Ad hidden" marker. Everywhere else, flow layout
+ * reflows on display:none and content moves up on its own — same as YouTube.
  */
-const FIRST_PARTY_AD_SITES: Array<{ hosts: RegExp; selectors: string[] }> = [
+const FIRST_PARTY_AD_SITES: Array<{
+  hosts: RegExp
+  selectors: string[]
+  mode?: 'placeholder'
+}> = [
   // google.com, google.de, google.co.uk, … (any national TLD)
   { hosts: /(^|\.)google\.[a-z]{2,3}(\.[a-z]{2})?$/, selectors: GOOGLE_SEARCH_SELECTORS },
-  { hosts: /(^|\.)pinterest\.[a-z]{2,3}(\.[a-z]{2})?$/, selectors: PINTEREST_SELECTORS },
+  {
+    hosts: /(^|\.)pinterest\.[a-z]{2,3}(\.[a-z]{2})?$/,
+    selectors: PINTEREST_SELECTORS,
+    mode: 'placeholder',
+  },
   { hosts: /(^|\.)amazon\.[a-z]{2,3}(\.[a-z]{2})?$/, selectors: AMAZON_SELECTORS },
   { hosts: /(^|\.)reddit\.com$/, selectors: REDDIT_SELECTORS },
   { hosts: /(^|\.)bing\.com$/, selectors: BING_SELECTORS },
@@ -211,7 +228,27 @@ function isValidSelectorList(list: string[]): string[] {
 }
 
 function buildCss(selectors: string[]): string {
+  if (selectors.length === 0) return ''
   return `${selectors.join(',')}{display:none!important}`
+}
+
+/** Placeholder mode: keep the slot's size, blank its content, and label it —
+ * for masonry layouts where collapsing would leave a bare hole anyway. */
+function buildPlaceholderCss(selectors: string[]): string {
+  if (selectors.length === 0) return ''
+  const slots = selectors.join(',')
+  const children = selectors.map((s) => `${s} > *`).join(',')
+  const labels = selectors.map((s) => `${s}::after`).join(',')
+  return (
+    `${slots}{position:relative!important}` +
+    `${children}{visibility:hidden!important}` +
+    `${labels}{content:"Ad hidden";position:absolute;inset:0;display:flex;` +
+    `align-items:center;justify-content:center;` +
+    `font:500 11px/1 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;` +
+    `letter-spacing:0.04em;text-transform:uppercase;` +
+    `color:rgba(128,128,136,0.55);border:1.5px dashed rgba(128,128,136,0.3);` +
+    `border-radius:16px;pointer-events:none}`
+  )
 }
 
 function isAllowlisted(allowlist: string[]): boolean {
@@ -251,25 +288,31 @@ async function apply() {
 
   // Per-site "not an ad" selectors the user un-hid stay un-hidden.
   const rejected = new Set(await getRejectedGapfill(bareDomain()))
-  const selectors = [
+  const siteHits = genericOn
+    ? FIRST_PARTY_AD_SITES.filter((site) => site.hosts.test(location.hostname))
+    : []
+  const hideSelectors = [
     ...(genericOn ? SELECTORS : []),
-    ...(genericOn
-      ? FIRST_PARTY_AD_SITES.filter((site) =>
-          site.hosts.test(location.hostname),
-        ).flatMap((site) => site.selectors)
-      : []),
+    ...siteHits
+      .filter((site) => site.mode !== 'placeholder')
+      .flatMap((site) => site.selectors),
     ...(ytOn ? YOUTUBE_SELECTORS : []),
   ].filter((s) => !rejected.has(s))
-  activeSelectors = selectors
+  const placeholderSelectors = siteHits
+    .filter((site) => site.mode === 'placeholder')
+    .flatMap((site) => site.selectors)
+    .filter((s) => !rejected.has(s))
+  activeSelectors = [...hideSelectors, ...placeholderSelectors]
 
   const existing = document.getElementById(STYLE_ID) as HTMLStyleElement | null
-  if (selectors.length === 0) {
+  if (activeSelectors.length === 0) {
     existing?.remove()
     document.getElementById(GAPFILL_STYLE_ID)?.remove()
   } else {
     const style = existing ?? document.createElement('style')
     style.id = STYLE_ID
-    style.textContent = buildCss(selectors)
+    style.textContent =
+      buildCss(hideSelectors) + buildPlaceholderCss(placeholderSelectors)
     if (!existing) (document.head ?? document.documentElement).appendChild(style)
   }
   if (genericOn) void applyGapfill() // hide anything the AI found on prior visits
@@ -472,6 +515,98 @@ function pageHasLoadedAds(): boolean {
     if (AD_IFRAME_HINTS.some((h) => src.includes(h))) return true
   }
   return !!document.querySelector('ins.adsbygoogle[data-ad-status="filled"]')
+}
+
+// ---------------------------------------------------------------------------
+// Empty ad-slot collapser. Network blocking stops the ad request, but many
+// sites pre-reserve the slot (min-height + a bare "AD" label) to avoid layout
+// shift — leaving a big blank box where the ad would have been. Find those
+// husks and tag them so the stylesheet collapses them; the surrounding flow
+// layout reflows and content moves up, same as YouTube. Conservative: only
+// elements that look like ad slots by name or label, hold no real content,
+// and contain nothing interactive.
+// ---------------------------------------------------------------------------
+
+const EMPTY_SLOT_CLASS = 'skip-sensei-empty-slot'
+const SLOT_NAME_RE =
+  /(^|[-_ ])ads?([-_ ]|$)|advert|sponsor|adsense|doubleclick|(^|[-_ ])gpt([-_ ]|$)|dfp/i
+const SLOT_LABEL_RE = /^(ad|ads|advertisement|sponsored)$/i
+
+function isEmptyAdSlot(el: HTMLElement): boolean {
+  const rect = el.getBoundingClientRect()
+  if (rect.height < 60 || rect.height > 1000 || rect.width < 100) return false
+  // Anything interactive or media-bearing is not an empty husk.
+  if (
+    el.querySelector('a[href], button, input, select, textarea, video, canvas')
+  )
+    return false
+  for (const img of el.querySelectorAll('img'))
+    if ((img as HTMLImageElement).naturalWidth > 8) return false
+  for (const frame of el.querySelectorAll<HTMLIFrameElement>('iframe')) {
+    const src = frame.src.toLowerCase()
+    if (
+      src &&
+      !src.startsWith('about:') &&
+      !AD_IFRAME_HINTS.some((h) => src.includes(h))
+    )
+      return false
+  }
+  // The only text allowed is the slot's own "AD"-style label.
+  const text = (el.innerText ?? '').trim()
+  return text === '' || SLOT_LABEL_RE.test(text)
+}
+
+function collapseEmptyAdSlots() {
+  // Feature rides the same switch as the rest of cosmetic hiding; a user 👎
+  // on .skip-sensei-empty-slot removes it from activeSelectors for the domain.
+  if (!activeSelectors.includes(`.${EMPTY_SLOT_CLASS}`)) return
+  // Name-based candidates: the element's OWN id/class declares it an ad slot.
+  // Trusted even inside <header> — masthead billboard slots are a standard
+  // news-site pattern (e.g. Business Insider's .masthead-ad) — because
+  // isEmptyAdSlot still requires it to be an empty, non-interactive husk.
+  const named = new Set<HTMLElement>()
+  for (const el of document.querySelectorAll<HTMLElement>(
+    'div[id*="ad" i], div[class*="ad" i], aside[id*="ad" i], aside[class*="ad" i], section[id*="ad" i], section[class*="ad" i]',
+  )) {
+    if (SLOT_NAME_RE.test(el.id) || SLOT_NAME_RE.test(el.className))
+      named.add(el)
+  }
+  // Label-based candidates: a bare "AD" tag marks the slot; walk up to the
+  // reserved box. These get the stricter no-nav/header guard since walking
+  // up can overshoot into site chrome. (A box that also holds real content
+  // fails the text check in isEmptyAdSlot, so overshooting stays safe.)
+  const labelled = new Set<HTMLElement>()
+  for (const label of document.querySelectorAll('span, div, p, small, b')) {
+    if (label.children.length > 0) continue
+    if (!SLOT_LABEL_RE.test((label.textContent ?? '').trim())) continue
+    let box = label.parentElement
+    for (let i = 0; i < 3 && box; i++) {
+      if (box.getBoundingClientRect().height >= 60) {
+        if (!named.has(box)) labelled.add(box)
+        break
+      }
+      box = box.parentElement
+    }
+  }
+  let tagged = 0
+  const collapse = (el: HTMLElement, guard: string) => {
+    if (el.classList.contains(EMPTY_SLOT_CLASS)) return
+    if (el.closest(guard)) return
+    if (isEmptyAdSlot(el)) {
+      el.classList.add(EMPTY_SLOT_CLASS)
+      tagged++
+    }
+  }
+  for (const el of named) collapse(el, 'form')
+  for (const el of labelled) collapse(el, 'nav, header, footer, form')
+  if (tagged > 0) log('collapsed', tagged, 'empty ad slot(s)')
+}
+
+async function scheduleSlotCollapse() {
+  if (!(await blockingActive())) return
+  // Two passes: slots settle at different times (lazy ad scripts give up).
+  setTimeout(collapseEmptyAdSlots, 2000)
+  setTimeout(collapseEmptyAdSlots, 6000)
 }
 
 /** Human-readable summary of everything the extension is hiding on this page
@@ -797,6 +932,7 @@ function onPageReady() {
   setTimeout(() => void apply(), 2000)
   // Give ads time to load, then scan once for anything the lists missed.
   setTimeout(() => void runGapfill(), 3500)
+  void scheduleSlotCollapse() // reclaim blank space where blocked ads were
   initConsent() // AI cookie-consent auto-reject
 }
 
