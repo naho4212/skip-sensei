@@ -3,6 +3,7 @@ import {
   getGapfillSelectors,
   getSettings,
   onSettingsChanged,
+  setGapfillSelectors,
 } from '../storage'
 import { initConsent } from './consent'
 import { initPopupReviewer } from './popup-reviewer'
@@ -264,17 +265,59 @@ function stopAdBadgeScanner() {
     .forEach((el) => el.classList.remove(AD_CARD_CLASS))
 }
 
+/**
+ * A gap-fill selector is only safe to APPLY if it plausibly targets ads and
+ * not the site's own UI. The AI occasionally mislabels app chrome as ads
+ * (e.g. it flagged Claude's sidebar nav), so refuse any selector that:
+ *  - matches many elements (ads are few), or
+ *  - matches a link/button or the primary nav/header, or
+ *  - matches a container that holds several links (a menu/nav, not an ad).
+ * Cheap and DOM-specific, so it also self-heals a bad cached selector.
+ */
+function isSafeGapfillSelector(sel: string): boolean {
+  let els: Element[]
+  try {
+    els = Array.from(document.querySelectorAll(sel))
+  } catch {
+    return false
+  }
+  if (els.length === 0) return true // nothing here now — harmless
+  if (els.length > 6) return false // too broad to be "a few ads"
+  return els.every((el) => {
+    const tag = el.tagName.toLowerCase()
+    if (tag === 'a' || tag === 'button' || tag === 'nav' || tag === 'header')
+      return false
+    if (
+      el.closest(
+        'nav, header, [role="navigation"], [role="banner"], [role="menu"], [role="menubar"]',
+      )
+    )
+      return false
+    // A container holding several links is navigation, not an ad unit.
+    if (el.querySelectorAll('a[href], button').length >= 3) return false
+    return true
+  })
+}
+
 /** Apply this domain's AI-discovered ad selectors (from prior visits). */
 async function applyGapfill() {
-  const cached = isValidSelectorList(await getGapfillSelectors(bareDomain()))
-  if (cached.length === 0) return
-  let style = document.getElementById(GAPFILL_STYLE_ID) as HTMLStyleElement | null
-  if (!style) {
-    style = document.createElement('style')
-    style.id = GAPFILL_STYLE_ID
-    ;(document.head ?? document.documentElement).appendChild(style)
+  const raw = isValidSelectorList(await getGapfillSelectors(bareDomain()))
+  const safe = raw.filter(isSafeGapfillSelector)
+  // Purge selectors that turned out to hit real UI so they never apply again.
+  if (safe.length !== raw.length) {
+    log('purged unsafe gap-fill selectors:', raw.filter((s) => !safe.includes(s)))
+    void setGapfillSelectors(bareDomain(), safe)
   }
-  style.textContent = buildCss(cached)
+  const existing = document.getElementById(GAPFILL_STYLE_ID)
+  if (safe.length === 0) {
+    existing?.remove()
+    return
+  }
+  const style =
+    (existing as HTMLStyleElement | null) ?? document.createElement('style')
+  style.id = GAPFILL_STYLE_ID
+  style.textContent = buildCss(safe)
+  if (!existing) (document.head ?? document.documentElement).appendChild(style)
 }
 
 void apply()
@@ -398,6 +441,11 @@ async function runGapfill() {
 
 function onPageReady() {
   scheduleReloadChecks()
+  // Re-apply now the DOM exists: the gap-fill safety check needs real elements
+  // to see whether a cached selector is hitting the site's own UI (it can't at
+  // document_start), and purge it if so. A short follow-up catches late nav.
+  void apply()
+  setTimeout(() => void apply(), 2000)
   // Give ads time to load, then scan once for anything the lists missed.
   setTimeout(() => void runGapfill(), 3500)
   initConsent() // AI cookie-consent auto-reject

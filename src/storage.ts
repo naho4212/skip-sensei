@@ -305,6 +305,16 @@ export async function addGapfillSelectors(domain: string, selectors: string[]) {
   await chrome.storage.local.set({ [GAPFILL_KEY]: all })
 }
 
+/** Replace a domain's gap-fill selectors wholesale (used to purge selectors
+ * that turned out to match real UI, not ads). Empty list removes the domain. */
+export async function setGapfillSelectors(domain: string, selectors: string[]) {
+  const result = await chrome.storage.local.get(GAPFILL_KEY)
+  const all: Record<string, string[]> = result[GAPFILL_KEY] ?? {}
+  if (selectors.length === 0) delete all[domain]
+  else all[domain] = selectors
+  await chrome.storage.local.set({ [GAPFILL_KEY]: all })
+}
+
 // ---------------------------------------------------------------------------
 // Cloud LLM usage tracking — monthly tokens/requests + daily request count.
 // ---------------------------------------------------------------------------
