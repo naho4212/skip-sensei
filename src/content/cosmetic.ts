@@ -74,6 +74,9 @@ const SELECTORS = [
   // Husks the empty-ad-slot collapser tags (see collapseEmptyAdSlots): space
   // a site reserved for an ad that network blocking stopped from loading.
   '.skip-sensei-empty-slot',
+  // Feed cards the global sponsored-card scanner tags by their disclosure
+  // label (see scanSponsoredCards).
+  '.skip-sensei-sponsored-card',
 ]
 
 /**
@@ -407,6 +410,11 @@ async function apply() {
 
   if (ytOn) startAdBadgeScanner()
   else stopAdBadgeScanner()
+
+  // Global disclosure-label scanner on the long tail; curated hosts have
+  // precise site rules instead.
+  if (genericOn && !isCuratedHost()) startSponsoredCardScanner()
+  else stopSponsoredCardScanner()
 }
 
 // ---------------------------------------------------------------------------
@@ -741,6 +749,127 @@ async function scheduleSlotCollapse() {
   setTimeout(() => void collapseEmptyAdSlots(), 6000)
 }
 
+// ---------------------------------------------------------------------------
+// Global sponsored-card scanner. The one ad signal that generalizes to every
+// site and language is the legally-mandated disclosure label ("Sponsored",
+// "Anzeige", "広告", …). Find exact-text labels, climb to the containing FEED
+// CARD — verified by the one-of-several-similar-siblings pattern, which is
+// what bounds the blast radius: a wrong match costs one card in a feed, never
+// a page section — and hide it via the stylesheet. Curated hosts (YouTube +
+// the first-party table) are excluded; they have precise site rules. Runs
+// continuously like the YouTube badge scanner, so cards that stream in later
+// are caught too. Recovery: the popup review lists tagged cards; 👎 un-hides
+// and disables the scanner for the domain.
+// ---------------------------------------------------------------------------
+
+const SPONSORED_CARD_CLASS = 'skip-sensei-sponsored-card'
+
+function isCuratedHost(): boolean {
+  return (
+    isYouTube() ||
+    FIRST_PARTY_AD_SITES.some((site) => site.hosts.test(location.hostname))
+  )
+}
+
+/** Climb from a disclosure label to the feed card it discloses, or null when
+ * no bounded card presents itself — then we leave it alone (fail open). */
+function findSponsoredFeedCard(label: Element): HTMLElement | null {
+  if (
+    label.closest(
+      'nav, header, footer, form, [role="navigation"], [role="banner"], [role="menu"], [role="menubar"]',
+    )
+  )
+    return null
+  const lr = label.getBoundingClientRect()
+  // Ad badges are small; a headline-sized "Sponsored" is content, not a badge.
+  if (lr.width === 0 || lr.height === 0 || lr.height > 40) return null
+  let node = label.parentElement
+  for (let i = 0; i < 7 && node; i++, node = node.parentElement) {
+    const r = node.getBoundingClientRect()
+    if (r.height > 1200) return null // grew past card size — give up
+    if (r.height < 80 || r.width < 120) continue
+    if (
+      r.width >= window.innerWidth * 0.98 &&
+      r.height >= window.innerHeight * 0.8
+    )
+      return null // page section, not a card
+    const parent = node.parentElement
+    if (!parent) return null
+    // The feed-card pattern: this element is one of several same-tag
+    // siblings (organic cards around the ad).
+    const similar = [...parent.children].filter(
+      (c) => c.tagName === node!.tagName,
+    )
+    if (similar.length >= 3) {
+      if (node.querySelector('input, select, textarea')) return null
+      return node
+    }
+  }
+  return null
+}
+
+function scanSponsoredCards() {
+  if (!document.body) return
+  if (!activeSelectors.includes(`.${SPONSORED_CARD_CLASS}`)) return
+  let tagged = 0
+  for (const label of document.querySelectorAll('span, div, p, small, b, em')) {
+    if (label.children.length > 0) continue
+    if (!DISCLOSURE_LABEL_RE.test((label.textContent ?? '').trim())) continue
+    const card = findSponsoredFeedCard(label)
+    if (card && !card.classList.contains(SPONSORED_CARD_CLASS)) {
+      card.classList.add(SPONSORED_CARD_CLASS)
+      tagged++
+      log('sponsored-card scanner hid a labelled card:', card.tagName)
+    }
+  }
+  if (tagged > 0) {
+    void recordActivity(
+      'Block all ads',
+      `hid ${tagged} sponsored post(s) by their ad label`,
+      bareDomain(),
+    )
+    // Mining data: which long-tail domains carry labelled first-party ads —
+    // recurring ones can be promoted into shipped per-site rules.
+    void chrome.runtime
+      .sendMessage({
+        type: 'skipSensei:event',
+        kind: 'sponsored_card',
+        fields: { domain: bareDomain(), count: String(tagged) },
+      })
+      .catch(() => {})
+  }
+}
+
+let sponsoredObserver: MutationObserver | null = null
+let sponsoredScanScheduled = false
+
+function scheduleSponsoredScan() {
+  if (sponsoredScanScheduled) return
+  sponsoredScanScheduled = true
+  setTimeout(() => {
+    sponsoredScanScheduled = false
+    scanSponsoredCards()
+  }, 800)
+}
+
+function startSponsoredCardScanner() {
+  scanSponsoredCards()
+  if (sponsoredObserver) return
+  sponsoredObserver = new MutationObserver(() => scheduleSponsoredScan())
+  sponsoredObserver.observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+  })
+}
+
+function stopSponsoredCardScanner() {
+  sponsoredObserver?.disconnect()
+  sponsoredObserver = null
+  document
+    .querySelectorAll(`.${SPONSORED_CARD_CLASS}`)
+    .forEach((el) => el.classList.remove(SPONSORED_CARD_CLASS))
+}
+
 /** Human-readable summary of everything the extension is hiding on this page
  * (filter-list + YouTube + AI gap-fill), for the popup review. Capped so a
  * heavy ad page doesn't flood the popup. */
@@ -819,11 +948,19 @@ async function rejectHiddenSelector(selector: string) {
   const domain = bareDomain()
   await addRejectedGapfill(domain, selector)
   await removeVetoedGapfill(domain, selector)
-  // Collapser outcomes: un-tag every slot right now (the rejected list stops
-  // future passes; see collapseEmptyAdSlots).
-  if (selector === `.${EMPTY_SLOT_CLASS}` || selector === `.${BRANDED_SLOT_CLASS}`) {
+  // Scanner/collapser outcomes: un-tag every element right now (the rejected
+  // list stops future passes via the activeSelectors gate).
+  if (
+    selector === `.${EMPTY_SLOT_CLASS}` ||
+    selector === `.${BRANDED_SLOT_CLASS}` ||
+    selector === `.${SPONSORED_CARD_CLASS}`
+  ) {
     for (const el of document.querySelectorAll(selector)) {
-      el.classList.remove(EMPTY_SLOT_CLASS, BRANDED_SLOT_CLASS)
+      el.classList.remove(
+        EMPTY_SLOT_CLASS,
+        BRANDED_SLOT_CLASS,
+        SPONSORED_CARD_CLASS,
+      )
       el.querySelector(`:scope > .${SLOT_BRAND_CLASS}`)?.remove()
     }
   }
@@ -962,9 +1099,14 @@ function scheduleReloadChecks() {
  * become an ad suspect (…downlo-AD…). */
 const CANDIDATE_NAME_RE =
   /(^|[-_ ])(ads?|advert(isement)?s?|sponsored?|promoted)([-_ ]|$)/i
-/** Exact ad-disclosure label text (leaf nodes only). */
-const CANDIDATE_LABEL_RE =
-  /^(sponsored|advertisement|paid content|paid post|promoted)$/i
+/**
+ * Exact ad-disclosure label text (leaf nodes only), across common locales.
+ * This is the one ad signal that generalizes to EVERY site: disclosure
+ * labels are legally mandated almost everywhere ads run. Exact match only —
+ * an article about sponsorship never consists solely of the word.
+ */
+const DISCLOSURE_LABEL_RE =
+  /^(sponsored|promoted|advertisement|paid (content|post|partnership)|anzeige|gesponsert|sponsorisé|publicité|commandité|patrocinado|publicidad|sponsorizzato|pubblicità|gesponsord|advertentie|annons|annonse|reklama|реклама|广告|贊助|広告|スポンサー|스폰서|광고)$/i
 
 /** Deterministic not-UI filter, applied to candidate ELEMENTS before the AI
  * ever sees them. Mirrors isSafeGapfillSelector but works on the element. */
@@ -1066,7 +1208,7 @@ function collectAdCandidates(
   for (const label of document.querySelectorAll('span, div, p, small, b, em')) {
     if (out.length >= 12) break
     if (label.children.length > 0) continue
-    if (!CANDIDATE_LABEL_RE.test((label.textContent ?? '').trim())) continue
+    if (!DISCLOSURE_LABEL_RE.test((label.textContent ?? '').trim())) continue
     let card = label.parentElement
     for (let i = 0; i < 4 && card; i++) {
       const r = card.getBoundingClientRect()
