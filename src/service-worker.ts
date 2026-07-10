@@ -471,17 +471,22 @@ chrome.runtime.onMessage.addListener(
         }
         return false
       case 'skipSensei:getTabBlocked':
-        // Live recount on popup open (a user gesture → generally quota-exempt),
-        // so the number reflects ads that loaded after the page finished. Falls
-        // back to the last badge value if the query is throttled.
-        void getTabBlockCounts(message.tabId).then((counts) =>
-          sendResponse(
-            counts
-              ? counts.ads + counts.trackers
-              : badgeState(message.tabId).blocked,
-          ),
-        )
+        // "Blocked here" = DNR network blocks + cosmetic hides. The network
+        // side is a live recount on popup open (a user gesture → generally
+        // quota-exempt), so it reflects ads that loaded after the page
+        // finished; it also refreshes the stored network count. The cosmetic
+        // side is the content script's live tally. Falls back to the last
+        // stored network count if the live query is throttled.
+        void getTabBlockCounts(message.tabId).then((counts) => {
+          if (counts) setTabBlocked(message.tabId, counts.ads + counts.trackers)
+          sendResponse(tabBlockedTotal(message.tabId))
+        })
         return true
+      case 'skipSensei:cosmeticHideCount':
+        if (sender.tab?.id !== undefined) {
+          setTabCosmetic(sender.tab.id, message.count)
+        }
+        return false
       case 'skipSensei:findSelector':
         void findSelector(message.html, message.description).then(sendResponse)
         return true
@@ -519,18 +524,29 @@ chrome.runtime.onMessage.addListener(
   },
 )
 
-// Per-tab icon badge. Shows the number of ads/elements blocked on the tab; a
-// "↻" takes priority when the page needs a reload to activate/apply blocking.
+// Per-tab icon badge. The count is the sum of two sources: DNR network blocks
+// (getMatchedRules, event-cadence) and cosmetic element hides (reported live by
+// the content script). A "↻" takes priority when the page needs a reload.
 interface TabBadge {
-  blocked: number
+  /** DNR network blocks (ads + trackers) — set by the block counter. */
+  network: number
+  /** Ad elements hidden by the content script — reported live per page. */
+  cosmetic: number
   needsReload: boolean
 }
 const tabBadges = new Map<number, TabBadge>()
 const badgeState = (tabId: number): TabBadge =>
-  tabBadges.get(tabId) ?? { blocked: 0, needsReload: false }
+  tabBadges.get(tabId) ?? { network: 0, cosmetic: 0, needsReload: false }
+
+/** Total shown on the badge / "blocked here": network blocks + hidden ads. */
+const tabBlockedTotal = (tabId: number): number => {
+  const s = badgeState(tabId)
+  return s.network + s.cosmetic
+}
 
 function renderBadge(tabId: number) {
-  const { blocked, needsReload } = badgeState(tabId)
+  const { needsReload } = badgeState(tabId)
+  const blocked = tabBlockedTotal(tabId)
   const text = needsReload
     ? '↻'
     : blocked > 0
@@ -553,13 +569,23 @@ function setReloadBadge(tabId: number, show: boolean) {
   renderBadge(tabId)
 }
 
-// Set the tab's blocked count to the current page snapshot (net-blocker recounts
-// the whole page each poll, so this is a set, not an increment — re-polling can
-// correct the number up but never double-counts it).
+// Set the tab's DNR network count to the current page snapshot (net-blocker
+// recounts the whole page each poll, so this is a set, not an increment —
+// re-polling can correct the number up but never double-counts it).
 function setTabBlocked(tabId: number, count: number) {
   const state = badgeState(tabId)
-  if (state.blocked === count) return
-  state.blocked = count
+  if (state.network === count) return
+  state.network = count
+  tabBadges.set(tabId, state)
+  renderBadge(tabId)
+}
+
+// Set the tab's cosmetic-hide count from the content script's live tally (also
+// a monotonic snapshot, so setting is safe — no double-count on re-report).
+function setTabCosmetic(tabId: number, count: number) {
+  const state = badgeState(tabId)
+  if (state.cosmetic === count) return
+  state.cosmetic = count
   tabBadges.set(tabId, state)
   renderBadge(tabId)
 }
@@ -567,7 +593,7 @@ function setTabBlocked(tabId: number, count: number) {
 // Reset a tab's count when it navigates to a new page (block counts are per-load).
 chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
   if (changeInfo.status === 'loading' && changeInfo.url) {
-    tabBadges.set(tabId, { blocked: 0, needsReload: false })
+    tabBadges.set(tabId, { network: 0, cosmetic: 0, needsReload: false })
     renderBadge(tabId)
   }
 })

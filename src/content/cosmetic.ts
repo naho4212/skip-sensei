@@ -479,6 +479,83 @@ async function apply() {
   // precise site rules instead.
   if (genericOn && !isCuratedHost()) startSponsoredCardScanner()
   else stopSponsoredCardScanner()
+
+  // Live per-page count of the ad elements we hide, reported to the badge and
+  // popup so "blocked here" ticks up as ads appear and are hidden — the one
+  // thing MV3 can count in real time (DNR network blocks can't; see
+  // net-blocker.ts). Top frame owns the tab's count.
+  if (window === window.top) {
+    if (activeSelectors.length > 0) startCosmeticTally()
+    else stopCosmeticTally()
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Live cosmetic-hide counter. Counts UNIQUE elements matching our hide
+// selectors, monotonically (a WeakSet dedupes, so a re-tally never
+// double-counts and a removed element doesn't decrement). Reported to the SW,
+// which adds it to the DNR network count for the badge / "blocked here".
+// ---------------------------------------------------------------------------
+const countedHides = new WeakSet<Element>()
+let cosmeticHideCount = 0
+let cosmeticReportTimer: ReturnType<typeof setTimeout> | null = null
+let cosmeticObserver: MutationObserver | null = null
+let cosmeticTallyScheduled = false
+
+function reportCosmeticCount() {
+  if (cosmeticReportTimer) return // coalesce bursts into one message
+  cosmeticReportTimer = setTimeout(() => {
+    cosmeticReportTimer = null
+    chrome.runtime
+      .sendMessage({
+        type: 'skipSensei:cosmeticHideCount',
+        count: cosmeticHideCount,
+      })
+      .catch(() => {})
+  }, 300)
+}
+
+function tallyCosmeticHides() {
+  if (activeSelectors.length === 0) return
+  let els: NodeListOf<Element>
+  try {
+    els = document.querySelectorAll(activeSelectors.join(','))
+  } catch {
+    return // a selector Chrome won't parse — skip this pass
+  }
+  let added = 0
+  for (const el of els) {
+    if (!countedHides.has(el)) {
+      countedHides.add(el)
+      cosmeticHideCount++
+      added++
+    }
+  }
+  if (added > 0) reportCosmeticCount()
+}
+
+function startCosmeticTally() {
+  tallyCosmeticHides()
+  if (cosmeticObserver) return
+  // Re-tally on DOM changes (new ad slots inject as you scroll / SPA-navigate),
+  // throttled so a busy page doesn't thrash.
+  cosmeticObserver = new MutationObserver(() => {
+    if (cosmeticTallyScheduled) return
+    cosmeticTallyScheduled = true
+    setTimeout(() => {
+      cosmeticTallyScheduled = false
+      tallyCosmeticHides()
+    }, 600)
+  })
+  cosmeticObserver.observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+  })
+}
+
+function stopCosmeticTally() {
+  cosmeticObserver?.disconnect()
+  cosmeticObserver = null
 }
 
 // ---------------------------------------------------------------------------
