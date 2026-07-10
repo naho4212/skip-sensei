@@ -123,6 +123,9 @@ export const DEFAULT_SETTINGS: Settings = {
 export interface Stats {
   allTimeAdSkips: number
   allTimeSponsorSkips: number
+  /** YouTube display ads (feed/sidebar/masthead) hidden — folded into the
+   *  popup's YouTube card, kept separate from video ad-skips. */
+  allTimeYtAdsHidden: number
   allTimeWebAdsBlocked: number
   allTimeTrackersBlocked: number
   allTimeCookiesBlocked: number
@@ -157,6 +160,7 @@ export const FREE_TIER_DAILY_LIMIT: Partial<Record<LlmProvider, number>> = {
 export const DEFAULT_STATS: Stats = {
   allTimeAdSkips: 0,
   allTimeSponsorSkips: 0,
+  allTimeYtAdsHidden: 0,
   allTimeWebAdsBlocked: 0,
   allTimeTrackersBlocked: 0,
   allTimeCookiesBlocked: 0,
@@ -236,8 +240,9 @@ export type Message =
   // reports the number of slots removed for a video); defaults to 1.
   | { type: 'skipSensei:adSkipped'; method: AdSkipMethod; count?: number }
   | { type: 'skipSensei:sponsorSkipped'; videoId: string }
-  // Live per-tab count of ad elements the content script has hidden.
-  | { type: 'skipSensei:cosmeticHideCount'; count: number }
+  // Live per-tab hidden-ad tally: `count` is the page total (badge snapshot),
+  // `added` is how many are new since the last message (fed to lifetime stats).
+  | { type: 'skipSensei:cosmeticHideCount'; count: number; added: number }
   // Content-side operational telemetry → forwarded to reportEvent.
   | {
       type: 'skipSensei:event'
@@ -284,6 +289,7 @@ export type Message =
 export interface SessionStats {
   sessionAdSkips: number
   sessionSponsorSkips: number
+  sessionYtAdsHidden: number
   sessionWebAdsBlocked: number
   sessionTrackersBlocked: number
   sessionCookiesBlocked: number

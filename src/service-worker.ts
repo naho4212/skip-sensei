@@ -52,6 +52,7 @@ const SESSION_STATS_KEY = 'skipSensei.sessionStats'
 const EMPTY_SESSION: SessionStats = {
   sessionAdSkips: 0,
   sessionSponsorSkips: 0,
+  sessionYtAdsHidden: 0,
   sessionWebAdsBlocked: 0,
   sessionTrackersBlocked: 0,
   sessionCookiesBlocked: 0,
@@ -92,6 +93,21 @@ function recordBlockCounts(c: {
       session.sessionWebAdsBlocked += c.ads
       session.sessionTrackersBlocked += c.trackers
       session.sessionCookiesBlocked += c.cookies
+      await chrome.storage.session.set({ [SESSION_STATS_KEY]: session })
+    })
+    .catch(() => {})
+}
+
+/** Fold newly-hidden YouTube display ads into the YouTube card. Kept separate
+ *  from ad-skips (allTimeYtAdsHidden), and safe from double-counting because
+ *  YouTube has no DNR network blocking to overlap with. */
+function recordYtAdsHidden(amount: number) {
+  if (amount <= 0) return
+  statChain = statChain
+    .then(async () => {
+      await incrementStat('allTimeYtAdsHidden', amount)
+      const session = await getSessionStats()
+      session.sessionYtAdsHidden += amount
       await chrome.storage.session.set({ [SESSION_STATS_KEY]: session })
     })
     .catch(() => {})
@@ -493,6 +509,12 @@ chrome.runtime.onMessage.addListener(
       case 'skipSensei:cosmeticHideCount':
         if (sender.tab?.id !== undefined) {
           setTabCosmetic(sender.tab.id, message.count)
+          // On YouTube, hidden display ads have no network-block counterpart,
+          // so fold the newly hidden ones into the YouTube card (elsewhere the
+          // hides stay per-page only, to avoid double-counting DNR blocks).
+          if (sender.tab.url?.includes('youtube.com')) {
+            recordYtAdsHidden(message.added)
+          }
         }
         return false
       case 'skipSensei:findSelector':

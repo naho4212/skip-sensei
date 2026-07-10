@@ -502,6 +502,7 @@ async function apply() {
 // ---------------------------------------------------------------------------
 const countedHides = new WeakSet<Element>()
 let cosmeticHideCount = 0
+let cosmeticReportedCount = 0
 let cosmeticReportTimer: ReturnType<typeof setTimeout> | null = null
 let cosmeticObserver: MutationObserver | null = null
 let cosmeticTallyScheduled = false
@@ -510,10 +511,16 @@ function reportCosmeticCount() {
   if (cosmeticReportTimer) return // coalesce bursts into one message
   cosmeticReportTimer = setTimeout(() => {
     cosmeticReportTimer = null
+    // `added` is the delta since the last message. Computing it here (from this
+    // frame's own monotonic count) keeps lifetime stats correct across SPA
+    // navigation without the SW having to reason about page loads.
+    const added = cosmeticHideCount - cosmeticReportedCount
+    cosmeticReportedCount = cosmeticHideCount
     chrome.runtime
       .sendMessage({
         type: 'skipSensei:cosmeticHideCount',
         count: cosmeticHideCount,
+        added,
       })
       .catch(() => {})
   }, 300)

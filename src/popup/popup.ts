@@ -160,18 +160,20 @@ async function renderBlockerState() {
 }
 
 function renderStats(stats: Stats, session: SessionStats | null) {
-  // YouTube card combines ad-skips + sponsor-skips into one "interruptions
-  // skipped on YouTube" figure. The two are still tracked separately (the
-  // "This video" section shows sponsor segments on their own).
+  // YouTube card is one "interruptions handled on YouTube" figure: video
+  // ad-skips + sponsor-skips + hidden display ads. They're tracked separately
+  // (the "This video" section shows sponsor segments on their own).
   $('alltime-youtube').textContent = formatCount(
-    stats.allTimeAdSkips + stats.allTimeSponsorSkips,
+    stats.allTimeAdSkips + stats.allTimeSponsorSkips + stats.allTimeYtAdsHidden,
   )
   $('alltime-web-blocks').textContent = formatCount(stats.allTimeWebAdsBlocked)
   $('alltime-trackers').textContent = formatCount(stats.allTimeTrackersBlocked)
   $('alltime-cookies').textContent = formatCount(stats.allTimeCookiesBlocked)
   if (session) {
     $('session-youtube').textContent = String(
-      session.sessionAdSkips + session.sessionSponsorSkips,
+      session.sessionAdSkips +
+        session.sessionSponsorSkips +
+        session.sessionYtAdsHidden,
     )
     $('session-web-blocks').textContent = String(session.sessionWebAdsBlocked)
     $('session-trackers').textContent = String(session.sessionTrackersBlocked)
