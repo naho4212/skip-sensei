@@ -280,6 +280,13 @@ input[type='range'] {
 .ruleset-subrow .ruleset-count {
   color: var(--text-3);
 }
+.ruleset-subrow .ruleset-source {
+  color: var(--text-3);
+  font-size: 11px;
+}
+.ruleset-subrow .ruleset-source::before {
+  content: '· ';
+}
 .ruleset-dot {
   width: 8px;
   height: 8px;

@@ -320,6 +320,22 @@ interface RulesetGroup {
   needsPermission?: boolean
 }
 
+/**
+ * Upstream source per ruleset id, for attribution captions. All but malware
+ * are AdGuard's prebuilt MV3 filters (@adguard/dnr-rulesets); ads_base is
+ * AdGuard's EasyList-derived Base filter. Malware is URLhaus (abuse.ch).
+ */
+const RULESET_SOURCES: Record<string, string> = {
+  ads_base: 'AdGuard Base · EasyList-based',
+  ads_mobile: 'AdGuard Mobile Ads',
+  trackers: 'AdGuard Tracking Protection',
+  cookies: 'AdGuard Cookie Notices',
+  social: 'AdGuard Social Media',
+  popups: 'AdGuard Popups',
+  url_tracking: 'AdGuard URL Tracking',
+  malware: 'URLhaus · abuse.ch',
+}
+
 const RULESET_GROUPS: RulesetGroup[] = [
   {
     label: 'Web ads',
@@ -435,6 +451,13 @@ function buildRulesetGroup(
     count.textContent = `${n.toLocaleString()} ${n === 1 ? 'rule' : 'rules'}`
 
     row.append(dot, code, count)
+    const src = RULESET_SOURCES[id]
+    if (src) {
+      const source = document.createElement('span')
+      source.className = 'ruleset-source'
+      source.textContent = src
+      row.append(source)
+    }
     if (isLoaded) {
       const loaded = document.createElement('span')
       loaded.className = 'ruleset-loaded-label'
