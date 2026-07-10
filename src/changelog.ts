@@ -15,6 +15,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.2.8',
+    date: '2026-07-10',
+    items: [
+      'Aggressive mode’s ad count now reflects the real number of ad breaks avoided per video, no longer inflated by YouTube re-checking the page',
+    ],
+  },
+  {
     version: '0.2.7',
     date: '2026-07-10',
     items: [
