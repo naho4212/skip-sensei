@@ -134,7 +134,15 @@ async function renderBlockerState() {
     } else if (state.enabled && state.active) {
       // Only surface the note when THIS page still has ads that loaded before
       // blocking — otherwise stay quiet (the ⓘ tooltip explains the feature).
-      const needsReload = await pageHasLoadedAds()
+      // Never on YouTube: it's exempt from network blocking (video ads are
+      // skipped by the ad engine, display ads are hidden), so "reload to clear"
+      // is wrong advice — a reload won't remove a video ad.
+      const [tab] = await chrome.tabs.query({
+        active: true,
+        currentWindow: true,
+      })
+      const onYouTube = Boolean(tab?.url?.includes('youtube.com'))
+      const needsReload = !onYouTube && (await pageHasLoadedAds())
       if (needsReload) {
         blockerNoteEl.className = 'blocker-note'
         textEl.textContent = 'Ads loaded before blocking — reload to clear them.'
