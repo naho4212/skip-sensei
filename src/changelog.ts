@@ -15,6 +15,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.2.7',
+    date: '2026-07-10',
+    items: [
+      'Fixed the YouTube “ads skipped” count over-counting in aggressive mode — it now reflects real ad breaks removed',
+    ],
+  },
+  {
     version: '0.2.6',
     date: '2026-07-10',
     items: [
