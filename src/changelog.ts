@@ -15,6 +15,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.2.3',
+    date: '2026-07-10',
+    items: [
+      'New Settings → Filter rulesets panel: switch each blocking list on or off, and see its rule count, its source, and how many rules are actually loaded',
+    ],
+  },
+  {
     version: '0.2.2',
     date: '2026-07-10',
     items: [
