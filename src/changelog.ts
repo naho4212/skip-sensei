@@ -15,6 +15,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.2.6',
+    date: '2026-07-10',
+    items: [
+      'Aggressive mode now works on its own — enable it without needing “Skip YouTube ads” turned on',
+      'The “blocked here” count updates live as ads are hidden on the page',
+    ],
+  },
+  {
     version: '0.2.5',
     date: '2026-07-10',
     items: [
