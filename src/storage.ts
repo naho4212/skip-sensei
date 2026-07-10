@@ -215,6 +215,12 @@ export function onStatsChanged(callback: (stats: Stats) => void) {
   })
 }
 
+/** Reset the lifetime stats to zero (the popup's all-time counters). Session
+ *  stats live in storage.session and are cleared separately by the SW. */
+export async function resetStats(): Promise<void> {
+  await chrome.storage.local.set({ [STATS_KEY]: DEFAULT_STATS })
+}
+
 // ---------------------------------------------------------------------------
 // Per-videoId analysis cache (LRU-ish: index ordered by insertion, oldest evicted)
 // ---------------------------------------------------------------------------

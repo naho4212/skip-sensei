@@ -259,6 +259,7 @@ export type Message =
   | { type: 'skipSensei:checkBuiltinAI' } // → { availability: string }
   | { type: 'skipSensei:getBlockerState' } // → BlockerState
   | { type: 'skipSensei:getRulesetInfo' } // → RulesetInfo (counts + live loaded)
+  | { type: 'skipSensei:resetStats' } // → { ok: true }; zeroes lifetime+session stats
   // → string[] of domain-specific cosmetic selectors for the sender's hostname
   | { type: 'skipSensei:getCosmeticFilters'; hostname: string }
   | { type: 'skipSensei:tabNeedsReload'; needsReload: boolean } // badges the icon for the sender tab

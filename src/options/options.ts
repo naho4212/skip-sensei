@@ -730,6 +730,17 @@ async function main() {
     clearCacheEl.disabled = false
     void renderCacheStats()
   })
+
+  const resetStatsEl = $<HTMLButtonElement>('reset-stats')
+  const resetStatsResultEl = $('reset-stats-result')
+  resetStatsEl.addEventListener('click', async () => {
+    resetStatsEl.disabled = true
+    await chrome.runtime
+      .sendMessage({ type: 'skipSensei:resetStats' })
+      .catch(() => {})
+    resetStatsResultEl.textContent = 'Statistics reset to zero.'
+    resetStatsEl.disabled = false
+  })
 }
 
 void main()

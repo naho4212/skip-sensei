@@ -31,6 +31,7 @@ import {
   incrementStat,
   recordActivity,
   recordCorrection,
+  resetStats,
   setCachedAnalysis,
 } from './storage'
 import {
@@ -91,6 +92,18 @@ function recordBlockCounts(c: {
       await chrome.storage.session.set({ [SESSION_STATS_KEY]: session })
     })
     .catch(() => {})
+}
+
+/** Zero the lifetime AND session counters. Chained through statChain so a
+ *  concurrent in-flight increment can't resurrect a count after the reset. */
+function resetAllStats(): Promise<void> {
+  statChain = statChain
+    .then(async () => {
+      await resetStats()
+      await chrome.storage.session.set({ [SESSION_STATS_KEY]: EMPTY_SESSION })
+    })
+    .catch(() => {})
+  return statChain
 }
 
 // ---------------------------------------------------------------------------
@@ -445,6 +458,9 @@ chrome.runtime.onMessage.addListener(
         return true
       case 'skipSensei:getRulesetInfo':
         void getRulesetInfo().then(sendResponse)
+        return true
+      case 'skipSensei:resetStats':
+        void resetAllStats().then(() => sendResponse({ ok: true }))
         return true
       case 'skipSensei:getCosmeticFilters':
         void getCosmeticFilters(message.hostname).then(sendResponse)
