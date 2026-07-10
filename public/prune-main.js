@@ -20,6 +20,12 @@
   window.__skipSenseiPruned = true
 
   var AD_KEYS = ['adPlacements', 'adSlots', 'playerAds', 'adBreakHeartbeatParams']
+  // A removal only counts as an ad prevented if it was a real ad SLOT. The
+  // other keys (playerAds config, adBreakHeartbeatParams) ride along in nearly
+  // every player response as ad-check machinery, so counting their removal
+  // reported a "skip" every few seconds of normal playback — 100+ on a single
+  // video. We still strip all four; we just don't tally the machinery.
+  var AD_SLOT_KEYS = { adPlacements: 1, adSlots: 1 }
   var lastNotify = 0
 
   function notify() {
@@ -33,12 +39,12 @@
 
   function prune(obj) {
     if (!obj || typeof obj !== 'object') return obj
-    var hit = false
+    var slotHit = false
     for (var i = 0; i < AD_KEYS.length; i++) {
       if (AD_KEYS[i] in obj) {
         try {
           delete obj[AD_KEYS[i]]
-          hit = true
+          if (AD_SLOT_KEYS[AD_KEYS[i]]) slotHit = true
         } catch (e) {}
       }
     }
@@ -48,12 +54,13 @@
         if (AD_KEYS[j] in obj.playerResponse) {
           try {
             delete obj.playerResponse[AD_KEYS[j]]
-            hit = true
+            if (AD_SLOT_KEYS[AD_KEYS[j]]) slotHit = true
           } catch (e) {}
         }
       }
     }
-    if (hit) notify()
+    // Count only when a real ad slot was removed, not the ubiquitous machinery.
+    if (slotHit) notify()
     return obj
   }
 
