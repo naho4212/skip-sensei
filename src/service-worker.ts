@@ -10,6 +10,7 @@ import {
 } from './llm-client'
 import {
   getBlockerState,
+  getRulesetInfo,
   initNetBlocker,
   syncNetBlocker,
   verifyNetBlocker,
@@ -440,6 +441,9 @@ chrome.runtime.onMessage.addListener(
         return true
       case 'skipSensei:getBlockerState':
         void getBlockerState().then(sendResponse)
+        return true
+      case 'skipSensei:getRulesetInfo':
+        void getRulesetInfo().then(sendResponse)
         return true
       case 'skipSensei:getCosmeticFilters':
         void getCosmeticFilters(message.hostname).then(sendResponse)

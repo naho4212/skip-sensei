@@ -248,6 +248,50 @@ export async function getBlockerState(): Promise<BlockerState> {
   return { enabled: blockAllAds, active, error: lastError }
 }
 
+export interface RulesetInfo {
+  /** Rule count per ruleset id, from the build-time _counts.json manifest. */
+  counts: Record<string, number>
+  /** Ruleset ids Chrome currently has ENABLED (the live truth). */
+  enabled: string[]
+  /** Sum of all rulesets' rule counts. */
+  availableTotal: number
+  /** Sum of rule counts across the enabled rulesets = rules actually loaded. */
+  loadedTotal: number
+}
+
+/** Build-time rule counts; immutable, so fetch once per worker lifetime. */
+let ruleCounts: Record<string, number> | null = null
+async function getRuleCounts(): Promise<Record<string, number>> {
+  if (ruleCounts) return ruleCounts
+  try {
+    const url = chrome.runtime.getURL('rulesets/_counts.json')
+    ruleCounts = (await (await fetch(url)).json()) as Record<string, number>
+  } catch {
+    ruleCounts = {}
+  }
+  return ruleCounts
+}
+
+/**
+ * Per-ruleset rule counts plus which rulesets Chrome currently has loaded, for
+ * the options "Filter rulesets" panel. `enabled` is read live from
+ * getEnabledRulesets rather than inferred from settings, so a ruleset that the
+ * settings asked for but Chrome refused (the static-rule-pool cap) shows as
+ * enabled-in-settings but absent here — the panel's honest "loaded" signal.
+ */
+export async function getRulesetInfo(): Promise<RulesetInfo> {
+  const counts = await getRuleCounts()
+  let enabled: string[] = []
+  try {
+    enabled = await chrome.declarativeNetRequest.getEnabledRulesets()
+  } catch {
+    // getEnabledRulesets unavailable — report nothing loaded rather than lying
+  }
+  const availableTotal = Object.values(counts).reduce((a, b) => a + b, 0)
+  const loadedTotal = enabled.reduce((sum, id) => sum + (counts[id] ?? 0), 0)
+  return { counts, enabled, availableTotal, loadedTotal }
+}
+
 const AD_SET = new Set(AD_RULESET_IDS)
 const TRACKER_SET = new Set(TRACKER_RULESET_IDS)
 const COOKIE_SET = new Set(['cookies'])

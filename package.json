@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "npm run rulesets && vite",
     "build": "npm run rulesets && tsc --noEmit && vite build",
-    "rulesets": "node scripts/build-rulesets.mjs && node scripts/build-malware-ruleset.mjs && node scripts/build-cosmetic-filters.mjs",
+    "rulesets": "node scripts/build-rulesets.mjs && node scripts/build-malware-ruleset.mjs && node scripts/build-cosmetic-filters.mjs && node scripts/build-ruleset-counts.mjs",
     "package": "npm run build && node scripts/package-zip.mjs",
     "typecheck": "tsc --noEmit"
   },

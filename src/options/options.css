@@ -222,6 +222,79 @@ input[type='range'] {
   accent-color: var(--accent);
 }
 
+/* Filter rulesets panel */
+.ruleset-total {
+  font-size: 13px;
+  color: var(--text-2);
+  margin: 8px 0 16px;
+}
+.ruleset-total strong {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.ruleset-group {
+  margin: 14px 0;
+}
+.ruleset-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  cursor: pointer;
+}
+.ruleset-head input[type='checkbox'] {
+  margin-top: 2px;
+}
+.ruleset-head .ruleset-label {
+  font-weight: 500;
+  font-size: 14px;
+}
+.ruleset-head.disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.ruleset-gate {
+  font-size: 12px;
+  color: var(--text-3);
+  font-weight: 400;
+}
+/* Per-ruleset sub-rows, indented under the group toggle. */
+.ruleset-sub {
+  margin: 4px 0 0 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.ruleset-subrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+.ruleset-subrow code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--text-2);
+  min-width: 96px;
+}
+.ruleset-subrow .ruleset-count {
+  color: var(--text-3);
+}
+.ruleset-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--text-3);
+}
+.ruleset-dot.loaded {
+  background: var(--accent);
+}
+.ruleset-subrow .ruleset-loaded-label {
+  color: var(--accent);
+  font-weight: 500;
+}
+
 input[type='checkbox'] {
   width: 18px;
   height: 18px;

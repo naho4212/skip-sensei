@@ -214,55 +214,20 @@
       </section>
 
       <section>
-        <h2>Ad blocking</h2>
+        <h2>Filter rulesets</h2>
         <p class="hint">
-          Extra filter lists, applied on top of ad blocking (needs
-          <strong>Block all ads</strong> on). Each is off by default.
+          Each blocking list is a set of network rules. Turn them on or off
+          individually here. <strong>Loaded</strong> is how many rules Chrome
+          currently has active — if a list is on but shows nothing loaded,
+          Chrome hit its per-session rule limit; restart the browser to clear
+          it.
         </p>
-        <label class="field checkbox">
-          <input type="checkbox" id="block-trackers" />
-          <span
-            >Block trackers &amp; analytics<span
-              class="info"
-              tabindex="0"
-              data-tip="Blocks tracking/analytics pixels (TikTok, Snapchat, Google Tag Manager, etc.) — a larger ruleset."
-              >ⓘ</span
-            ></span
-          >
-        </label>
-        <label class="field checkbox">
-          <input type="checkbox" id="block-cookie-notices" />
-          <span
-            >Handle cookie-consent notices<span
-              class="info"
-              tabindex="0"
-              data-tip="Hides the “we value your privacy” banners. With AI enhancements on, also clicks “Reject all / necessary only” so your choice is actually registered."
-              >ⓘ</span
-            ></span
-          >
-        </label>
-        <label class="field checkbox">
-          <input type="checkbox" id="block-social" />
-          <span
-            >Block social-media widgets &amp; tracking<span
-              class="info"
-              tabindex="0"
-              data-tip="Blocks share buttons and embedded like/follow widgets that track you across sites."
-              >ⓘ</span
-            ></span
-          >
-        </label>
-        <label class="field checkbox">
-          <input type="checkbox" id="block-popups" />
-          <span
-            >Block popup &amp; overlay ads<span
-              class="info"
-              tabindex="0"
-              data-tip="Blocks intrusive popup/overlay ads. With AI enhancements on, the AI reviews each overlay and keeps useful ones (logins, consent dialogs), hiding only annoyances (newsletter walls, promos)."
-              >ⓘ</span
-            ></span
-          >
-        </label>
+        <div class="ruleset-total" id="ruleset-total"></div>
+        <div id="ruleset-list"></div>
+      </section>
+
+      <section>
+        <h2>Ad blocking</h2>
         <label class="field checkbox">
           <input type="checkbox" id="defuse-anti-adblock" />
           <span
@@ -303,28 +268,6 @@
 
       <section>
         <h2>Privacy</h2>
-        <label class="field checkbox">
-          <input type="checkbox" id="block-malware" />
-          <span
-            >Block malware &amp; phishing domains<span
-              class="info"
-              tabindex="0"
-              data-tip="Blocks requests and navigation to domains currently distributing malware, from the URLhaus list (abuse.ch). Independent of ad blocking; refreshed with every filter update. On by default."
-              >ⓘ</span
-            ></span
-          >
-        </label>
-        <label class="field checkbox">
-          <input type="checkbox" id="block-url-tracking" />
-          <span
-            >Strip tracking parameters from links<span
-              class="info"
-              tabindex="0"
-              data-tip="Removes tracking parameters (utm_*, fbclid, gclid, and hundreds more) from URLs as you browse, so sites can't use them to profile you. Works on every site and is independent of ad blocking. Asks for permission to access all sites when enabled — required to rewrite URLs."
-              >ⓘ</span
-            ></span
-          >
-        </label>
         <label class="field checkbox">
           <input type="checkbox" id="local-only" />
           <span

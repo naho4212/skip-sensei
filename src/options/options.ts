@@ -213,6 +213,7 @@ function render(settings: Settings) {
     }
   }
   void renderUsage(provider)
+  void renderRulesets()
 }
 
 const fmt = (n: number) =>
@@ -294,6 +295,205 @@ async function renderBuiltinStatus() {
   } catch {
     builtinStatusEl.textContent = ''
   }
+}
+
+// --- Filter rulesets panel -------------------------------------------------
+
+/** Shape of the skipSensei:getRulesetInfo response (see net-blocker.ts). */
+interface RulesetInfo {
+  counts: Record<string, number>
+  enabled: string[]
+  availableTotal: number
+  loadedTotal: number
+}
+
+interface RulesetGroup {
+  label: string
+  /** Backing boolean setting — the single source of truth syncNetBlocker reads. */
+  setting: keyof Settings
+  /** Constituent ruleset ids, shown as sub-rows with their own loaded state. */
+  rulesets: string[]
+  tip: string
+  /** cookies/social/popups only take effect when Web ads (blockAllAds) is on. */
+  gatedOnAds?: boolean
+  /** url_tracking needs all-sites host access to rewrite URLs. */
+  needsPermission?: boolean
+}
+
+const RULESET_GROUPS: RulesetGroup[] = [
+  {
+    label: 'Web ads',
+    setting: 'blockAllAds',
+    rulesets: ['ads_base', 'ads_mobile'],
+    tip: 'The core ad-blocking lists (AdGuard Base + Mobile Ads). Same switch as "Block all ads" in the popup.',
+  },
+  {
+    label: 'Trackers & analytics',
+    setting: 'blockTrackers',
+    rulesets: ['trackers'],
+    tip: 'Blocks tracking/analytics pixels (TikTok, Snapchat, Google Tag Manager, etc.) — the largest list.',
+  },
+  {
+    label: 'Cookie-consent notices',
+    setting: 'blockCookieNotices',
+    rulesets: ['cookies'],
+    gatedOnAds: true,
+    tip: 'Hides "we value your privacy" banners. With AI enhancements on, also clicks Reject so your choice registers.',
+  },
+  {
+    label: 'Social widgets & tracking',
+    setting: 'blockSocial',
+    rulesets: ['social'],
+    gatedOnAds: true,
+    tip: 'Blocks share buttons and embedded like/follow widgets that track you across sites.',
+  },
+  {
+    label: 'Popup & overlay ads',
+    setting: 'blockPopups',
+    rulesets: ['popups'],
+    gatedOnAds: true,
+    tip: 'Blocks intrusive popup/overlay ads. With AI enhancements on, keeps useful overlays (logins, consent) and hides only annoyances.',
+  },
+  {
+    label: 'URL tracking parameters',
+    setting: 'blockUrlTracking',
+    rulesets: ['url_tracking'],
+    needsPermission: true,
+    tip: 'Strips tracking params (utm_*, fbclid, gclid, and hundreds more) from links as you browse. Needs all-sites access to rewrite URLs.',
+  },
+  {
+    label: 'Malware & phishing domains',
+    setting: 'blockMalware',
+    rulesets: ['malware'],
+    tip: 'Blocks domains currently distributing malware (URLhaus / abuse.ch). Independent of ad blocking; on by default.',
+  },
+]
+
+function infoIcon(tip: string): HTMLElement {
+  const el = document.createElement('span')
+  el.className = 'info'
+  el.tabIndex = 0
+  el.dataset.tip = tip
+  el.textContent = 'ⓘ'
+  // These rows render after init, so the global .info click-guard hasn't bound
+  // them — stop the click from toggling the checkbox this icon sits inside.
+  el.addEventListener('click', (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+  })
+  return el
+}
+
+function buildRulesetGroup(
+  group: RulesetGroup,
+  info: RulesetInfo,
+  enabled: Set<string>,
+  settings: Settings,
+  adsOn: boolean,
+): HTMLElement {
+  const wrap = document.createElement('div')
+  wrap.className = 'ruleset-group'
+
+  const gated = group.gatedOnAds && !adsOn
+  const head = document.createElement('label')
+  head.className = 'ruleset-head'
+
+  const box = document.createElement('input')
+  box.type = 'checkbox'
+  box.checked = Boolean(settings[group.setting])
+  box.addEventListener('change', () => void onRulesetToggle(group, box))
+
+  const label = document.createElement('span')
+  label.className = 'ruleset-label'
+  label.textContent = group.label
+
+  head.append(box, label, infoIcon(group.tip))
+  if (gated) {
+    const gate = document.createElement('span')
+    gate.className = 'ruleset-gate'
+    gate.textContent = '(needs Web ads on)'
+    head.append(gate)
+  }
+  wrap.append(head)
+
+  const sub = document.createElement('div')
+  sub.className = 'ruleset-sub'
+  for (const id of group.rulesets) {
+    const row = document.createElement('div')
+    row.className = 'ruleset-subrow'
+
+    const dot = document.createElement('span')
+    const isLoaded = enabled.has(id)
+    dot.className = isLoaded ? 'ruleset-dot loaded' : 'ruleset-dot'
+
+    const code = document.createElement('code')
+    code.textContent = id
+
+    const count = document.createElement('span')
+    count.className = 'ruleset-count'
+    const n = info.counts[id] ?? 0
+    count.textContent = `${n.toLocaleString()} ${n === 1 ? 'rule' : 'rules'}`
+
+    row.append(dot, code, count)
+    if (isLoaded) {
+      const loaded = document.createElement('span')
+      loaded.className = 'ruleset-loaded-label'
+      loaded.textContent = 'loaded'
+      row.append(loaded)
+    }
+    sub.append(row)
+  }
+  wrap.append(sub)
+  return wrap
+}
+
+async function onRulesetToggle(group: RulesetGroup, box: HTMLInputElement) {
+  // url_tracking needs all-sites access to actually rewrite URLs — request it
+  // on the enabling gesture and revert the checkbox if the user declines.
+  if (group.needsPermission && box.checked) {
+    const granted = await chrome.permissions
+      .request({ origins: ['*://*/*'] })
+      .catch(() => false)
+    if (!granted) {
+      box.checked = false
+      return
+    }
+  }
+  await save({ [group.setting]: box.checked })
+  // The enabled-ruleset state changes only after the service worker's sync
+  // runs; re-read once it has settled so the loaded dots + total catch up.
+  setTimeout(() => void renderRulesets(), 500)
+}
+
+async function renderRulesets() {
+  let info: RulesetInfo | undefined
+  try {
+    info = await chrome.runtime.sendMessage({ type: 'skipSensei:getRulesetInfo' })
+  } catch {
+    return
+  }
+  if (!info) return
+
+  const settings = currentSettings ?? (await getSettings())
+  const enabled = new Set(info.enabled)
+  const adsOn = settings.masterEnabled && settings.blockAllAds
+
+  const total = $('ruleset-total')
+  total.replaceChildren()
+  const loaded = document.createElement('strong')
+  loaded.textContent = info.loadedTotal.toLocaleString()
+  total.append(
+    loaded,
+    document.createTextNode(
+      ` of ${info.availableTotal.toLocaleString()} rules loaded`,
+    ),
+  )
+
+  $('ruleset-list').replaceChildren(
+    ...RULESET_GROUPS.map((g) =>
+      buildRulesetGroup(g, info!, enabled, settings, adsOn),
+    ),
+  )
 }
 
 async function renderAllowlist() {
@@ -392,15 +592,13 @@ async function main() {
     void renderUsage(currentSettings.llmProvider)
   })
 
+  // Ruleset toggles (trackers/cookies/social/popups/malware/url_tracking + the
+  // Web-ads master) live in the "Filter rulesets" panel — see renderRulesets.
   const extraLists: [string, keyof Settings][] = [
     ['aggressive-pruning', 'aggressivePruning'],
     ['yt-hide-shorts', 'ytHideShorts'],
     ['yt-disable-endcards', 'ytDisableEndCards'],
     ['yt-dismiss-stillwatching', 'ytDismissStillWatching'],
-    ['block-trackers', 'blockTrackers'],
-    ['block-cookie-notices', 'blockCookieNotices'],
-    ['block-social', 'blockSocial'],
-    ['block-popups', 'blockPopups'],
     ['defuse-anti-adblock', 'defuseAntiAdblock'],
     ['telemetry', 'telemetryEnabled'],
   ]
@@ -440,29 +638,7 @@ async function main() {
     })
   }
 
-  const malwareEl = $<HTMLInputElement>('block-malware')
-  malwareEl.checked = loaded.blockMalware
-  malwareEl.addEventListener('change', () => {
-    void save({ blockMalware: malwareEl.checked })
-  })
-
-  // URL-tracking stripping needs broad host access to rewrite URLs — request
-  // it at the moment the user turns the toggle on (a user gesture), and revert
-  // the toggle if they decline.
-  const urlTrackingEl = $<HTMLInputElement>('block-url-tracking')
-  urlTrackingEl.checked = loaded.blockUrlTracking
-  urlTrackingEl.addEventListener('change', async () => {
-    if (urlTrackingEl.checked) {
-      const granted = await chrome.permissions
-        .request({ origins: ['*://*/*'] })
-        .catch(() => false)
-      if (!granted) {
-        urlTrackingEl.checked = false
-        return
-      }
-    }
-    await save({ blockUrlTracking: urlTrackingEl.checked })
-  })
+  void renderRulesets()
 
   // Local-only mode overrides the provider, diagnostics, and SponsorBlock —
   // grey those out while it's on so the override is visible.
