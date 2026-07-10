@@ -1,33 +1,45 @@
+/* Onboarding — borrows tokens + base (body, buttons, .hint) from options.css,
+ * but owns its own layout so it doesn't depend on that file's page shell. */
+
 .onboarding {
   max-width: 680px;
+  margin: 0 auto;
+  padding: 56px 24px 72px;
 }
 
+/* Hero */
 .hero {
   text-align: center;
-  padding: 16px 0 8px;
+  padding: 0 0 8px;
   border: none;
 }
 
 .hero-icon {
-  width: 72px;
-  height: 72px;
+  width: 76px;
+  height: 76px;
+  border-radius: 20px;
+  /* soft accent halo so the mark reads as the brand anchor */
+  filter: drop-shadow(0 8px 28px rgba(124, 58, 237, 0.45));
 }
 
 .hero h1 {
-  font-size: 26px;
-  margin: 12px 0 4px;
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin: 18px 0 6px;
 }
 
 .tagline {
   color: var(--text-2);
-  font-size: 15px;
+  font-size: 15.5px;
   margin: 0;
 }
 
+/* Feature cards (numbered "three ways") */
 .cards {
   list-style: none;
   counter-reset: card;
-  margin: 24px 0;
+  margin: 32px 0 20px;
   padding: 0;
   display: grid;
   gap: 12px;
@@ -36,29 +48,40 @@
 .card {
   counter-increment: card;
   position: relative;
-  padding: 16px 16px 16px 56px;
+  padding: 18px 20px 18px 62px;
   border: 1px solid var(--divider);
-  border-radius: 12px;
+  border-radius: 14px;
+  background: var(--field-bg);
+  transition:
+    border-color 0.15s,
+    transform 0.15s;
+}
+.card:hover {
+  border-color: rgba(124, 58, 237, 0.5);
+  transform: translateY(-1px);
 }
 
 .card::before {
   content: counter(card);
   position: absolute;
-  left: 16px;
-  top: 16px;
-  width: 28px;
-  height: 28px;
+  left: 18px;
+  top: 18px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
-  background: var(--accent);
+  background: linear-gradient(135deg, var(--accent-bright), var(--accent-deep));
   color: #fff;
   font-weight: 700;
+  font-size: 14px;
   display: grid;
   place-items: center;
+  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.4);
 }
 
 .card h2 {
   margin: 0 0 4px;
   font-size: 16px;
+  font-weight: 600;
 }
 
 .card p {
@@ -67,16 +90,26 @@
   font-size: 14px;
 }
 
+/* AI note — an accent-tinted callout, visually distinct from the steps */
 .ai-note {
-  border: 1px solid var(--divider);
-  border-radius: 12px;
-  padding: 16px;
+  border: 1px solid rgba(124, 58, 237, 0.35);
+  border-radius: 14px;
+  padding: 18px 20px;
   margin: 0;
+  background: rgba(124, 58, 237, 0.06);
 }
 
 .ai-note h2 {
   margin: 0 0 6px;
   font-size: 15px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ai-note h2::before {
+  content: '✦';
+  color: var(--accent-bright);
 }
 
 .ai-note p {
@@ -89,24 +122,39 @@
   color: var(--link);
 }
 
+/* Call to action */
 .cta {
   display: flex;
   gap: 12px;
   justify-content: center;
-  margin: 28px 0 8px;
+  margin: 32px 0 8px;
 }
 
 .cta button {
-  height: 42px;
-  padding: 0 24px;
+  height: 44px;
+  padding: 0 26px;
   font-size: 15px;
+  font-weight: 600;
+  border: none;
+  border-radius: 22px;
+  cursor: pointer;
+  transition:
+    filter 0.15s,
+    background 0.15s;
 }
 
 .cta button:not(.secondary) {
   background: var(--accent);
   color: #fff;
 }
+.cta button:not(.secondary):hover {
+  filter: brightness(1.08);
+}
 
 .cta button.secondary {
   background: var(--hover);
+  color: var(--text);
+}
+.cta button.secondary:hover {
+  background: var(--divider);
 }
