@@ -15,6 +15,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.2.2',
+    date: '2026-07-10',
+    items: [
+      'Hides ads on thousands more sites, using per-site rules from the AdGuard filter list',
+      'More reliable ad blocking after Chrome restarts and extension updates',
+    ],
+  },
+  {
     version: '0.2.1',
     date: '2026-07-09',
     items: [
