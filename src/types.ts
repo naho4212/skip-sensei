@@ -290,6 +290,7 @@ export interface SessionStats {
 
 export type TabMessage =
   | { type: 'skipSensei:getPageStatus' }
+  | { type: 'skipSensei:hasYouTubeEmbed' } // → boolean (page embeds a YT video)
   | {
       type: 'skipSensei:analysisProgress'
       videoId: string

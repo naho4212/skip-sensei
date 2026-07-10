@@ -473,13 +473,30 @@ function sponsorStatusText(status: PageStatus): string {
 
 async function renderVideoStatus() {
   reloadTabEl.hidden = true
+  const section = $('video-section')
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
-  if (!tab?.id || !tab.url?.includes('youtube.com')) {
-    // Off YouTube the video section is just noise — hide it entirely.
-    $('video-section').hidden = true
+  if (!tab?.id) {
+    section.hidden = true
     return
   }
-  $('video-section').hidden = false
+  // On YouTube proper we have the full page status; on any other site the
+  // section only makes sense when the page actually embeds a YouTube video, so
+  // ask the content script before showing it. Anything else stays hidden.
+  if (!tab.url?.includes('youtube.com')) {
+    const hasEmbed = await chrome.tabs
+      .sendMessage(tab.id, { type: 'skipSensei:hasYouTubeEmbed' }, TOP_FRAME)
+      .catch(() => false)
+    if (!hasEmbed) {
+      section.hidden = true
+      return
+    }
+    section.hidden = false
+    videoStatusEl.textContent = 'YouTube video embedded on this page.'
+    segmentListEl.replaceChildren()
+    renderProgress(null)
+    return
+  }
+  section.hidden = false
   const message: TabMessage = { type: 'skipSensei:getPageStatus' }
   try {
     const status: PageStatus = await chrome.tabs.sendMessage(

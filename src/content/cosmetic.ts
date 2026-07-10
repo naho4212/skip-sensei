@@ -354,6 +354,18 @@ function bareDomain(): string {
   return location.hostname.replace(/^www\./, '')
 }
 
+/** Whether this page embeds a YouTube video — an iframe player (standard or
+ *  privacy-enhanced), or a common lazy-embed placeholder. Lets the popup show
+ *  the "This video" section on non-YouTube pages that host a YouTube video. */
+function hasYouTubeEmbed(): boolean {
+  return !!document.querySelector(
+    'iframe[src*="youtube.com/embed/"],' +
+      'iframe[src*="youtube-nocookie.com/embed/"],' +
+      'iframe[src*="youtube.com/watch"],' +
+      'lite-youtube,[data-youtube-id],[data-ytid]',
+  )
+}
+
 async function blockingActive(): Promise<boolean> {
   const settings = await getSettings()
   return (
@@ -1135,6 +1147,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (window !== window.top) return
   if (message?.type === 'skipSensei:pageHasAds') {
     sendResponse(pageHasLoadedAds())
+  } else if (message?.type === 'skipSensei:hasYouTubeEmbed') {
+    sendResponse(hasYouTubeEmbed())
   } else if (message?.type === 'skipSensei:getHiddenElements') {
     sendResponse(describeHiddenElements())
   } else if (message?.type === 'skipSensei:rejectHiddenSelector') {
