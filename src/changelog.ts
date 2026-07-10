@@ -15,6 +15,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.2.9',
+    date: '2026-07-10',
+    items: [
+      'Hidden YouTube display ads now count in the YouTube stat card, so it no longer reads 0 while the page shows ads blocked',
+    ],
+  },
+  {
     version: '0.2.8',
     date: '2026-07-10',
     items: [

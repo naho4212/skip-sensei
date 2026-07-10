@@ -6,7 +6,7 @@ import { defineManifest } from '@crxjs/vite-plugin'
 export default defineManifest({
   manifest_version: 3,
   name: 'Ad Sensei',
-  version: '0.2.8',
+  version: '0.2.9',
   description:
     'Skip YouTube ads and AI-detected creator sponsor segments, and block ads & trackers across the web.',
   icons: {
