@@ -15,6 +15,15 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.2.4',
+    date: '2026-07-10',
+    items: [
+      'AI enhancements now toggle right from the popup — flip it to compare AI-assisted blocking against filter lists alone',
+      'The per-page “blocked here” count is now accurate on sites that load ads after the page opens',
+      '“This video” only appears on YouTube or pages that actually embed a YouTube video',
+    ],
+  },
+  {
     version: '0.2.3',
     date: '2026-07-10',
     items: [
