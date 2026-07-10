@@ -24,51 +24,69 @@ export interface BlockerState {
 
 let lastError: string | undefined
 
-export async function syncNetBlocker(): Promise<BlockerState> {
+/**
+ * Desired ruleset state per group, derived from settings. Ad blocking is the
+ * base; cookies/social/popups are opt-ins gated on their own settings AND
+ * blockAllAds. URL-tracking stripping is a standalone privacy feature (needs
+ * host access to actually rewrite, but enabling without it is a harmless
+ * no-op). Malware/phishing blocking (URLhaus) is protection, not ad blocking —
+ * standalone and on by default.
+ */
+function desiredRulesets(
+  settings: Awaited<ReturnType<typeof getSettings>>,
+): Array<{ ids: string[]; on: boolean; label: string }> {
+  const master = settings.masterEnabled
+  return [
+    { ids: AD_RULESET_IDS, on: master && settings.blockAllAds, label: 'ad blocking' },
+    { ids: TRACKER_RULESET_IDS, on: master && settings.blockTrackers, label: 'tracker blocking' },
+    { ids: ['cookies'], on: master && settings.blockAllAds && settings.blockCookieNotices, label: 'cookie-notice blocking' },
+    { ids: ['social'], on: master && settings.blockAllAds && settings.blockSocial, label: 'social blocking' },
+    { ids: ['popups'], on: master && settings.blockAllAds && settings.blockPopups, label: 'popup blocking' },
+    { ids: ['url_tracking'], on: master && settings.blockUrlTracking, label: 'URL tracking protection' },
+    { ids: ['malware'], on: master && settings.blockMalware, label: 'malware blocking' },
+  ]
+}
+
+/**
+ * Single-flight gate. Sync triggers overlap freely — onInstalled, onStartup,
+ * and the cold-start gate all fire within a second of each other at launch,
+ * and settings changes add more. Concurrent runs interleave their setRulesets
+ * retries and race on the shared `lastError`, so a failing run can have its
+ * error cleared by a run that started later. Serialize instead: one sync at a
+ * time; triggers arriving mid-run coalesce into a single follow-up run (which
+ * re-reads settings, so it reflects the newest state).
+ */
+let syncInFlight: Promise<BlockerState> | null = null
+let syncQueued = false
+
+export function syncNetBlocker(): Promise<BlockerState> {
+  if (syncInFlight) {
+    syncQueued = true
+    return syncInFlight
+  }
+  syncInFlight = (async () => {
+    try {
+      return await doSyncNetBlocker()
+    } finally {
+      syncInFlight = null
+      if (syncQueued) {
+        syncQueued = false
+        void syncNetBlocker()
+      }
+    }
+  })()
+  return syncInFlight
+}
+
+async function doSyncNetBlocker(): Promise<BlockerState> {
   const settings = await getSettings()
   lastError = undefined
 
   // Each ruleset group is enabled in a SEPARATE call so that if one hits the
-  // shared rule-pool limit, the others still apply. Ad blocking is the base;
-  // the rest are independent opt-ins gated on their own settings AND blockAllAds.
-  const master = settings.masterEnabled
-  await setRulesets(AD_RULESET_IDS, master && settings.blockAllAds, 'ad blocking')
-  await setRulesets(
-    TRACKER_RULESET_IDS,
-    master && settings.blockTrackers,
-    'tracker blocking',
-  )
-  await setRulesets(
-    ['cookies'],
-    master && settings.blockAllAds && settings.blockCookieNotices,
-    'cookie-notice blocking',
-  )
-  await setRulesets(
-    ['social'],
-    master && settings.blockAllAds && settings.blockSocial,
-    'social blocking',
-  )
-  await setRulesets(
-    ['popups'],
-    master && settings.blockAllAds && settings.blockPopups,
-    'popup blocking',
-  )
-  // URL-tracking stripping is a standalone privacy feature — it does NOT
-  // require "Block all ads". Needs host access (granted via the options
-  // toggle) to actually rewrite URLs, but enabling the ruleset without it is
-  // a harmless no-op.
-  await setRulesets(
-    ['url_tracking'],
-    master && settings.blockUrlTracking,
-    'URL tracking protection',
-  )
-  // Malware/phishing domain blocking (URLhaus) is protection, not ad
-  // blocking — standalone and on by default.
-  await setRulesets(
-    ['malware'],
-    master && settings.blockMalware,
-    'malware blocking',
-  )
+  // shared rule-pool limit, the others still apply.
+  for (const group of desiredRulesets(settings)) {
+    await setRulesets(group.ids, group.on, group.label)
+  }
 
   try {
     await syncAllowlist(settings.allowlist)
@@ -79,26 +97,64 @@ export async function syncNetBlocker(): Promise<BlockerState> {
   return getBlockerState()
 }
 
-async function setRulesets(ids: string[], on: boolean, label: string) {
+/**
+ * Cheap drift check for warm SW wakes (one settings read + one
+ * getEnabledRulesets, then a full sync only if they disagree). Enabled-ruleset
+ * state is Chrome-side and outlives the worker, so anything that resets it
+ * mid-session — an extension reload, a failed earlier sync — would otherwise
+ * persist until the next settings change or browser restart.
+ */
+export async function verifyNetBlocker(): Promise<void> {
   try {
+    const settings = await getSettings()
     const current = new Set(
       await chrome.declarativeNetRequest.getEnabledRulesets(),
     )
-    const allOn = ids.every((id) => current.has(id))
-    const allOff = ids.every((id) => !current.has(id))
-    if (on && !allOn) {
-      await chrome.declarativeNetRequest.updateEnabledRulesets({
-        enableRulesetIds: ids,
-      })
-    } else if (!on && !allOff) {
-      await chrome.declarativeNetRequest.updateEnabledRulesets({
-        disableRulesetIds: ids,
-      })
+    const drifted = desiredRulesets(settings).some(({ ids, on }) =>
+      ids.some((id) => current.has(id) !== on),
+    )
+    if (drifted) await syncNetBlocker()
+  } catch {
+    // best-effort — the event-driven syncs still cover the common paths
+  }
+}
+
+async function setRulesets(ids: string[], on: boolean, label: string) {
+  // One retry for a transient failure right at launch. Note this does NOT
+  // rescue the known "exceeds the rule count limit" failure after an extension
+  // reload/update: Chrome can hold the previous install's static-rule
+  // allocation for the rest of the browser session, and every retry — in-call,
+  // on a timer, or on a later event — fails identically until restart. Keep
+  // the attempt cheap rather than pretending we can wait it out; the failure
+  // is surfaced through getBlockerState() so the popup can show it.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const current = new Set(
+        await chrome.declarativeNetRequest.getEnabledRulesets(),
+      )
+      const allOn = ids.every((id) => current.has(id))
+      const allOff = ids.every((id) => !current.has(id))
+      if (on && !allOn) {
+        await chrome.declarativeNetRequest.updateEnabledRulesets({
+          enableRulesetIds: ids,
+        })
+      } else if (!on && !allOff) {
+        await chrome.declarativeNetRequest.updateEnabledRulesets({
+          disableRulesetIds: ids,
+        })
+      }
+      return
+    } catch (error) {
+      if (attempt === 1) {
+        // Most likely the enabled-static-rule limit (this extension's own
+        // stale allocation, or other extensions using the shared pool).
+        const msg =
+          error instanceof Error ? error.message : `Could not update ${label}`
+        lastError = `${label}: ${msg}`
+        return
+      }
+      await new Promise((r) => setTimeout(r, 600))
     }
-  } catch (error) {
-    // Most likely the enabled-static-rule limit (other extensions using the pool).
-    const msg = error instanceof Error ? error.message : `Could not update ${label}`
-    lastError = `${label}: ${msg}`
   }
 }
 
@@ -120,25 +176,60 @@ const NETWORK_EXEMPT = ['youtube.com', 'youtube-nocookie.com', 'googlevideo.com'
  * high-priority allowAllRequests rule that exempts the whole page (and its
  * subframes) from the static block rules — i.e. "pause blocking on this site".
  */
+/**
+ * DNR requestDomains must be clean ASCII hostnames — no scheme, port, path, or
+ * spaces. updateDynamicRules validates the WHOLE rule atomically, so a single
+ * malformed entry rejects it and (on a fresh profile with no prior rule) would
+ * drop the NETWORK_EXEMPT YouTube exemption with it — network-blocking YouTube,
+ * which we must never do. Sanitize each entry and drop anything that isn't a
+ * plausible hostname so one bad allowlist input can't take the rule down.
+ */
+function normalizeHost(raw: string): string | null {
+  const s = raw
+    .trim()
+    .toLowerCase()
+    .replace(/^[a-z][a-z0-9+.-]*:\/\//, '') // scheme
+    .replace(/[/?#].*$/, '') // path / query / fragment
+    .replace(/:\d+$/, '') // port
+  if (
+    !/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/.test(s)
+  ) {
+    return null
+  }
+  return s
+}
+
 async function syncAllowlist(hostnames: string[]) {
   const existing = await chrome.declarativeNetRequest.getDynamicRules()
-  const addRules = [
-    ...NETWORK_EXEMPT,
-    ...hostnames.map((h) => h.trim().toLowerCase()).filter(Boolean),
-  ]
+  const domains = [...NETWORK_EXEMPT, ...hostnames]
+    .map(normalizeHost)
+    .filter((h): h is string => h !== null)
     .filter((h, i, arr) => arr.indexOf(h) === i) // dedupe
-    .map((hostname, i) => ({
-      id: i + 1,
-      priority: ALLOWLIST_PRIORITY,
-      action: { type: 'allowAllRequests' as chrome.declarativeNetRequest.RuleActionType },
-      condition: {
-        requestDomains: [hostname],
-        resourceTypes: [
-          'main_frame',
-          'sub_frame',
-        ] as chrome.declarativeNetRequest.ResourceType[],
-      },
-    }))
+
+  // A SINGLE allowAllRequests rule whose condition lists every paused hostname
+  // in requestDomains — one dynamic rule no matter how large the allowlist
+  // grows, instead of one rule per hostname. (allowAllRequests on a page's
+  // main_frame/sub_frame exempts the whole page + its subframes from the
+  // static block rules.)
+  const addRules =
+    domains.length === 0
+      ? []
+      : [
+          {
+            id: 1,
+            priority: ALLOWLIST_PRIORITY,
+            action: {
+              type: 'allowAllRequests' as chrome.declarativeNetRequest.RuleActionType,
+            },
+            condition: {
+              requestDomains: domains,
+              resourceTypes: [
+                'main_frame',
+                'sub_frame',
+              ] as chrome.declarativeNetRequest.ResourceType[],
+            },
+          },
+        ]
   await chrome.declarativeNetRequest.updateDynamicRules({
     removeRuleIds: existing.map((r) => r.id),
     addRules,
@@ -157,48 +248,84 @@ export async function getBlockerState(): Promise<BlockerState> {
   return { enabled: blockAllAds, active, error: lastError }
 }
 
-const BLOCK_RULESET_IDS = new Set([...AD_RULESET_IDS, ...TRACKER_RULESET_IDS])
+const AD_SET = new Set(AD_RULESET_IDS)
+const TRACKER_SET = new Set(TRACKER_RULESET_IDS)
+const COOKIE_SET = new Set(['cookies'])
 
 /**
- * Count blocked web-ad requests for the popup stats. onRuleMatchedDebug fires
- * per matched rule for unpacked extensions (which is how this is loaded).
- * Matches are batched in memory and flushed to storage to avoid hammering it.
+ * Count blocked web-ad requests for the popup stats + per-tab badge.
+ *
+ * We poll declarativeNetRequest.getMatchedRules() when a tab finishes loading.
+ * Unlike onRuleMatchedDebug — which the docs restrict to UNPACKED extensions,
+ * so it silently never fires in a packed Web Store build — getMatchedRules
+ * works in production. It needs the declarativeNetRequestFeedback permission,
+ * which we hold (and which also lifts the API's call-rate quota). A per-tab
+ * high-water timestamp keeps us from recounting the same matches.
  */
-let pendingBlocks = 0
-let flushTimer: ReturnType<typeof setTimeout> | null = null
+const lastPollTs = new Map<number, number>()
 
-function scheduleFlush(onBlocks: (n: number) => void) {
-  if (flushTimer !== null) return
-  flushTimer = setTimeout(() => {
-    flushTimer = null
-    const n = pendingBlocks
-    pendingBlocks = 0
-    if (n > 0) onBlocks(n)
-  }, 3000)
+interface BlockCallbacks {
+  /** One batched count per poll → the stats recorder. Delivered as a single
+   *  object so the recorder can do ONE serialized read-modify-write and never
+   *  drop a bucket's increment (ads/trackers/cookies land together). */
+  onCounts: (c: { ads: number; trackers: number; cookies: number }) => void
+  /** Per ad+tracker block, with the tab id → the icon badge counter. */
+  onTabBlock: (tabId: number) => void
+}
+
+async function pollTabBlocks(tabId: number, cb: BlockCallbacks) {
+  // Matched-rule info is per-TAB and Chrome retains it for ~5 min, so without a
+  // high-water mark a post-navigation poll would recount the previous page's
+  // matches. The mark is seeded at 'loading' (see initNetBlocker); a missing
+  // mark means we never saw this tab load, so start from now and count nothing
+  // retroactively (an undercount is safer than a double-count).
+  const since = lastPollTs.get(tabId) ?? Date.now()
+  try {
+    const { rulesMatchedInfo } =
+      await chrome.declarativeNetRequest.getMatchedRules({
+        tabId,
+        minTimeStamp: since,
+      })
+    let maxTs = since
+    let ads = 0
+    let trackers = 0
+    let cookies = 0
+    for (const info of rulesMatchedInfo) {
+      if (info.timeStamp > maxTs) maxTs = info.timeStamp
+      const id = info.rule.rulesetId
+      if (AD_SET.has(id)) ads++
+      else if (TRACKER_SET.has(id)) trackers++
+      else if (COOKIE_SET.has(id)) cookies++
+    }
+    // Advance the mark past the newest match counted (more precise than
+    // Date.now(), which could skip matches recorded while the call was in
+    // flight) so the next poll never recounts these.
+    lastPollTs.set(tabId, maxTs + 1)
+    if (ads || trackers || cookies) cb.onCounts({ ads, trackers, cookies })
+    for (let i = 0; i < ads + trackers; i++) cb.onTabBlock(tabId)
+  } catch {
+    // getMatchedRules is subject to a quota (20 calls / 10 min; ONLY
+    // user-gesture calls are exempt — the feedback permission does not exempt
+    // it). Under very heavy multi-tab browsing a poll can reject; counting is
+    // best-effort and simply resumes next interval. Blocking is unaffected.
+  }
 }
 
 /**
- * Wire up: enforce on startup, install, settings change.
- * @param onBlocks   batched total block count → for the running stats
- * @param onTabBlock per-block callback with the tab id → for the icon badge
+ * Wire up: enforce on startup, install, settings change; count blocks per tab
+ * load. The initial sync is driven by the service worker's cold-start gate
+ * (see lifecycle.ts) so a mid-session SW wake doesn't redundantly re-sync.
  */
-export function initNetBlocker(
-  onBlocks: (n: number) => void,
-  onTabBlock: (tabId: number) => void,
-) {
+export function initNetBlocker(cb: BlockCallbacks) {
   chrome.runtime.onInstalled.addListener(() => void syncNetBlocker())
   chrome.runtime.onStartup.addListener(() => void syncNetBlocker())
   onSettingsChanged(() => void syncNetBlocker())
 
-  // Only fires in unpacked/dev extensions; silently absent otherwise.
-  chrome.declarativeNetRequest.onRuleMatchedDebug?.addListener((info) => {
-    if (BLOCK_RULESET_IDS.has(info.rule.rulesetId)) {
-      pendingBlocks++
-      scheduleFlush(onBlocks)
-      const tabId = info.request.tabId
-      if (tabId !== undefined && tabId >= 0) onTabBlock(tabId)
-    }
+  chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+    // Seed the counting high-water AT load start, so the post-load poll counts
+    // only this page's matches — not the previous page's still-retained ones.
+    if (changeInfo.status === 'loading') lastPollTs.set(tabId, Date.now())
+    if (changeInfo.status === 'complete') void pollTabBlocks(tabId, cb)
   })
-
-  void syncNetBlocker()
+  chrome.tabs.onRemoved.addListener((tabId) => lastPollTs.delete(tabId))
 }

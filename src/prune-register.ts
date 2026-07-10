@@ -58,10 +58,13 @@ export async function syncPruneRegistration(): Promise<void> {
   }
 }
 
-/** Enforce on startup, install, and whenever settings change. */
+/**
+ * Enforce on startup, install, and whenever settings change. The first sync is
+ * driven by the service worker's cold-start gate (see lifecycle.ts); a
+ * mid-session SW wake skips it since the registration persists across restarts.
+ */
 export function initPruneRegistration(): void {
   chrome.runtime.onInstalled.addListener(() => void syncPruneRegistration())
   chrome.runtime.onStartup.addListener(() => void syncPruneRegistration())
   onSettingsChanged(() => void syncPruneRegistration())
-  void syncPruneRegistration()
 }

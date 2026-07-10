@@ -366,6 +366,47 @@ async function blockingActive(): Promise<boolean> {
 /** Generic + YouTube selectors currently injected (for the popup review). */
 let activeSelectors: string[] = []
 
+/**
+ * Domain-specific cosmetic selectors from the bundled filter list, fetched
+ * once per frame from the service worker (which owns the sharded data).
+ *
+ * Deliberately NOT awaited by apply(): the round-trip can wake a sleeping
+ * worker, and blocking on it would delay the built-in selectors past the ad
+ * paint they exist to prevent. apply() injects what it has, and re-applies
+ * once the list lands — so the list only ever adds hiding, never postpones it.
+ *
+ * YouTube is excluded on purpose: its display ads are handled by
+ * YOUTUBE_SELECTORS + the ad-badge scanner, which are tuned against the live
+ * site, and we don't want list rules fighting them.
+ *
+ * A failure (worker asleep mid-navigation, message port closed) resolves to an
+ * empty list rather than taking down the built-in selectors.
+ */
+let listSelectors: string[] | null = null
+let listRequested = false
+
+function requestListSelectors(onReady: () => void): void {
+  if (listRequested) return
+  listRequested = true
+  if (isYouTube()) {
+    listSelectors = []
+    return
+  }
+  void chrome.runtime
+    .sendMessage({
+      type: 'skipSensei:getCosmeticFilters',
+      hostname: location.hostname,
+    })
+    .then((selectors: unknown) =>
+      Array.isArray(selectors) ? isValidSelectorList(selectors as string[]) : [],
+    )
+    .catch(() => [] as string[])
+    .then((selectors) => {
+      listSelectors = selectors
+      if (selectors.length > 0) onReady()
+    })
+}
+
 async function apply() {
   const settings = await getSettings()
   const allowed = settings.masterEnabled && !isAllowlisted(settings.allowlist)
@@ -384,8 +425,15 @@ async function apply() {
   const siteHits = genericOn
     ? FIRST_PARTY_AD_SITES.filter((site) => site.hosts.test(location.hostname))
     : []
+  // Domain-specific rules from the bundled list. Fetched in the background on
+  // the first pass (see requestListSelectors) and folded in from the second;
+  // validated on arrival because a rule can carry syntax this Chrome build
+  // won't parse, and one bad selector in a comma-joined rule silently voids
+  // the WHOLE stylesheet rule.
+  if (genericOn) requestListSelectors(() => void apply())
   const hideSelectors = [
     ...(genericOn ? SELECTORS : []),
+    ...(genericOn ? (listSelectors ?? []) : []),
     ...siteHits
       .filter((site) => site.mode !== 'placeholder')
       .flatMap((site) => site.selectors),

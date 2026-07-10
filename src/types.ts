@@ -45,11 +45,23 @@ export interface Settings {
   aiEnhancements: boolean
   /**
    * Aggressive YouTube ad blocking: strip ad slots from player responses in
-   * the page world (uBO-style json-prune) so most ads never start. Most
-   * likely feature to be detected by YouTube — off by default, and the ad
-   * engine auto-disables it after repeated enforcement walls.
+   * the page world (uBO-style json-prune) plus outbound player-request context
+   * spoofing and HLS/DASH ad-segment stripping, so most ads never start. The
+   * page-world patches are cloaked (patched natives report `[native code]`) so
+   * YouTube's integrity checks don't notice. Off by default (opt-in): it's the
+   * riskiest feature, and the ad engine keeps a circuit breaker that falls back
+   * to reactive skipping if repeated enforcement walls appear.
    */
   aggressivePruning: boolean
+  /**
+   * Anti-adblock defusing: inject MAIN-world scriptlets (set-constant,
+   * spoof-css, abort-on-property-read, prevent-setTimeout/addEventListener) to
+   * neutralize adblock-detection and ad-reinsertion on general sites. Part of
+   * "Block all ads". Only active where the extension has host access — the
+   * broad-web layer needs the optional all-sites permission (e.g. granted for
+   * URL-tracking protection); dormant until then. On by default.
+   */
+  defuseAntiAdblock: boolean
   /** General web URL-tracking-parameter stripping (AdGuard URL Tracking list).
    * Needs broad host access, so it's requested as an optional permission when
    * enabled. Off by default. */
@@ -94,6 +106,7 @@ export const DEFAULT_SETTINGS: Settings = {
   showSkipToast: true,
   aiEnhancements: true,
   aggressivePruning: false,
+  defuseAntiAdblock: true,
   blockUrlTracking: false,
   ytHideShorts: false,
   ytDismissStillWatching: false,
@@ -111,6 +124,8 @@ export interface Stats {
   allTimeAdSkips: number
   allTimeSponsorSkips: number
   allTimeWebAdsBlocked: number
+  allTimeTrackersBlocked: number
+  allTimeCookiesBlocked: number
 }
 
 /** Cloud LLM usage tracking (built-in on-device AI is free/untracked). */
@@ -143,6 +158,8 @@ export const DEFAULT_STATS: Stats = {
   allTimeAdSkips: 0,
   allTimeSponsorSkips: 0,
   allTimeWebAdsBlocked: 0,
+  allTimeTrackersBlocked: 0,
+  allTimeCookiesBlocked: 0,
 }
 
 /** How an ad was neutralized — kept for future metrics/debugging. */
@@ -241,6 +258,8 @@ export type Message =
     }
   | { type: 'skipSensei:checkBuiltinAI' } // → { availability: string }
   | { type: 'skipSensei:getBlockerState' } // → BlockerState
+  // → string[] of domain-specific cosmetic selectors for the sender's hostname
+  | { type: 'skipSensei:getCosmeticFilters'; hostname: string }
   | { type: 'skipSensei:tabNeedsReload'; needsReload: boolean } // badges the icon for the sender tab
   | { type: 'skipSensei:getTabBlocked'; tabId: number } // → number (ads blocked on that tab)
   | {
@@ -260,6 +279,8 @@ export interface SessionStats {
   sessionAdSkips: number
   sessionSponsorSkips: number
   sessionWebAdsBlocked: number
+  sessionTrackersBlocked: number
+  sessionCookiesBlocked: number
 }
 
 // ---------------------------------------------------------------------------

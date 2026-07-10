@@ -8,8 +8,19 @@ import {
   resolveProvider,
   reviewPopup,
 } from './llm-client'
-import { getBlockerState, initNetBlocker } from './net-blocker'
-import { initPruneRegistration } from './prune-register'
+import {
+  getBlockerState,
+  initNetBlocker,
+  syncNetBlocker,
+  verifyNetBlocker,
+} from './net-blocker'
+import { getCosmeticFilters } from './cosmetic-filters'
+import { initPruneRegistration, syncPruneRegistration } from './prune-register'
+import {
+  initScriptletRegistration,
+  syncScriptletRegistration,
+} from './scriptlet-register'
+import { isColdStart, runColdStart } from './lifecycle'
 import { fetchSponsorBlockSegments } from './sponsorblock'
 import { initErrorReporting, reportError, reportEvent } from './error-reporting'
 import {
@@ -39,6 +50,8 @@ const EMPTY_SESSION: SessionStats = {
   sessionAdSkips: 0,
   sessionSponsorSkips: 0,
   sessionWebAdsBlocked: 0,
+  sessionTrackersBlocked: 0,
+  sessionCookiesBlocked: 0,
 }
 
 async function getSessionStats(): Promise<SessionStats> {
@@ -54,11 +67,28 @@ async function recordSkip(kind: 'ad' | 'sponsor') {
   await chrome.storage.session.set({ [SESSION_STATS_KEY]: session })
 }
 
-async function recordWebBlocks(n: number) {
-  await incrementStat('allTimeWebAdsBlocked', n)
-  const session = await getSessionStats()
-  session.sessionWebAdsBlocked += n
-  await chrome.storage.session.set({ [SESSION_STATS_KEY]: session })
+// Stat writes are serialized through this chain so concurrent polls (e.g. two
+// tabs finishing at once) can't lose an increment via interleaved
+// read-modify-write on the shared stats / session keys.
+let statChain: Promise<void> = Promise.resolve()
+
+function recordBlockCounts(c: {
+  ads: number
+  trackers: number
+  cookies: number
+}) {
+  statChain = statChain
+    .then(async () => {
+      if (c.ads) await incrementStat('allTimeWebAdsBlocked', c.ads)
+      if (c.trackers) await incrementStat('allTimeTrackersBlocked', c.trackers)
+      if (c.cookies) await incrementStat('allTimeCookiesBlocked', c.cookies)
+      const session = await getSessionStats()
+      session.sessionWebAdsBlocked += c.ads
+      session.sessionTrackersBlocked += c.trackers
+      session.sessionCookiesBlocked += c.cookies
+      await chrome.storage.session.set({ [SESSION_STATS_KEY]: session })
+    })
+    .catch(() => {})
 }
 
 // ---------------------------------------------------------------------------
@@ -411,6 +441,9 @@ chrome.runtime.onMessage.addListener(
       case 'skipSensei:getBlockerState':
         void getBlockerState().then(sendResponse)
         return true
+      case 'skipSensei:getCosmeticFilters':
+        void getCosmeticFilters(message.hostname).then(sendResponse)
+        return true
       case 'skipSensei:tabNeedsReload':
         if (sender.tab?.id !== undefined) {
           setReloadBadge(sender.tab.id, message.needsReload)
@@ -546,14 +579,38 @@ void (async () => {
 })()
 
 // "Block all ads" engine: enforce DNR ruleset state; count blocks (stats + badge).
-initNetBlocker(
-  (n) => void recordWebBlocks(n),
-  (tabId) => bumpTabBlocked(tabId),
-)
+initNetBlocker({
+  onCounts: (c) => recordBlockCounts(c),
+  onTabBlock: (tabId) => bumpTabBlocked(tabId),
+})
 
 // Aggressive-mode YouTube pruner: (un)register the MAIN-world content script
 // to match the aggressivePruning setting.
 initPruneRegistration()
+
+// Anti-adblock scriptlet layer: (un)register the MAIN-world scriptlet bundle
+// for the broad web (dormant until broad host permission is granted).
+initScriptletRegistration()
+
+// Cold-start gate: DNR ruleset state and chrome.scripting registrations persist
+// across service-worker restarts, so we only run the full sync on a genuine
+// cold start (browser launch / install / update) — not on every idle wake.
+// (onInstalled/onStartup/onSettingsChanged still re-sync on their own events.)
+// Warm wakes get the cheap drift check instead. Enabled-ruleset state lives
+// in Chrome and outlives the worker, so if it ever stops matching settings
+// (an earlier sync that failed, an extension reload) nothing would notice
+// until the next settings change; the check re-syncs only when they disagree.
+void (async () => {
+  if (await isColdStart()) {
+    await runColdStart(async () => {
+      await syncNetBlocker()
+      await syncPruneRegistration()
+      await syncScriptletRegistration()
+    })
+  } else {
+    await verifyNetBlocker()
+  }
+})()
 
 // Sanitized crash reporting for anything nobody caught (usage analytics come
 // from Chrome Web Store stats, not from the extension).

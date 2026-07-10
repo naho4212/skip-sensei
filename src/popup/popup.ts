@@ -43,6 +43,18 @@ function renderSettings(settings: Settings) {
   sponsorToggle.checked = settings.sponsorEngineEnabled
   blockAdsToggle.checked = settings.blockAllAds
   document.body.classList.toggle('disabled', !settings.masterEnabled)
+  $('brand-status').textContent = settings.masterEnabled
+    ? 'Zero interruptions.'
+    : 'Paused'
+}
+
+/** Compact large counts so four stat cards fit (48,392 → 48.4K). */
+function formatCount(n: number): string {
+  if (n < 10000) return n.toLocaleString()
+  return new Intl.NumberFormat('en', {
+    notation: 'compact',
+    maximumFractionDigits: 1,
+  }).format(n)
 }
 
 let currentHost: string | null = null
@@ -73,10 +85,12 @@ async function renderSiteSection() {
   $('site-host').textContent = host
   const paused = settings.allowlist.includes(host)
   pauseSiteToggle.checked = paused
+  sectionEl.classList.toggle('paused', paused)
+  $('site-status').textContent = paused ? 'Paused here' : 'Blocking active'
 
   const pageBlockedEl = $('page-blocked')
   if (paused) {
-    pageBlockedEl.textContent = 'paused'
+    pageBlockedEl.textContent = 'Tap the power button to resume'
   } else {
     // Same live counter the icon badge uses, so the two never disagree.
     let n = 0
@@ -136,13 +150,22 @@ async function renderBlockerState() {
 }
 
 function renderStats(stats: Stats, session: SessionStats | null) {
-  $('alltime-ad-skips').textContent = String(stats.allTimeAdSkips)
-  $('alltime-sponsor-skips').textContent = String(stats.allTimeSponsorSkips)
-  $('alltime-web-blocks').textContent = String(stats.allTimeWebAdsBlocked)
+  // YouTube card combines ad-skips + sponsor-skips into one "interruptions
+  // skipped on YouTube" figure. The two are still tracked separately (the
+  // "This video" section shows sponsor segments on their own).
+  $('alltime-youtube').textContent = formatCount(
+    stats.allTimeAdSkips + stats.allTimeSponsorSkips,
+  )
+  $('alltime-web-blocks').textContent = formatCount(stats.allTimeWebAdsBlocked)
+  $('alltime-trackers').textContent = formatCount(stats.allTimeTrackersBlocked)
+  $('alltime-cookies').textContent = formatCount(stats.allTimeCookiesBlocked)
   if (session) {
-    $('session-ad-skips').textContent = String(session.sessionAdSkips)
-    $('session-sponsor-skips').textContent = String(session.sessionSponsorSkips)
+    $('session-youtube').textContent = String(
+      session.sessionAdSkips + session.sessionSponsorSkips,
+    )
     $('session-web-blocks').textContent = String(session.sessionWebAdsBlocked)
+    $('session-trackers').textContent = String(session.sessionTrackersBlocked)
+    $('session-cookies').textContent = String(session.sessionCookiesBlocked)
   }
 }
 
