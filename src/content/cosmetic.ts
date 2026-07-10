@@ -423,14 +423,18 @@ async function apply() {
   const settings = await getSettings()
   const allowed = settings.masterEnabled && !isAllowlisted(settings.allowlist)
   // Generic web ad hiding is the "Block all ads" feature. YouTube's own
-  // display ads (feed/sidebar/masthead) are also hidden when "Skip YouTube
-  // ads" is on — a YouTube display ad slipping through is surprising when
-  // ad-skipping is enabled.
+  // display ads (feed/sidebar/masthead) are also hidden whenever any YouTube
+  // ad handling is on — "Skip YouTube ads", "Block all ads", or aggressive
+  // mode — so a display ad slipping through never looks out of place next to
+  // handled video ads. (Aggressive mode alone should still give an ad-free
+  // YouTube, so it counts here too.)
   const genericOn = allowed && settings.blockAllAds
   const ytOn =
     allowed &&
     isYouTube() &&
-    (settings.blockAllAds || settings.adEngineEnabled)
+    (settings.blockAllAds ||
+      settings.adEngineEnabled ||
+      settings.aggressivePruning)
 
   // Per-site "not an ad" selectors the user un-hid stay un-hidden.
   const rejected = new Set(await getRejectedGapfill(bareDomain()))

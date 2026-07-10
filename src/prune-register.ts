@@ -30,10 +30,11 @@ async function isRegistered(): Promise<boolean> {
 
 export async function syncPruneRegistration(): Promise<void> {
   const settings = await getSettings()
-  const shouldRun =
-    settings.masterEnabled &&
-    settings.adEngineEnabled &&
-    settings.aggressivePruning
+  // Aggressive mode is its own YouTube ad strategy (prune ads before they're
+  // ever scheduled), NOT an add-on to the reactive Skip engine — so it runs on
+  // its own switch, independent of adEngineEnabled. Gating it on ad-skip meant
+  // turning ad-skip off silently killed aggressive mode even when it was on.
+  const shouldRun = settings.masterEnabled && settings.aggressivePruning
 
   const registered = await isRegistered()
   try {
