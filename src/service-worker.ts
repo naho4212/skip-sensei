@@ -8,7 +8,12 @@ import {
   resolveProvider,
   reviewPopup,
 } from './llm-client'
-import { getBlockerState, initNetBlocker, syncNetBlocker } from './net-blocker'
+import {
+  getBlockerState,
+  initNetBlocker,
+  syncNetBlocker,
+  verifyNetBlocker,
+} from './net-blocker'
 import { initPruneRegistration, syncPruneRegistration } from './prune-register'
 import {
   initScriptletRegistration,
@@ -587,13 +592,20 @@ initScriptletRegistration()
 // across service-worker restarts, so we only run the full sync on a genuine
 // cold start (browser launch / install / update) — not on every idle wake.
 // (onInstalled/onStartup/onSettingsChanged still re-sync on their own events.)
+// Warm wakes get the cheap drift check instead. Enabled-ruleset state lives
+// in Chrome and outlives the worker, so if it ever stops matching settings
+// (an earlier sync that failed, an extension reload) nothing would notice
+// until the next settings change; the check re-syncs only when they disagree.
 void (async () => {
-  if (!(await isColdStart())) return
-  await runColdStart(async () => {
-    await syncNetBlocker()
-    await syncPruneRegistration()
-    await syncScriptletRegistration()
-  })
+  if (await isColdStart()) {
+    await runColdStart(async () => {
+      await syncNetBlocker()
+      await syncPruneRegistration()
+      await syncScriptletRegistration()
+    })
+  } else {
+    await verifyNetBlocker()
+  }
 })()
 
 // Sanitized crash reporting for anything nobody caught (usage analytics come

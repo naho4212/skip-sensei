@@ -24,51 +24,69 @@ export interface BlockerState {
 
 let lastError: string | undefined
 
-export async function syncNetBlocker(): Promise<BlockerState> {
+/**
+ * Desired ruleset state per group, derived from settings. Ad blocking is the
+ * base; cookies/social/popups are opt-ins gated on their own settings AND
+ * blockAllAds. URL-tracking stripping is a standalone privacy feature (needs
+ * host access to actually rewrite, but enabling without it is a harmless
+ * no-op). Malware/phishing blocking (URLhaus) is protection, not ad blocking —
+ * standalone and on by default.
+ */
+function desiredRulesets(
+  settings: Awaited<ReturnType<typeof getSettings>>,
+): Array<{ ids: string[]; on: boolean; label: string }> {
+  const master = settings.masterEnabled
+  return [
+    { ids: AD_RULESET_IDS, on: master && settings.blockAllAds, label: 'ad blocking' },
+    { ids: TRACKER_RULESET_IDS, on: master && settings.blockTrackers, label: 'tracker blocking' },
+    { ids: ['cookies'], on: master && settings.blockAllAds && settings.blockCookieNotices, label: 'cookie-notice blocking' },
+    { ids: ['social'], on: master && settings.blockAllAds && settings.blockSocial, label: 'social blocking' },
+    { ids: ['popups'], on: master && settings.blockAllAds && settings.blockPopups, label: 'popup blocking' },
+    { ids: ['url_tracking'], on: master && settings.blockUrlTracking, label: 'URL tracking protection' },
+    { ids: ['malware'], on: master && settings.blockMalware, label: 'malware blocking' },
+  ]
+}
+
+/**
+ * Single-flight gate. Sync triggers overlap freely — onInstalled, onStartup,
+ * and the cold-start gate all fire within a second of each other at launch,
+ * and settings changes add more. Concurrent runs interleave their setRulesets
+ * retries and race on the shared `lastError`, so a failing run can have its
+ * error cleared by a run that started later. Serialize instead: one sync at a
+ * time; triggers arriving mid-run coalesce into a single follow-up run (which
+ * re-reads settings, so it reflects the newest state).
+ */
+let syncInFlight: Promise<BlockerState> | null = null
+let syncQueued = false
+
+export function syncNetBlocker(): Promise<BlockerState> {
+  if (syncInFlight) {
+    syncQueued = true
+    return syncInFlight
+  }
+  syncInFlight = (async () => {
+    try {
+      return await doSyncNetBlocker()
+    } finally {
+      syncInFlight = null
+      if (syncQueued) {
+        syncQueued = false
+        void syncNetBlocker()
+      }
+    }
+  })()
+  return syncInFlight
+}
+
+async function doSyncNetBlocker(): Promise<BlockerState> {
   const settings = await getSettings()
   lastError = undefined
 
   // Each ruleset group is enabled in a SEPARATE call so that if one hits the
-  // shared rule-pool limit, the others still apply. Ad blocking is the base;
-  // the rest are independent opt-ins gated on their own settings AND blockAllAds.
-  const master = settings.masterEnabled
-  await setRulesets(AD_RULESET_IDS, master && settings.blockAllAds, 'ad blocking')
-  await setRulesets(
-    TRACKER_RULESET_IDS,
-    master && settings.blockTrackers,
-    'tracker blocking',
-  )
-  await setRulesets(
-    ['cookies'],
-    master && settings.blockAllAds && settings.blockCookieNotices,
-    'cookie-notice blocking',
-  )
-  await setRulesets(
-    ['social'],
-    master && settings.blockAllAds && settings.blockSocial,
-    'social blocking',
-  )
-  await setRulesets(
-    ['popups'],
-    master && settings.blockAllAds && settings.blockPopups,
-    'popup blocking',
-  )
-  // URL-tracking stripping is a standalone privacy feature — it does NOT
-  // require "Block all ads". Needs host access (granted via the options
-  // toggle) to actually rewrite URLs, but enabling the ruleset without it is
-  // a harmless no-op.
-  await setRulesets(
-    ['url_tracking'],
-    master && settings.blockUrlTracking,
-    'URL tracking protection',
-  )
-  // Malware/phishing domain blocking (URLhaus) is protection, not ad
-  // blocking — standalone and on by default.
-  await setRulesets(
-    ['malware'],
-    master && settings.blockMalware,
-    'malware blocking',
-  )
+  // shared rule-pool limit, the others still apply.
+  for (const group of desiredRulesets(settings)) {
+    await setRulesets(group.ids, group.on, group.label)
+  }
 
   try {
     await syncAllowlist(settings.allowlist)
@@ -79,26 +97,64 @@ export async function syncNetBlocker(): Promise<BlockerState> {
   return getBlockerState()
 }
 
-async function setRulesets(ids: string[], on: boolean, label: string) {
+/**
+ * Cheap drift check for warm SW wakes (one settings read + one
+ * getEnabledRulesets, then a full sync only if they disagree). Enabled-ruleset
+ * state is Chrome-side and outlives the worker, so anything that resets it
+ * mid-session — an extension reload, a failed earlier sync — would otherwise
+ * persist until the next settings change or browser restart.
+ */
+export async function verifyNetBlocker(): Promise<void> {
   try {
+    const settings = await getSettings()
     const current = new Set(
       await chrome.declarativeNetRequest.getEnabledRulesets(),
     )
-    const allOn = ids.every((id) => current.has(id))
-    const allOff = ids.every((id) => !current.has(id))
-    if (on && !allOn) {
-      await chrome.declarativeNetRequest.updateEnabledRulesets({
-        enableRulesetIds: ids,
-      })
-    } else if (!on && !allOff) {
-      await chrome.declarativeNetRequest.updateEnabledRulesets({
-        disableRulesetIds: ids,
-      })
+    const drifted = desiredRulesets(settings).some(({ ids, on }) =>
+      ids.some((id) => current.has(id) !== on),
+    )
+    if (drifted) await syncNetBlocker()
+  } catch {
+    // best-effort — the event-driven syncs still cover the common paths
+  }
+}
+
+async function setRulesets(ids: string[], on: boolean, label: string) {
+  // One retry for a transient failure right at launch. Note this does NOT
+  // rescue the known "exceeds the rule count limit" failure after an extension
+  // reload/update: Chrome can hold the previous install's static-rule
+  // allocation for the rest of the browser session, and every retry — in-call,
+  // on a timer, or on a later event — fails identically until restart. Keep
+  // the attempt cheap rather than pretending we can wait it out; the failure
+  // is surfaced through getBlockerState() so the popup can show it.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const current = new Set(
+        await chrome.declarativeNetRequest.getEnabledRulesets(),
+      )
+      const allOn = ids.every((id) => current.has(id))
+      const allOff = ids.every((id) => !current.has(id))
+      if (on && !allOn) {
+        await chrome.declarativeNetRequest.updateEnabledRulesets({
+          enableRulesetIds: ids,
+        })
+      } else if (!on && !allOff) {
+        await chrome.declarativeNetRequest.updateEnabledRulesets({
+          disableRulesetIds: ids,
+        })
+      }
+      return
+    } catch (error) {
+      if (attempt === 1) {
+        // Most likely the enabled-static-rule limit (this extension's own
+        // stale allocation, or other extensions using the shared pool).
+        const msg =
+          error instanceof Error ? error.message : `Could not update ${label}`
+        lastError = `${label}: ${msg}`
+        return
+      }
+      await new Promise((r) => setTimeout(r, 600))
     }
-  } catch (error) {
-    // Most likely the enabled-static-rule limit (other extensions using the pool).
-    const msg = error instanceof Error ? error.message : `Could not update ${label}`
-    lastError = `${label}: ${msg}`
   }
 }
 
