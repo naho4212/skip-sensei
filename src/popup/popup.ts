@@ -31,6 +31,7 @@ const masterToggle = $<HTMLInputElement>('master-toggle')
 const adToggle = $<HTMLInputElement>('ad-engine-toggle')
 const sponsorToggle = $<HTMLInputElement>('sponsor-engine-toggle')
 const blockAdsToggle = $<HTMLInputElement>('block-ads-toggle')
+const aiEnhancementsToggle = $<HTMLInputElement>('ai-enhancements-toggle')
 const blockerNoteEl = $('blocker-note')
 const pauseSiteToggle = $<HTMLInputElement>('pause-site-toggle')
 const videoStatusEl = $('video-status')
@@ -42,6 +43,7 @@ function renderSettings(settings: Settings) {
   adToggle.checked = settings.adEngineEnabled
   sponsorToggle.checked = settings.sponsorEngineEnabled
   blockAdsToggle.checked = settings.blockAllAds
+  aiEnhancementsToggle.checked = settings.aiEnhancements
   document.body.classList.toggle('disabled', !settings.masterEnabled)
   $('brand-status').textContent = settings.masterEnabled
     ? 'Zero interruptions.'
@@ -589,6 +591,7 @@ async function main() {
   wireToggle(masterToggle, 'masterEnabled')
   wireToggle(adToggle, 'adEngineEnabled')
   wireToggle(sponsorToggle, 'sponsorEngineEnabled')
+  wireToggle(aiEnhancementsToggle, 'aiEnhancements')
   blockAdsToggle.addEventListener('change', async () => {
     renderSettings(await updateSettings({ blockAllAds: blockAdsToggle.checked }))
     // Give the service worker a moment to flip the rulesets, then report.
