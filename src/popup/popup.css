@@ -43,6 +43,14 @@
   box-sizing: border-box;
 }
 
+/* The `hidden` attribute must always win. Author `display` rules (e.g.
+ * `.current { display: flex }`) otherwise override the UA `[hidden]` rule, so
+ * JS-hidden sections would stay visible — which is exactly what left the
+ * "This video" panel showing on non-YouTube pages. */
+[hidden] {
+  display: none !important;
+}
+
 body {
   width: 344px;
   margin: 0;
