@@ -2,335 +2,470 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>Ad Sensei options</title>
+    <title>Ad Sensei settings</title>
     <link rel="stylesheet" href="./options.css" />
   </head>
   <body>
-    <main>
-      <h1 class="wordmark">
-        <svg viewBox="0 0 24 17" aria-hidden="true">
-          <path
-            d="M0 1.5l6 7-6 7v-14zm7.5 0l6 7-6 7v-14zm8.5 0h2.4v14H16v-14z"
-          />
-        </svg>
-        <span class="ad">AD</span> SENSEI <span class="sub">settings</span>
-      </h1>
-
-      <section>
-        <h2>Sponsor detection AI</h2>
-        <p class="hint">
-          Transcripts of the videos you watch are sent to the selected AI for
-          analysis. Beyond that, only the anonymous diagnostics described
-          under Privacy below ever leave your browser.
-        </p>
-        <label class="field">
-          <span>Provider</span>
-          <select id="provider">
-            <option value="builtin">Chrome built-in AI (free, on-device)</option>
-            <option value="gemini">Google Gemini (free API key)</option>
-            <option value="groq">Groq (free API key)</option>
-            <option value="openrouter">OpenRouter (free API key)</option>
-            <option value="ollama">Local Ollama (free, no key)</option>
-            <option value="openclaw">OpenClaw gateway (your OpenClaw)</option>
-            <option value="anthropic">Anthropic Claude (API key)</option>
-            <option value="openai">OpenAI (API key)</option>
-          </select>
-        </label>
-        <p class="hint" id="provider-info"></p>
-        <p class="hint" id="builtin-status"></p>
-        <div id="cloud-fields" hidden>
-          <label class="field" id="api-key-field">
-            <span>
-              <span id="api-key-label">API key</span>
-              <a id="api-key-link" target="_blank" rel="noopener">Get a key →</a>
-            </span>
-            <input type="password" id="api-key" autocomplete="off" placeholder="paste your key" />
-          </label>
-          <label class="field" id="openclaw-url-field" hidden>
-            <span>Gateway URL</span>
-            <input
-              type="text"
-              id="openclaw-url"
-              placeholder="http://127.0.0.1:18789/v1/chat/completions"
+    <div class="app">
+      <!-- ─────────────────────────  Sidebar  ───────────────────────── -->
+      <aside class="sidebar">
+        <h1 class="wordmark">
+          <svg viewBox="0 0 24 17" aria-hidden="true">
+            <path
+              d="M0 1.5l6 7-6 7v-14zm7.5 0l6 7-6 7v-14zm8.5 0h2.4v14H16v-14z"
             />
-          </label>
-          <label class="field">
-            <span>Model <em>(optional override)</em></span>
-            <select id="model-select"></select>
-            <input
-              type="text"
-              id="model"
-              placeholder="custom model id"
-              hidden
-            />
-          </label>
-          <p class="hint">
-            Your key is stored locally in this browser and sent only to the
-            provider you selected.
-          </p>
-          <div class="usage" id="usage-box" hidden>
-            <div class="usage-head">
-              <span>Usage</span>
-              <button type="button" id="usage-reset" class="usage-reset">Reset</button>
-            </div>
-            <p class="usage-line" id="usage-daily"></p>
-            <p class="usage-line" id="usage-monthly"></p>
-            <p class="hint" id="usage-note"></p>
-          </div>
-        </div>
-      </section>
-
-      <section>
-        <h2>SponsorBlock</h2>
-        <p class="hint">
-          Use the community-run
-          <a href="https://sponsor.ajay.app" target="_blank" rel="noopener"
-            >SponsorBlock</a
-          >
-          database for instant, exact segment skipping on videos others have
-          already marked. The AI above only runs when SponsorBlock has nothing.
-          Privacy-preserving: your video is looked up by a hashed prefix, so the
-          server never learns which video you watched.
-        </p>
-        <label class="field checkbox">
-          <input type="checkbox" id="sponsorblock-enabled" />
-          <span>Use SponsorBlock segments</span>
-        </label>
-        <div id="sponsorblock-categories">
-          <label class="field checkbox">
-            <input type="checkbox" data-sbcat="sponsor" />
-            <span>Sponsor</span>
-          </label>
-          <label class="field checkbox">
-            <input type="checkbox" data-sbcat="selfpromo" />
-            <span>Unpaid / self-promotion</span>
-          </label>
-          <label class="field checkbox">
-            <input type="checkbox" data-sbcat="interaction" />
-            <span>Interaction reminders (like &amp; subscribe)</span>
-          </label>
-          <label class="field checkbox">
-            <input type="checkbox" data-sbcat="intro" />
-            <span>Intro / intermission</span>
-          </label>
-          <label class="field checkbox">
-            <input type="checkbox" data-sbcat="outro" />
-            <span>Outro / endcards</span>
-          </label>
-          <label class="field checkbox">
-            <input type="checkbox" data-sbcat="preview" />
-            <span>Preview / recap</span>
-          </label>
-          <label class="field checkbox">
-            <input type="checkbox" data-sbcat="filler" />
-            <span>Filler / tangents</span>
-          </label>
-          <label class="field checkbox">
-            <input type="checkbox" data-sbcat="music_offtopic" />
-            <span>Non-music section (music videos)</span>
-          </label>
-        </div>
-      </section>
-
-      <section>
-        <h2>Skipping behavior</h2>
-        <label class="field">
-          <span
-            >Confidence threshold<span
-              class="info"
-              tabindex="0"
-              data-tip="Only skip sponsor segments the AI is at least this confident about. Higher = fewer false skips, but may miss some."
-              >ⓘ</span
-            ></span
-          >
-          <span class="slider-row">
-            <input type="range" id="threshold" min="0.5" max="0.95" step="0.05" />
-            <output id="threshold-value">0.70</output>
-          </span>
-        </label>
-        <label class="field checkbox">
-          <input type="checkbox" id="show-toast" />
-          <span>Show a brief toast in the player when a sponsor segment is skipped</span>
-        </label>
-        <label class="field checkbox">
-          <input type="checkbox" id="aggressive-pruning" />
-          <span
-            >Aggressive YouTube ad blocking (experimental)<span
-              class="info"
-              tabindex="0"
-              data-tip="Strips ad slots out of YouTube's player data so most ads never start, instead of skipping them after they appear. Most likely feature to be detected by YouTube — if repeated ad-blocker warnings appear, it turns itself off automatically and normal skipping continues. Takes effect on the next page load."
-              >ⓘ</span
-            ></span
-          >
-        </label>
-        <label class="field checkbox">
-          <input type="checkbox" id="ai-enhancements" />
-          <span
-            >AI enhancements<span
-              class="info"
-              tabindex="0"
-              data-tip="Lets the AI auto-repair YouTube skipping when the layout changes, catch web ads the filter lists miss, review popups, and auto-answer cookie prompts. Free on built-in AI."
-              >ⓘ</span
-            ></span
-          >
-        </label>
-        <label class="field checkbox">
-          <input type="checkbox" id="debug-logging" />
-          <span
-            >Debug logging<span
-              class="info"
-              tabindex="0"
-              data-tip="Prints [skipSensei] diagnostics to the browser console. For troubleshooting; leave off for normal use."
-              >ⓘ</span
-            ></span
-          >
-        </label>
-      </section>
-
-      <section>
-        <h2>YouTube extras</h2>
-        <p class="hint">
-          Optional annoyance removers. Each is off by default.
-        </p>
-        <label class="field checkbox">
-          <input type="checkbox" id="yt-hide-shorts" />
-          <span>Hide Shorts (feed shelves and sidebar)</span>
-        </label>
-        <label class="field checkbox">
-          <input type="checkbox" id="yt-disable-endcards" />
-          <span
-            >Hide end-screen cards and turn off autoplay of the next video<span
-              class="info"
-              tabindex="0"
-              data-tip="Hides the suggestion cards over the end of a video and keeps YouTube's autoplay toggle off so it doesn't roll into the next video."
-              >ⓘ</span
-            ></span
-          >
-        </label>
-        <label class="field checkbox">
-          <input type="checkbox" id="yt-dismiss-stillwatching" />
-          <span>Auto-dismiss the “Continue watching?” pause prompt</span>
-        </label>
-      </section>
-
-      <section>
-        <h2>Filter rulesets</h2>
-        <p class="hint">
-          Each blocking list is a set of network rules. Turn them on or off
-          individually here. <strong>Loaded</strong> is how many rules Chrome
-          currently has active — if a list is on but shows nothing loaded,
-          Chrome hit its per-session rule limit; restart the browser to clear
-          it.
-        </p>
-        <div class="ruleset-total" id="ruleset-total"></div>
-        <div id="ruleset-list"></div>
-      </section>
-
-      <section>
-        <h2>Ad blocking</h2>
-        <label class="field checkbox">
-          <input type="checkbox" id="defuse-anti-adblock" />
-          <span
-            >Defuse ad-blocker detection<span
-              class="info"
-              tabindex="0"
-              data-tip="Neutralizes scripts that detect ad blocking or re-insert ads (adblock-wall nags, hidden-slot checks). Only active on sites you've granted all-sites access to — until then it stays dormant. Takes effect on the next page load."
-              >ⓘ</span
-            ></span
-          >
-        </label>
-        <p class="hint">
-          Sites where ad blocking is paused. Add sites here, or use the popup's
-          “Pause ad blocking here” toggle while on a site.
-        </p>
-        <div class="allowlist-add">
-          <input type="text" id="allowlist-input" placeholder="example.com" />
-          <button id="allowlist-add-btn" type="button">Add</button>
-        </div>
-        <ul class="allowlist" id="allowlist"></ul>
-      </section>
-
-      <section>
-        <h2>Analysis cache</h2>
-        <p class="hint">
-          Sponsor analysis is cached per video so a re-watch never re-runs the
-          AI. Clear it to force fresh analysis (e.g. after changing provider).
-        </p>
-        <p class="hint" id="cache-stats">Measuring cache…</p>
-        <div class="button-row">
-          <button id="clear-cache" type="button">Clear analysis cache</button>
-          <button id="cache-refresh" type="button" title="Recalculate sizes">
-            ↻ Refresh
+          </svg>
+          <span class="ad">AD</span> SENSEI
+        </h1>
+        <nav class="nav" id="nav">
+          <button class="nav-item" data-panel="youtube" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 8.5a3 3 0 0 0-2.1-2.1C18 6 12 6 12 6s-6 0-7.9.4A3 3 0 0 0 2 8.5 31 31 0 0 0 2 12a31 31 0 0 0 0 3.5 3 3 0 0 0 2.1 2.1C6 18 12 18 12 18s6 0 7.9-.4A3 3 0 0 0 22 15.5 31 31 0 0 0 22 12a31 31 0 0 0 0-3.5z"/><path d="M10 15l5-3-5-3z" fill="currentColor"/></svg>
+            <span>YouTube</span>
           </button>
+          <button class="nav-item" data-panel="adblock" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 7.6-7 9-4-1.4-7-4.5-7-9V6z"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+            <span>Ad blocking</span>
+          </button>
+          <button class="nav-item" data-panel="ai" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 4.6L18.5 9.5 13.9 11.4 12 16l-1.9-4.6L5.5 9.5l4.6-1.9z"/><path d="M18 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/></svg>
+            <span>AI &amp; privacy</span>
+          </button>
+          <button class="nav-item" data-panel="analytics" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="20" x2="4" y2="12"/><line x1="10" y1="20" x2="10" y2="4"/><line x1="16" y1="20" x2="16" y2="9"/><line x1="21" y1="20" x2="3" y2="20"/></svg>
+            <span>Analytics</span>
+          </button>
+          <button class="nav-item" data-panel="logs" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="20" y2="12"/><line x1="8" y1="18" x2="20" y2="18"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></svg>
+            <span>Activity &amp; logs</span>
+          </button>
+          <button class="nav-item" data-panel="about" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><circle cx="12" cy="8" r="1" fill="currentColor" stroke="none"/></svg>
+            <span>About</span>
+          </button>
+        </nav>
+        <p class="saved" id="saved-note" hidden>Saved ✓</p>
+      </aside>
+
+      <!-- ─────────────────────────  Content  ───────────────────────── -->
+      <main class="content">
+        <!-- ═══════════════════════  YouTube  ═══════════════════════ -->
+        <div class="panel" id="panel-youtube" hidden>
+          <h2 class="panel-title">YouTube</h2>
+
+          <section>
+            <h3>SponsorBlock</h3>
+            <p class="hint">
+              Use the community-run
+              <a href="https://sponsor.ajay.app" target="_blank" rel="noopener"
+                >SponsorBlock</a
+              >
+              database for instant, exact segment skipping on videos others have
+              already marked. The AI only runs when SponsorBlock has nothing.
+              Privacy-preserving: your video is looked up by a hashed prefix, so
+              the server never learns which video you watched.
+            </p>
+            <label class="field checkbox">
+              <input type="checkbox" id="sponsorblock-enabled" />
+              <span>Use SponsorBlock segments</span>
+            </label>
+            <div id="sponsorblock-categories">
+              <label class="field checkbox">
+                <input type="checkbox" data-sbcat="sponsor" />
+                <span>Sponsor</span>
+              </label>
+              <label class="field checkbox">
+                <input type="checkbox" data-sbcat="selfpromo" />
+                <span>Unpaid / self-promotion</span>
+              </label>
+              <label class="field checkbox">
+                <input type="checkbox" data-sbcat="interaction" />
+                <span>Interaction reminders (like &amp; subscribe)</span>
+              </label>
+              <label class="field checkbox">
+                <input type="checkbox" data-sbcat="intro" />
+                <span>Intro / intermission</span>
+              </label>
+              <label class="field checkbox">
+                <input type="checkbox" data-sbcat="outro" />
+                <span>Outro / endcards</span>
+              </label>
+              <label class="field checkbox">
+                <input type="checkbox" data-sbcat="preview" />
+                <span>Preview / recap</span>
+              </label>
+              <label class="field checkbox">
+                <input type="checkbox" data-sbcat="filler" />
+                <span>Filler / tangents</span>
+              </label>
+              <label class="field checkbox">
+                <input type="checkbox" data-sbcat="music_offtopic" />
+                <span>Non-music section (music videos)</span>
+              </label>
+            </div>
+          </section>
+
+          <section>
+            <h3>Skipping behavior</h3>
+            <label class="field">
+              <span
+                >Confidence threshold<span
+                  class="info"
+                  tabindex="0"
+                  data-tip="Only skip sponsor segments the AI is at least this confident about. Higher = fewer false skips, but may miss some."
+                  >ⓘ</span
+                ></span
+              >
+              <span class="slider-row">
+                <input type="range" id="threshold" min="0.5" max="0.95" step="0.05" />
+                <output id="threshold-value">0.70</output>
+              </span>
+            </label>
+            <label class="field checkbox">
+              <input type="checkbox" id="show-toast" />
+              <span>Show a brief toast in the player when a sponsor segment is skipped</span>
+            </label>
+            <label class="field checkbox">
+              <input type="checkbox" id="aggressive-pruning" />
+              <span
+                >Aggressive YouTube ad blocking (experimental)<span
+                  class="info"
+                  tabindex="0"
+                  data-tip="Strips ad slots out of YouTube's player data so most ads never start, instead of skipping them after they appear. Works even with ad skipping off. Most likely feature to be detected by YouTube — if repeated ad-blocker warnings appear, it turns itself off automatically. Takes effect on the next page load."
+                  >ⓘ</span
+                ></span
+              >
+            </label>
+            <label class="field checkbox">
+              <input type="checkbox" id="debug-logging" />
+              <span
+                >Debug logging<span
+                  class="info"
+                  tabindex="0"
+                  data-tip="Prints [skipSensei] diagnostics to the browser console. For troubleshooting; leave off for normal use."
+                  >ⓘ</span
+                ></span
+              >
+            </label>
+          </section>
+
+          <section>
+            <h3>YouTube extras</h3>
+            <p class="hint">Optional annoyance removers. Each is off by default.</p>
+            <label class="field checkbox">
+              <input type="checkbox" id="yt-hide-shorts" />
+              <span>Hide Shorts (feed shelves and sidebar)</span>
+            </label>
+            <label class="field checkbox">
+              <input type="checkbox" id="yt-disable-endcards" />
+              <span
+                >Hide end-screen cards and turn off autoplay of the next video<span
+                  class="info"
+                  tabindex="0"
+                  data-tip="Hides the suggestion cards over the end of a video and keeps YouTube's autoplay toggle off so it doesn't roll into the next video."
+                  >ⓘ</span
+                ></span
+              >
+            </label>
+            <label class="field checkbox">
+              <input type="checkbox" id="yt-dismiss-stillwatching" />
+              <span>Auto-dismiss the “Continue watching?” pause prompt</span>
+            </label>
+          </section>
         </div>
-        <span class="hint" id="clear-cache-result"></span>
-      </section>
 
-      <section>
-        <h2>Privacy</h2>
-        <label class="field checkbox">
-          <input type="checkbox" id="local-only" />
-          <span
-            >Local-only mode<span
-              class="info"
-              tabindex="0"
-              data-tip="Hard privacy guarantee: forces on-device Chrome AI, turns off diagnostics, and makes zero external network calls — no cloud AI provider, no SponsorBlock, no error reports. Sponsor detection still works via the built-in model."
-              >ⓘ</span
-            ></span
-          >
-        </label>
-        <label class="field checkbox">
-          <input type="checkbox" id="telemetry" />
-          <span
-            >Share anonymous diagnostics<span
-              class="info"
-              tabindex="0"
-              data-tip="Two things, both scrubbed and anonymous: (1) errors — the error type, message, stack trace; (2) adaptation events — when the AI self-heals a YouTube layout change, the CSS selector it found, so it can be built into future updates. Both include extension version, provider name, and Chrome version. Never URLs, video titles, API keys, device IDs, or anything personal."
-              >ⓘ</span
-            ></span
-          >
-        </label>
-        <p class="hint">
-          Error reports are the only data Ad Sensei ever sends home.
-          Transcripts go only to the AI provider you chose above, and
-          everything else stays in this browser.
-        </p>
-      </section>
+        <!-- ═══════════════════════  Ad blocking  ═══════════════════════ -->
+        <div class="panel" id="panel-adblock" hidden>
+          <h2 class="panel-title">Ad blocking</h2>
 
-      <section>
-        <h2>History &amp; logs</h2>
-        <p class="hint">
-          Every settings change is recorded locally, and the log page also
-          lists each cached video with its size on disk.
-        </p>
-        <a id="open-log" class="log-link" href="#" target="_blank"
-          >Open settings history &amp; cache log →</a
-        >
-        <p class="hint" style="margin-top: 18px">
-          Reset the lifetime and this-session counters shown in the popup (ads
-          skipped, ads/trackers/cookies blocked). Your settings are untouched.
-        </p>
-        <button id="reset-stats" type="button">Reset statistics</button>
-        <span class="hint" id="reset-stats-result"></span>
-      </section>
+          <section>
+            <h3>Filter rulesets</h3>
+            <p class="hint">
+              Each blocking list is a set of network rules. Turn them on or off
+              individually here. <strong>Loaded</strong> is how many rules Chrome
+              currently has active — if a list is on but shows nothing loaded,
+              Chrome hit its per-session rule limit; restart the browser to clear
+              it.
+            </p>
+            <div class="ruleset-total" id="ruleset-total"></div>
+            <div id="ruleset-list"></div>
+          </section>
 
-      <p class="saved" id="saved-note" hidden>Saved ✓</p>
+          <section>
+            <h3>Behavior &amp; exceptions</h3>
+            <label class="field checkbox">
+              <input type="checkbox" id="defuse-anti-adblock" />
+              <span
+                >Defuse ad-blocker detection<span
+                  class="info"
+                  tabindex="0"
+                  data-tip="Neutralizes scripts that detect ad blocking or re-insert ads (adblock-wall nags, hidden-slot checks). Only active on sites you've granted all-sites access to — until then it stays dormant. Takes effect on the next page load."
+                  >ⓘ</span
+                ></span
+              >
+            </label>
+            <p class="hint">
+              Sites where ad blocking is paused. Add sites here, or use the
+              popup's “Pause ad blocking here” toggle while on a site.
+            </p>
+            <div class="allowlist-add">
+              <input type="text" id="allowlist-input" placeholder="example.com" />
+              <button id="allowlist-add-btn" type="button">Add</button>
+            </div>
+            <ul class="allowlist" id="allowlist"></ul>
+          </section>
+        </div>
 
-      <footer class="footer">
-        Questions, bugs, or ideas?
-        <a id="contact-link" href="mailto:info@singlefinmedia.com"
-          >info@singlefinmedia.com</a
-        >
-        <br />
-        Enjoying Ad Sensei?
-        <a
-          href="https://buymeacoffee.com/singlefin"
-          target="_blank"
-          rel="noopener"
-          >☕ Buy me a coffee</a
-        >
-      </footer>
-    </main>
+        <!-- ═══════════════════════  AI & privacy  ═══════════════════════ -->
+        <div class="panel" id="panel-ai" hidden>
+          <h2 class="panel-title">AI &amp; privacy</h2>
+
+          <section>
+            <h3>Sponsor detection AI</h3>
+            <p class="hint">
+              Transcripts of the videos you watch are sent to the selected AI for
+              analysis. Beyond that, only the anonymous diagnostics described
+              under Privacy below ever leave your browser.
+            </p>
+            <label class="field">
+              <span>Provider</span>
+              <select id="provider">
+                <option value="builtin">Chrome built-in AI (free, on-device)</option>
+                <option value="gemini">Google Gemini (free API key)</option>
+                <option value="groq">Groq (free API key)</option>
+                <option value="openrouter">OpenRouter (free API key)</option>
+                <option value="ollama">Local Ollama (free, no key)</option>
+                <option value="openclaw">OpenClaw gateway (your OpenClaw)</option>
+                <option value="anthropic">Anthropic Claude (API key)</option>
+                <option value="openai">OpenAI (API key)</option>
+              </select>
+            </label>
+            <p class="hint" id="provider-info"></p>
+            <p class="hint" id="builtin-status"></p>
+            <div id="cloud-fields" hidden>
+              <label class="field" id="api-key-field">
+                <span>
+                  <span id="api-key-label">API key</span>
+                  <a id="api-key-link" target="_blank" rel="noopener">Get a key →</a>
+                </span>
+                <input type="password" id="api-key" autocomplete="off" placeholder="paste your key" />
+              </label>
+              <label class="field" id="openclaw-url-field" hidden>
+                <span>Gateway URL</span>
+                <input
+                  type="text"
+                  id="openclaw-url"
+                  placeholder="http://127.0.0.1:18789/v1/chat/completions"
+                />
+              </label>
+              <label class="field">
+                <span>Model <em>(optional override)</em></span>
+                <select id="model-select"></select>
+                <input type="text" id="model" placeholder="custom model id" hidden />
+              </label>
+              <p class="hint">
+                Your key is stored locally in this browser and sent only to the
+                provider you selected.
+              </p>
+              <div class="usage" id="usage-box" hidden>
+                <div class="usage-head">
+                  <span>Usage</span>
+                  <button type="button" id="usage-reset" class="usage-reset">Reset</button>
+                </div>
+                <p class="usage-line" id="usage-daily"></p>
+                <p class="usage-line" id="usage-monthly"></p>
+                <p class="hint" id="usage-note"></p>
+              </div>
+            </div>
+            <label class="field checkbox">
+              <input type="checkbox" id="ai-enhancements" />
+              <span
+                >AI enhancements<span
+                  class="info"
+                  tabindex="0"
+                  data-tip="Lets the AI auto-repair YouTube skipping when the layout changes, catch web ads the filter lists miss, review popups, and auto-answer cookie prompts. Free on built-in AI."
+                  >ⓘ</span
+                ></span
+              >
+            </label>
+          </section>
+
+          <section>
+            <h3>Privacy</h3>
+            <label class="field checkbox">
+              <input type="checkbox" id="local-only" />
+              <span
+                >Local-only mode<span
+                  class="info"
+                  tabindex="0"
+                  data-tip="Hard privacy guarantee: forces on-device Chrome AI, turns off diagnostics, and makes zero external network calls — no cloud AI provider, no SponsorBlock, no error reports. Sponsor detection still works via the built-in model."
+                  >ⓘ</span
+                ></span
+              >
+            </label>
+            <label class="field checkbox">
+              <input type="checkbox" id="telemetry" />
+              <span
+                >Share anonymous diagnostics<span
+                  class="info"
+                  tabindex="0"
+                  data-tip="Two things, both scrubbed and anonymous: (1) errors — the error type, message, stack trace; (2) adaptation events — when the AI self-heals a YouTube layout change, the CSS selector it found. Both include extension version, provider name, and Chrome version. Never URLs, video titles, API keys, device IDs, or anything personal."
+                  >ⓘ</span
+                ></span
+              >
+            </label>
+            <p class="hint">
+              Error reports are the only data Ad Sensei ever sends home.
+              Transcripts go only to the AI provider you chose above, and
+              everything else stays in this browser.
+            </p>
+          </section>
+        </div>
+
+        <!-- ═══════════════════════  Analytics  ═══════════════════════ -->
+        <div class="panel" id="panel-analytics" hidden>
+          <h2 class="panel-title">Analytics</h2>
+          <p class="hint">
+            What Ad Sensei has handled for you. All-time totals, with this
+            browser session in the sub-line. Stored only in this browser.
+          </p>
+          <div class="stat-grid" id="stat-grid">
+            <div class="stat-card">
+              <span class="stat-num" id="stat-youtube">0</span>
+              <span class="stat-label">YouTube interruptions</span>
+              <span class="stat-sub"><b id="stat-youtube-session">0</b> this session</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-num" id="stat-webads">0</span>
+              <span class="stat-label">Web ads blocked</span>
+              <span class="stat-sub"><b id="stat-webads-session">0</b> this session</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-num" id="stat-trackers">0</span>
+              <span class="stat-label">Trackers blocked</span>
+              <span class="stat-sub"><b id="stat-trackers-session">0</b> this session</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-num" id="stat-cookies">0</span>
+              <span class="stat-label">Cookie notices handled</span>
+              <span class="stat-sub"><b id="stat-cookies-session">0</b> this session</span>
+            </div>
+          </div>
+          <p class="hint" id="stat-breakdown"></p>
+
+          <section>
+            <h3>Reset</h3>
+            <p class="hint">
+              Zero the lifetime and this-session counters above (and in the
+              popup). Your settings are untouched.
+            </p>
+            <button id="reset-stats" type="button">Reset statistics</button>
+            <span class="hint" id="reset-stats-result"></span>
+          </section>
+        </div>
+
+        <!-- ═══════════════════════  Activity & logs  ═══════════════════════ -->
+        <div class="panel" id="panel-logs" hidden>
+          <h2 class="panel-title">
+            Activity &amp; logs
+            <button id="logs-reload" class="ghost-btn" type="button" title="Reload data">↻</button>
+          </h2>
+
+          <section>
+            <h3>Storage overview</h3>
+            <div class="totals" id="totals">Measuring…</div>
+          </section>
+
+          <section>
+            <div class="section-head">
+              <h3>Feature activity</h3>
+              <button id="clear-activity" type="button">Clear activity</button>
+            </div>
+            <p class="hint">
+              What the features actually did — ads skipped, popups reviewed,
+              cookie banners answered, selectors self-healed, videos analyzed.
+              Newest first, last 300 events, stored only in this browser.
+            </p>
+            <div class="table-wrap">
+              <table class="log-table" id="activity-table">
+                <thead>
+                  <tr><th>When</th><th>Feature</th><th>What happened</th><th>Where</th></tr>
+                </thead>
+                <tbody id="activity-body"></tbody>
+              </table>
+            </div>
+            <p class="hint empty" id="activity-empty" hidden>
+              Nothing yet — events appear here as the features act.
+            </p>
+          </section>
+
+          <section>
+            <div class="section-head">
+              <h3>Settings history</h3>
+              <button id="clear-log" type="button">Clear history</button>
+            </div>
+            <p class="hint">
+              Every change made in the popup or settings, newest first. Stored
+              only in this browser (last 500 changes; API keys are never recorded).
+            </p>
+            <div class="table-wrap">
+              <table class="log-table" id="settings-table">
+                <thead>
+                  <tr><th>When</th><th>Setting</th><th>Change</th></tr>
+                </thead>
+                <tbody id="settings-body"></tbody>
+              </table>
+            </div>
+            <p class="hint empty" id="settings-empty" hidden>
+              No settings changes recorded yet.
+            </p>
+          </section>
+
+          <section>
+            <div class="section-head">
+              <h3>Analysis cache</h3>
+              <button id="clear-cache" type="button">Clear cache</button>
+            </div>
+            <p class="hint">
+              One entry per analyzed video, newest first, with its size in
+              extension storage. The cache keeps the most recent 200 videos.
+            </p>
+            <div class="table-wrap">
+              <table class="log-table" id="cache-table">
+                <thead>
+                  <tr><th>Analyzed</th><th>Video</th><th>Status</th><th>Segments</th><th>Provider</th><th class="num">Size</th></tr>
+                </thead>
+                <tbody id="cache-body"></tbody>
+              </table>
+            </div>
+            <p class="hint empty" id="cache-empty" hidden>No cached analyses yet.</p>
+          </section>
+        </div>
+
+        <!-- ═══════════════════════  About  ═══════════════════════ -->
+        <div class="panel" id="panel-about" hidden>
+          <h2 class="panel-title">About</h2>
+          <section>
+            <p class="about-version">Ad Sensei <b id="about-version">—</b></p>
+            <p class="hint">
+              Skip YouTube ads and AI-detected creator sponsor segments, and
+              block ads &amp; trackers across the web.
+            </p>
+            <p class="hint">
+              Questions, bugs, or ideas?
+              <a id="contact-link" href="mailto:info@singlefinmedia.com"
+                >info@singlefinmedia.com</a
+              >
+            </p>
+            <p class="hint">
+              Enjoying Ad Sensei?
+              <a href="https://buymeacoffee.com/singlefin" target="_blank" rel="noopener"
+                >☕ Buy me a coffee</a
+              >
+            </p>
+          </section>
+        </div>
+      </main>
+    </div>
     <script type="module" src="./options.ts"></script>
   </body>
 </html>

@@ -1,8 +1,13 @@
 import {
+  clearActivityLog,
   clearAnalysisCache,
+  clearSettingsLog,
+  getActivityLog,
   getApiUsage,
   getCacheStats,
   getSettings,
+  getSettingsLog,
+  getStats,
   resetApiUsage,
   setSiteAllowlisted,
   updateSettings,
@@ -12,6 +17,7 @@ import {
   type KeyedProvider,
   type LlmProvider,
   type Message,
+  type SessionStats,
   type Settings,
 } from '../types'
 
@@ -230,12 +236,192 @@ const fmtBytes = (n: number) =>
       ? `${(n / 1024).toFixed(1)} KB`
       : `${n} B`
 
-async function renderCacheStats() {
-  const el = $('cache-stats')
+// --- Analytics panel --------------------------------------------------------
+
+async function renderAnalytics() {
+  const stats = await getStats()
+  let session: SessionStats | null = null
+  try {
+    session = await chrome.runtime.sendMessage({
+      type: 'skipSensei:getSessionStats',
+    })
+  } catch {
+    session = null
+  }
+  const yt =
+    stats.allTimeAdSkips + stats.allTimeSponsorSkips + stats.allTimeYtAdsHidden
+  $('stat-youtube').textContent = fmt(yt)
+  $('stat-webads').textContent = fmt(stats.allTimeWebAdsBlocked)
+  $('stat-trackers').textContent = fmt(stats.allTimeTrackersBlocked)
+  $('stat-cookies').textContent = fmt(stats.allTimeCookiesBlocked)
+  if (session) {
+    $('stat-youtube-session').textContent = String(
+      session.sessionAdSkips +
+        session.sessionSponsorSkips +
+        session.sessionYtAdsHidden,
+    )
+    $('stat-webads-session').textContent = String(session.sessionWebAdsBlocked)
+    $('stat-trackers-session').textContent = String(
+      session.sessionTrackersBlocked,
+    )
+    $('stat-cookies-session').textContent = String(session.sessionCookiesBlocked)
+  }
+  $('stat-breakdown').textContent =
+    `YouTube total breaks down into ${fmt(stats.allTimeAdSkips)} video ads skipped, ` +
+    `${fmt(stats.allTimeSponsorSkips)} sponsor segments, and ` +
+    `${fmt(stats.allTimeYtAdsHidden)} display ads hidden.`
+}
+
+// --- Activity & logs panel (merged from the former standalone log page) -----
+
+const fmtWhen = (epochMs: number) =>
+  epochMs
+    ? new Date(epochMs).toLocaleString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+      })
+    : '—'
+
+/** Friendly names for settings keys shown in the history table. */
+const SETTING_LABELS: Record<string, string> = {
+  masterEnabled: 'Ad Sensei enabled',
+  adEngineEnabled: 'YouTube ad skipping',
+  sponsorEngineEnabled: 'Sponsor detection',
+  blockAllAds: 'Block all ads',
+  blockTrackers: 'Block trackers & analytics',
+  blockCookieNotices: 'Handle cookie-consent notices',
+  blockSocial: 'Block social-media widgets',
+  blockPopups: 'Block popup & overlay ads',
+  blockMalware: 'Block malware & phishing',
+  blockUrlTracking: 'Strip tracking parameters',
+  allowlist: 'Paused sites',
+  confidenceThreshold: 'Confidence threshold',
+  showSkipToast: 'Skip toast',
+  aiEnhancements: 'AI enhancements',
+  aggressivePruning: 'Aggressive YouTube ad blocking',
+  debugLogging: 'Debug logging',
+  telemetryEnabled: 'Anonymous error reports',
+  localOnlyMode: 'Local-only mode',
+  llmProvider: 'AI provider',
+  model: 'Model override',
+}
+
+function cell(text: string, className?: string): HTMLTableCellElement {
+  const td = document.createElement('td')
+  td.textContent = text
+  if (className) td.className = className
+  return td
+}
+
+async function renderActivity() {
+  const entries = await getActivityLog()
+  const body = $<HTMLTableSectionElement>('activity-body')
+  $('activity-empty').hidden = entries.length > 0
+  $('activity-table').hidden = entries.length === 0
+  body.replaceChildren(
+    ...[...entries].reverse().map((entry) => {
+      const tr = document.createElement('tr')
+      tr.append(
+        cell(fmtWhen(entry.at), 'when'),
+        cell(entry.feature),
+        cell(entry.action),
+        cell(entry.site ?? '—', 'site'),
+      )
+      return tr
+    }),
+  )
+}
+
+async function renderSettingsHistory() {
+  const log = await getSettingsLog()
+  const body = $<HTMLTableSectionElement>('settings-body')
+  $('settings-empty').hidden = log.length > 0
+  $('settings-table').hidden = log.length === 0
+  body.replaceChildren(
+    ...[...log].reverse().map((entry) => {
+      const tr = document.createElement('tr')
+      tr.append(
+        cell(fmtWhen(entry.at), 'when'),
+        cell(SETTING_LABELS[entry.key] ?? entry.key),
+      )
+      const change = document.createElement('td')
+      change.className = 'change'
+      const from = document.createElement('span')
+      from.className = 'from'
+      from.textContent = entry.from
+      const to = document.createElement('b')
+      to.textContent = entry.to
+      change.append(from, ' → ', to)
+      tr.append(change)
+      return tr
+    }),
+  )
+}
+
+async function renderCacheTable() {
   const { entries, cacheBytes, totalBytes } = await getCacheStats()
-  el.innerHTML =
-    `<b>${entries.length}</b> ${entries.length === 1 ? 'video' : 'videos'} cached · ` +
-    `<b>${fmtBytes(cacheBytes)}</b> <span class="dim">(all extension storage: ${fmtBytes(totalBytes)})</span>`
+  $('totals').innerHTML =
+    `Analysis cache: <b>${fmtBytes(cacheBytes)}</b> across ` +
+    `<b>${entries.length}</b> ${entries.length === 1 ? 'video' : 'videos'} · ` +
+    `all extension storage: <b>${fmtBytes(totalBytes)}</b>`
+  const body = $<HTMLTableSectionElement>('cache-body')
+  $('cache-empty').hidden = entries.length > 0
+  $('cache-table').hidden = entries.length === 0
+  body.replaceChildren(
+    ...entries.map((entry) => {
+      const tr = document.createElement('tr')
+      tr.append(cell(fmtWhen(entry.analyzedAt), 'when'))
+      const video = document.createElement('td')
+      const link = document.createElement('a')
+      link.href = `https://www.youtube.com/watch?v=${entry.videoId}`
+      link.target = '_blank'
+      link.rel = 'noopener'
+      link.textContent = entry.videoId
+      video.append(link)
+      tr.append(
+        video,
+        cell(entry.status),
+        cell(String(entry.segments), 'num'),
+        cell(entry.provider ?? '—'),
+        cell(fmtBytes(entry.bytes), 'num'),
+      )
+      return tr
+    }),
+  )
+}
+
+function renderLogs() {
+  void renderActivity()
+  void renderSettingsHistory()
+  void renderCacheTable()
+}
+
+// --- Sidebar navigation -----------------------------------------------------
+
+const PANELS = ['youtube', 'adblock', 'ai', 'analytics', 'logs', 'about']
+
+function showPanel(name: string) {
+  const panel = PANELS.includes(name) ? name : 'youtube'
+  for (const p of PANELS) $(`panel-${p}`).hidden = p !== panel
+  for (const btn of document.querySelectorAll<HTMLButtonElement>('.nav-item')) {
+    btn.classList.toggle('active', btn.dataset.panel === panel)
+  }
+  // Render on demand — analytics/logs pull fresh data when first shown.
+  if (panel === 'analytics') void renderAnalytics()
+  if (panel === 'logs') renderLogs()
+}
+
+function setupNav() {
+  for (const btn of document.querySelectorAll<HTMLButtonElement>('.nav-item')) {
+    btn.addEventListener('click', () => {
+      const panel = btn.dataset.panel!
+      history.replaceState(null, '', `#${panel}`)
+      showPanel(panel)
+    })
+  }
+  showPanel(location.hash.replace('#', '') || 'youtube')
 }
 
 async function renderUsage(provider: LlmProvider) {
@@ -707,30 +893,31 @@ async function main() {
     if (e.key === 'Enter') void addSite()
   })
 
-  void renderCacheStats()
-  $<HTMLButtonElement>('cache-refresh').addEventListener('click', () =>
-    void renderCacheStats(),
-  )
-  $<HTMLAnchorElement>('open-log').href = chrome.runtime.getURL(
-    'src/log/index.html',
-  )
-
-  // Prefill the support email with version context (mailto = no backend, no
-  // spam surface; swap for an embedded form once an email API is wired up).
+  // About panel + support email (mailto = no backend, no spam surface).
   const { version } = chrome.runtime.getManifest()
+  $('about-version').textContent = version
   $<HTMLAnchorElement>('contact-link').href =
     `mailto:info@singlefinmedia.com?subject=${encodeURIComponent(`Ad Sensei v${version} — feedback`)}`
 
+  // Activity & logs panel.
+  $<HTMLButtonElement>('logs-reload').addEventListener('click', renderLogs)
+  $<HTMLButtonElement>('clear-activity').addEventListener('click', async () => {
+    await clearActivityLog()
+    void renderActivity()
+  })
+  $<HTMLButtonElement>('clear-log').addEventListener('click', async () => {
+    await clearSettingsLog()
+    void renderSettingsHistory()
+  })
   const clearCacheEl = $<HTMLButtonElement>('clear-cache')
-  const clearResultEl = $('clear-cache-result')
   clearCacheEl.addEventListener('click', async () => {
     clearCacheEl.disabled = true
-    const count = await clearAnalysisCache()
-    clearResultEl.textContent = `Cleared ${count} cached ${count === 1 ? 'video' : 'videos'}.`
+    await clearAnalysisCache()
     clearCacheEl.disabled = false
-    void renderCacheStats()
+    void renderCacheTable()
   })
 
+  // Reset statistics (Analytics panel).
   const resetStatsEl = $<HTMLButtonElement>('reset-stats')
   const resetStatsResultEl = $('reset-stats-result')
   resetStatsEl.addEventListener('click', async () => {
@@ -740,7 +927,10 @@ async function main() {
       .catch(() => {})
     resetStatsResultEl.textContent = 'Statistics reset to zero.'
     resetStatsEl.disabled = false
+    void renderAnalytics()
   })
+
+  setupNav()
 }
 
 void main()

@@ -11,7 +11,6 @@ export default defineConfig({
       // otherwise the build ships them with raw ./*.ts script tags.
       input: {
         onboarding: 'src/onboarding/index.html',
-        log: 'src/log/index.html',
       },
     },
   },
