@@ -14,6 +14,7 @@ import {
   syncNetBlocker,
   verifyNetBlocker,
 } from './net-blocker'
+import { getCosmeticFilters } from './cosmetic-filters'
 import { initPruneRegistration, syncPruneRegistration } from './prune-register'
 import {
   initScriptletRegistration,
@@ -439,6 +440,9 @@ chrome.runtime.onMessage.addListener(
         return true
       case 'skipSensei:getBlockerState':
         void getBlockerState().then(sendResponse)
+        return true
+      case 'skipSensei:getCosmeticFilters':
+        void getCosmeticFilters(message.hostname).then(sendResponse)
         return true
       case 'skipSensei:tabNeedsReload':
         if (sender.tab?.id !== undefined) {

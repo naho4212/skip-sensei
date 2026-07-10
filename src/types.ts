@@ -258,6 +258,8 @@ export type Message =
     }
   | { type: 'skipSensei:checkBuiltinAI' } // → { availability: string }
   | { type: 'skipSensei:getBlockerState' } // → BlockerState
+  // → string[] of domain-specific cosmetic selectors for the sender's hostname
+  | { type: 'skipSensei:getCosmeticFilters'; hostname: string }
   | { type: 'skipSensei:tabNeedsReload'; needsReload: boolean } // badges the icon for the sender tab
   | { type: 'skipSensei:getTabBlocked'; tabId: number } // → number (ads blocked on that tab)
   | {
