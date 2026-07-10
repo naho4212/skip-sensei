@@ -15,6 +15,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.2.5',
+    date: '2026-07-10',
+    items: [
+      'Fixed: the “This video” panel no longer appears on pages that aren’t YouTube and don’t embed a YouTube video',
+      'New: reset your stats anytime — Settings → History &amp; logs → Reset statistics',
+    ],
+  },
+  {
     version: '0.2.4',
     date: '2026-07-10',
     items: [
