@@ -15,6 +15,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.2.10',
+    date: '2026-07-10',
+    items: [
+      'Redesigned settings: one page with a sidebar — YouTube, Ad blocking, AI & privacy, Analytics, Activity & logs, and About',
+      'New Analytics dashboard shows lifetime and this-session totals at a glance',
+    ],
+  },
+  {
     version: '0.2.9',
     date: '2026-07-10',
     items: [
