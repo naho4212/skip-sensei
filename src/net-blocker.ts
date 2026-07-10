@@ -306,53 +306,96 @@ const COOKIE_SET = new Set(['cookies'])
  * which we hold (and which also lifts the API's call-rate quota). A per-tab
  * high-water timestamp keeps us from recounting the same matches.
  */
+/** getMatchedRules retains a tab's matches for ~5 min. When we don't know the
+ *  page's load time (e.g. after an SW restart), fall back to this window so the
+ *  count still reflects roughly the current page rather than nothing. */
+const MATCH_RETENTION_MS = 5 * 60 * 1000
+
+/** When a tab's current page load began — the anchor for its "blocked here"
+ *  count. Seeded at navigation, NOT advanced by polling, so every poll can
+ *  recompute the full page total (idempotent → no double-count). */
+const tabLoadStart = new Map<number, number>()
+/** High-water per tab for the CUMULATIVE stats: matches at or before this were
+ *  already added to lifetime/session totals, so re-polls only add new ones. */
 const lastPollTs = new Map<number, number>()
 
 interface BlockCallbacks {
-  /** One batched count per poll → the stats recorder. Delivered as a single
-   *  object so the recorder can do ONE serialized read-modify-write and never
-   *  drop a bucket's increment (ads/trackers/cookies land together). */
+  /** New-since-last-poll counts → lifetime/session stats. One object so the
+   *  recorder does ONE serialized read-modify-write (buckets land together). */
   onCounts: (c: { ads: number; trackers: number; cookies: number }) => void
-  /** Per ad+tracker block, with the tab id → the icon badge counter. */
-  onTabBlock: (tabId: number) => void
+  /** The tab's CURRENT full ad+tracker total → the icon badge. Set, not added:
+   *  the badge is a snapshot of the page, so re-polling can't inflate it. */
+  onTabCount: (tabId: number, adsPlusTrackers: number) => void
 }
 
-async function pollTabBlocks(tabId: number, cb: BlockCallbacks) {
-  // Matched-rule info is per-TAB and Chrome retains it for ~5 min, so without a
-  // high-water mark a post-navigation poll would recount the previous page's
-  // matches. The mark is seeded at 'loading' (see initNetBlocker); a missing
-  // mark means we never saw this tab load, so start from now and count nothing
-  // retroactively (an undercount is safer than a double-count).
-  const since = lastPollTs.get(tabId) ?? Date.now()
+let callbacks: BlockCallbacks | null = null
+
+/**
+ * Count what's been blocked on a tab's current page. ONE getMatchedRules call
+ * yields both the full page snapshot (for the badge, set idempotently) and the
+ * delta since the last poll (added to cumulative stats). Returns the snapshot
+ * counts, or null if the query failed (quota) so callers keep the last value
+ * instead of showing a bogus 0.
+ *
+ * getMatchedRules is quota-limited (20 calls / 10 min; the feedback permission
+ * does NOT exempt it — only genuine user-gesture calls are). We spend at most a
+ * couple of calls per page load plus one when the popup opens, which fits
+ * normal browsing; very heavy multi-tab browsing can still exhaust it, after
+ * which counting pauses until the quota resets. Blocking is never affected.
+ */
+async function countTabBlocks(
+  tabId: number,
+  cb: BlockCallbacks,
+): Promise<{ ads: number; trackers: number; cookies: number } | null> {
+  const loadStart = tabLoadStart.get(tabId) ?? Date.now() - MATCH_RETENTION_MS
   try {
     const { rulesMatchedInfo } =
       await chrome.declarativeNetRequest.getMatchedRules({
         tabId,
-        minTimeStamp: since,
+        minTimeStamp: loadStart,
       })
-    let maxTs = since
+    const since = lastPollTs.get(tabId) ?? loadStart
     let ads = 0
     let trackers = 0
     let cookies = 0
+    let dAds = 0
+    let dTrackers = 0
+    let dCookies = 0
+    let maxTs = since
     for (const info of rulesMatchedInfo) {
-      if (info.timeStamp > maxTs) maxTs = info.timeStamp
       const id = info.rule.rulesetId
-      if (AD_SET.has(id)) ads++
-      else if (TRACKER_SET.has(id)) trackers++
-      else if (COOKIE_SET.has(id)) cookies++
+      const isAd = AD_SET.has(id)
+      const isTracker = TRACKER_SET.has(id)
+      const isCookie = COOKIE_SET.has(id)
+      if (isAd) ads++
+      else if (isTracker) trackers++
+      else if (isCookie) cookies++
+      // Only matches newer than the high-water are new to the cumulative stats.
+      if (info.timeStamp > since) {
+        if (info.timeStamp > maxTs) maxTs = info.timeStamp
+        if (isAd) dAds++
+        else if (isTracker) dTrackers++
+        else if (isCookie) dCookies++
+      }
     }
-    // Advance the mark past the newest match counted (more precise than
-    // Date.now(), which could skip matches recorded while the call was in
-    // flight) so the next poll never recounts these.
     lastPollTs.set(tabId, maxTs + 1)
-    if (ads || trackers || cookies) cb.onCounts({ ads, trackers, cookies })
-    for (let i = 0; i < ads + trackers; i++) cb.onTabBlock(tabId)
+    if (dAds || dTrackers || dCookies)
+      cb.onCounts({ ads: dAds, trackers: dTrackers, cookies: dCookies })
+    cb.onTabCount(tabId, ads + trackers)
+    return { ads, trackers, cookies }
   } catch {
-    // getMatchedRules is subject to a quota (20 calls / 10 min; ONLY
-    // user-gesture calls are exempt — the feedback permission does not exempt
-    // it). Under very heavy multi-tab browsing a poll can reject; counting is
-    // best-effort and simply resumes next interval. Blocking is unaffected.
+    return null
   }
+}
+
+/** Live per-tab block counts for the popup, refreshed on open (a user gesture,
+ *  so this getMatchedRules call is generally quota-exempt) — this is what makes
+ *  "blocked here" accurate even for ads that loaded after the page finished. */
+export async function getTabBlockCounts(
+  tabId: number,
+): Promise<{ ads: number; trackers: number; cookies: number } | null> {
+  if (!callbacks) return null
+  return countTabBlocks(tabId, callbacks)
 }
 
 /**
@@ -365,11 +408,26 @@ export function initNetBlocker(cb: BlockCallbacks) {
   chrome.runtime.onStartup.addListener(() => void syncNetBlocker())
   onSettingsChanged(() => void syncNetBlocker())
 
+  callbacks = cb
   chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
-    // Seed the counting high-water AT load start, so the post-load poll counts
-    // only this page's matches — not the previous page's still-retained ones.
-    if (changeInfo.status === 'loading') lastPollTs.set(tabId, Date.now())
-    if (changeInfo.status === 'complete') void pollTabBlocks(tabId, cb)
+    // Anchor the count at real navigation start (url present), so a poll counts
+    // this page's matches, not the previous page's still-retained ones.
+    if (changeInfo.status === 'loading' && changeInfo.url) {
+      const now = Date.now()
+      tabLoadStart.set(tabId, now)
+      lastPollTs.set(tabId, now)
+    }
+    if (changeInfo.status === 'complete') {
+      void countTabBlocks(tabId, cb)
+      // Many sites load ads AFTER 'complete' (lazy-load, consent walls, SPA
+      // routing). One delayed re-poll catches those; the badge is set to the
+      // full snapshot, so this only ever corrects the number upward, never
+      // double-counts. The popup's on-open query is the accurate backstop.
+      setTimeout(() => void countTabBlocks(tabId, cb), 9000)
+    }
   })
-  chrome.tabs.onRemoved.addListener((tabId) => lastPollTs.delete(tabId))
+  chrome.tabs.onRemoved.addListener((tabId) => {
+    lastPollTs.delete(tabId)
+    tabLoadStart.delete(tabId)
+  })
 }

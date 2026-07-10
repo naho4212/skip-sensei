@@ -11,6 +11,7 @@ import {
 import {
   getBlockerState,
   getRulesetInfo,
+  getTabBlockCounts,
   initNetBlocker,
   syncNetBlocker,
   verifyNetBlocker,
@@ -454,8 +455,17 @@ chrome.runtime.onMessage.addListener(
         }
         return false
       case 'skipSensei:getTabBlocked':
-        sendResponse(badgeState(message.tabId).blocked)
-        return false
+        // Live recount on popup open (a user gesture → generally quota-exempt),
+        // so the number reflects ads that loaded after the page finished. Falls
+        // back to the last badge value if the query is throttled.
+        void getTabBlockCounts(message.tabId).then((counts) =>
+          sendResponse(
+            counts
+              ? counts.ads + counts.trackers
+              : badgeState(message.tabId).blocked,
+          ),
+        )
+        return true
       case 'skipSensei:findSelector':
         void findSelector(message.html, message.description).then(sendResponse)
         return true
@@ -527,18 +537,15 @@ function setReloadBadge(tabId: number, show: boolean) {
   renderBadge(tabId)
 }
 
-// Coalesce bursts of blocks into at most one badge update per ~400ms per tab.
-const badgeRenderPending = new Set<number>()
-function bumpTabBlocked(tabId: number) {
+// Set the tab's blocked count to the current page snapshot (net-blocker recounts
+// the whole page each poll, so this is a set, not an increment — re-polling can
+// correct the number up but never double-counts it).
+function setTabBlocked(tabId: number, count: number) {
   const state = badgeState(tabId)
-  state.blocked += 1
+  if (state.blocked === count) return
+  state.blocked = count
   tabBadges.set(tabId, state)
-  if (badgeRenderPending.has(tabId)) return
-  badgeRenderPending.add(tabId)
-  setTimeout(() => {
-    badgeRenderPending.delete(tabId)
-    renderBadge(tabId)
-  }, 400)
+  renderBadge(tabId)
 }
 
 // Reset a tab's count when it navigates to a new page (block counts are per-load).
@@ -585,7 +592,7 @@ void (async () => {
 // "Block all ads" engine: enforce DNR ruleset state; count blocks (stats + badge).
 initNetBlocker({
   onCounts: (c) => recordBlockCounts(c),
-  onTabBlock: (tabId) => bumpTabBlocked(tabId),
+  onTabCount: (tabId, count) => setTabBlocked(tabId, count),
 })
 
 // Aggressive-mode YouTube pruner: (un)register the MAIN-world content script
