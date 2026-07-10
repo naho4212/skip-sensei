@@ -8,20 +8,20 @@
  * can't reach chrome.runtime; the isolated world can.)
  */
 
-/** One activity-log entry per pruning burst, not per pruned response. */
-const REPORT_DEBOUNCE_MS = 10_000
-
-let lastReportAt = 0
+// No debounce needed: the pruner dedupes per video at the source, so each
+// message already represents a distinct video's ad breaks (with a count).
 window.addEventListener('message', (event) => {
   if (event.source !== window) return
-  const data = event.data as { source?: string; type?: string } | null
+  const data = event.data as {
+    source?: string
+    type?: string
+    count?: number
+  } | null
   if (data?.source !== 'skip-sensei' || data?.type !== 'ads-pruned') return
-  const now = Date.now()
-  if (now - lastReportAt < REPORT_DEBOUNCE_MS) return
-  lastReportAt = now
+  const count = typeof data.count === 'number' && data.count > 0 ? data.count : 1
   try {
     chrome.runtime
-      .sendMessage({ type: 'skipSensei:adSkipped', method: 'pruned' })
+      .sendMessage({ type: 'skipSensei:adSkipped', method: 'pruned', count })
       .catch(() => {})
   } catch {
     // orphaned after an extension reload — nothing to report to

@@ -232,7 +232,9 @@ export interface VideoAnalysis {
 // ---------------------------------------------------------------------------
 
 export type Message =
-  | { type: 'skipSensei:adSkipped'; method: AdSkipMethod }
+  // count: how many ad breaks this event represents (aggressive-mode pruning
+  // reports the number of slots removed for a video); defaults to 1.
+  | { type: 'skipSensei:adSkipped'; method: AdSkipMethod; count?: number }
   | { type: 'skipSensei:sponsorSkipped'; videoId: string }
   // Live per-tab count of ad elements the content script has hidden.
   | { type: 'skipSensei:cosmeticHideCount'; count: number }

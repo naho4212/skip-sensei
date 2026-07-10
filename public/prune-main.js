@@ -20,47 +20,69 @@
   window.__skipSenseiPruned = true
 
   var AD_KEYS = ['adPlacements', 'adSlots', 'playerAds', 'adBreakHeartbeatParams']
-  // A removal only counts as an ad prevented if it was a real ad SLOT. The
-  // other keys (playerAds config, adBreakHeartbeatParams) ride along in nearly
-  // every player response as ad-check machinery, so counting their removal
-  // reported a "skip" every few seconds of normal playback — 100+ on a single
-  // video. We still strip all four; we just don't tally the machinery.
+  // Only real ad SLOTS count as ads prevented. The other keys (playerAds
+  // config, adBreakHeartbeatParams) ride along in nearly every player response
+  // as ad-check machinery — we still strip them, we just don't tally them.
   var AD_SLOT_KEYS = { adPlacements: 1, adSlots: 1 }
-  var lastNotify = 0
+  // Distinct-count dedupe. YouTube refetches a video's player response many
+  // times (seeks, quality changes, navigation), re-serving the SAME ad slots
+  // each time. Count a video's ads only the FIRST time we strip them, keyed by
+  // videoId — so the tally is real ad breaks avoided, not prune events.
+  var countedVideos = Object.create(null)
 
-  function notify() {
-    var now = Date.now()
-    if (now - lastNotify < 1000) return
-    lastNotify = now
+  function videoIdOf(obj) {
     try {
-      window.postMessage({ source: 'skip-sensei', type: 'ads-pruned' }, '*')
+      var d =
+        (obj && obj.videoDetails) ||
+        (obj && obj.playerResponse && obj.playerResponse.videoDetails)
+      return (d && d.videoId) || ''
+    } catch (e) {
+      return ''
+    }
+  }
+
+  function notify(count) {
+    try {
+      window.postMessage(
+        { source: 'skip-sensei', type: 'ads-pruned', count: count },
+        '*',
+      )
     } catch (e) {}
+  }
+
+  // Strip the ad keys from one object; return how many real ad SLOTS (breaks)
+  // were removed (array length, so a placement list counts each break).
+  function stripKeys(target) {
+    var removed = 0
+    for (var i = 0; i < AD_KEYS.length; i++) {
+      var key = AD_KEYS[i]
+      if (key in target) {
+        var val = target[key]
+        try {
+          delete target[key]
+          if (AD_SLOT_KEYS[key]) removed += Array.isArray(val) ? val.length : 1
+        } catch (e) {}
+      }
+    }
+    return removed
   }
 
   function prune(obj) {
     if (!obj || typeof obj !== 'object') return obj
-    var slotHit = false
-    for (var i = 0; i < AD_KEYS.length; i++) {
-      if (AD_KEYS[i] in obj) {
-        try {
-          delete obj[AD_KEYS[i]]
-          if (AD_SLOT_KEYS[AD_KEYS[i]]) slotHit = true
-        } catch (e) {}
-      }
-    }
+    var removed = stripKeys(obj)
     // Some shapes nest the payload under playerResponse.
     if (obj.playerResponse && typeof obj.playerResponse === 'object') {
-      for (var j = 0; j < AD_KEYS.length; j++) {
-        if (AD_KEYS[j] in obj.playerResponse) {
-          try {
-            delete obj.playerResponse[AD_KEYS[j]]
-            if (AD_SLOT_KEYS[AD_KEYS[j]]) slotHit = true
-          } catch (e) {}
-        }
+      removed += stripKeys(obj.playerResponse)
+    }
+    // Count the ad breaks once per video (dedupe YouTube's refetches). If we
+    // can't read a videoId, skip counting rather than risk over-counting.
+    if (removed > 0) {
+      var vid = videoIdOf(obj)
+      if (vid && !countedVideos[vid]) {
+        countedVideos[vid] = 1
+        notify(removed)
       }
     }
-    // Count only when a real ad slot was removed, not the ubiquitous machinery.
-    if (slotHit) notify()
     return obj
   }
 

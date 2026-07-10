@@ -62,11 +62,14 @@ async function getSessionStats(): Promise<SessionStats> {
   return { ...EMPTY_SESSION, ...(result[SESSION_STATS_KEY] ?? {}) }
 }
 
-async function recordSkip(kind: 'ad' | 'sponsor') {
-  await incrementStat(kind === 'ad' ? 'allTimeAdSkips' : 'allTimeSponsorSkips')
+async function recordSkip(kind: 'ad' | 'sponsor', amount = 1) {
+  await incrementStat(
+    kind === 'ad' ? 'allTimeAdSkips' : 'allTimeSponsorSkips',
+    amount,
+  )
   const session = await getSessionStats()
-  if (kind === 'ad') session.sessionAdSkips += 1
-  else session.sessionSponsorSkips += 1
+  if (kind === 'ad') session.sessionAdSkips += amount
+  else session.sessionSponsorSkips += amount
   await chrome.storage.session.set({ [SESSION_STATS_KEY]: session })
 }
 
@@ -398,14 +401,19 @@ const AD_SKIP_DESCRIPTIONS: Record<string, string> = {
 chrome.runtime.onMessage.addListener(
   (message: Message, sender, sendResponse) => {
     switch (message?.type) {
-      case 'skipSensei:adSkipped':
-        void recordSkip('ad')
-        void recordActivity(
-          'Skip YouTube ads',
-          AD_SKIP_DESCRIPTIONS[message.method] ?? 'neutralized an ad',
-          senderHost(sender),
-        )
+      case 'skipSensei:adSkipped': {
+        const count = message.count && message.count > 0 ? message.count : 1
+        void recordSkip('ad', count)
+        const base =
+          AD_SKIP_DESCRIPTIONS[message.method] ?? 'neutralized an ad'
+        // Aggressive mode reports a video's whole ad-break count at once.
+        const desc =
+          message.method === 'pruned' && count > 1
+            ? `blocked ${count} ads before they could load (aggressive)`
+            : base
+        void recordActivity('Skip YouTube ads', desc, senderHost(sender))
         return false
+      }
       case 'skipSensei:event':
         void reportEvent(message.kind, {
           ...(message.fields ?? {}),
