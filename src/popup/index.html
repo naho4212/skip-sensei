@@ -69,6 +69,28 @@
       </button>
     </section>
 
+    <!-- A site is showing an ad-blocker wall on the active tab. -->
+    <section class="yt-backoff" id="adblock-wall" hidden>
+      <button
+        type="button"
+        class="yt-backoff-dismiss"
+        id="adblock-wall-dismiss"
+        aria-label="Dismiss"
+      >
+        ×
+      </button>
+      <div class="yt-backoff-title">
+        <span id="adblock-wall-site">This site</span> detected your ad blocker
+      </div>
+      <p class="yt-backoff-text">
+        Some sites gate content when they spot ad blocking. Clearing this site's
+        cookies usually lifts the wall — or reload after signing out.
+      </p>
+      <button type="button" class="yt-backoff-action" id="adblock-wall-clear">
+        Clear this site's cookies &amp; reload
+      </button>
+    </section>
+
     <main>
       <!-- Active site: prominent at the top. Shown only for the general
            "Block all ads" engine on a real web page. -->

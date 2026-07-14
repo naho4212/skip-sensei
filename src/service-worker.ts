@@ -30,6 +30,7 @@ import {
   getSettings,
   incrementStat,
   recordActivity,
+  recordAdblockWall,
   recordCorrection,
   resetStats,
   setCachedAnalysis,
@@ -489,6 +490,9 @@ chrome.runtime.onMessage.addListener(
       case 'skipSensei:getCosmeticFilters':
         void getCosmeticFilters(message.hostname).then(sendResponse)
         return true
+      case 'skipSensei:adblockWall':
+        void recordAdblockWall(message.hostname)
+        return false
       case 'skipSensei:tabNeedsReload':
         if (sender.tab?.id !== undefined) {
           setReloadBadge(sender.tab.id, message.needsReload)

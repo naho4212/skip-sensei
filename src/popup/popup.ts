@@ -1,6 +1,8 @@
 import { changesSince } from '../changelog'
 import {
+  clearAdblockWall,
   clearYtBackoff,
+  getAdblockWall,
   getLastSeenVersion,
   getSettings,
   getStats,
@@ -636,15 +638,86 @@ async function clearYouTubeCookiesAndReload(btn: HTMLButtonElement) {
   }
 }
 
+// The active tab's hostname, or null for extension/internal pages.
+async function activeTabHost(): Promise<{ host: string; url: string } | null> {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+  if (!tab?.url) return null
+  try {
+    const u = new URL(tab.url)
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return null
+    return { host: u.hostname, url: tab.url }
+  } catch {
+    return null
+  }
+}
+
+// Show the "site detected your ad blocker" notice if the active tab's host has
+// a recent wall record.
+async function renderAdblockWall() {
+  const el = $('adblock-wall')
+  const active = await activeTabHost()
+  const wall = active ? await getAdblockWall(active.host) : null
+  el.hidden = !wall
+  if (wall && active) {
+    $('adblock-wall-site').textContent = active.host.replace(/^www\./, '')
+  }
+}
+
+// Clear the active site's cookies to lift its ad-blocker wall, then reload.
+// Clearing another origin's cookies needs host permission for it — which the
+// base install doesn't hold — so request just that origin on demand (this runs
+// from a click, a valid user gesture). Then clear cookies the page would send,
+// drop the wall record, and reload.
+async function clearSiteCookiesAndReload(btn: HTMLButtonElement) {
+  const original = btn.textContent
+  const active = await activeTabHost()
+  if (!active) return
+  btn.disabled = true
+  btn.textContent = 'Clearing…'
+  try {
+    const origin = new URL(active.url).origin
+    const granted = await chrome.permissions.request({ origins: [`${origin}/*`] })
+    if (!granted) {
+      btn.disabled = false
+      btn.textContent = original
+      return
+    }
+    const cookies = await chrome.cookies.getAll({ url: active.url })
+    await Promise.all(
+      cookies.map((c) => {
+        const url = `http${c.secure ? 's' : ''}://${c.domain.replace(/^\./, '')}${c.path}`
+        return chrome.cookies
+          .remove({ url, name: c.name, storeId: c.storeId })
+          .catch(() => undefined)
+      }),
+    )
+    await clearAdblockWall(active.host)
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+    if (tab?.id !== undefined) await chrome.tabs.reload(tab.id)
+    window.close()
+  } catch {
+    btn.disabled = false
+    btn.textContent = original
+  }
+}
+
 async function main() {
   void renderUpdateBanner()
   void renderYtBackoff()
+  void renderAdblockWall()
   $('yt-backoff-dismiss').addEventListener('click', () => {
     $('yt-backoff').hidden = true
     void clearYtBackoff()
   })
   $('yt-backoff-clear').addEventListener('click', (e) => {
     void clearYouTubeCookiesAndReload(e.currentTarget as HTMLButtonElement)
+  })
+  $('adblock-wall-dismiss').addEventListener('click', () => {
+    $('adblock-wall').hidden = true
+    void activeTabHost().then((a) => a && clearAdblockWall(a.host))
+  })
+  $('adblock-wall-clear').addEventListener('click', (e) => {
+    void clearSiteCookiesAndReload(e.currentTarget as HTMLButtonElement)
   })
   renderSettings(await getSettings())
   renderStats(await getStats(), await fetchSessionStats())

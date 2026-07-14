@@ -248,6 +248,60 @@ export async function clearYtBackoff(): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// Anti-adblock wall notices (general web). The cosmetic content script detects
+// when a site is showing an "you're using an ad blocker" wall and records it
+// per-hostname; the popup surfaces a recovery notice for the active tab with a
+// one-click "clear this site's cookies" action. Records expire after 7 days and
+// the map is capped so it can't grow unbounded.
+// ---------------------------------------------------------------------------
+const ADBLOCK_WALL_KEY = 'skipSensei.adblockWalls'
+const ADBLOCK_WALL_TTL_MS = 7 * 24 * 60 * 60 * 1000
+const ADBLOCK_WALL_MAX = 40
+
+export interface AdblockWall {
+  at: number
+}
+
+type AdblockWallMap = Record<string, AdblockWall>
+
+async function readAdblockWalls(): Promise<AdblockWallMap> {
+  const result = await chrome.storage.local.get(ADBLOCK_WALL_KEY)
+  return (result[ADBLOCK_WALL_KEY] as AdblockWallMap | undefined) ?? {}
+}
+
+/** Note a wall on `host`. Throttled: a fresh record isn't overwritten, so the
+ * notice doesn't re-surface every page load a detected site is open. */
+export async function recordAdblockWall(host: string): Promise<void> {
+  if (!host) return
+  const map = await readAdblockWalls()
+  const existing = map[host]
+  if (existing && Date.now() - existing.at < ADBLOCK_WALL_TTL_MS) return
+  map[host] = { at: Date.now() }
+  // Cap: keep the most recent records only.
+  const trimmed = Object.fromEntries(
+    Object.entries(map)
+      .sort((a, b) => b[1].at - a[1].at)
+      .slice(0, ADBLOCK_WALL_MAX),
+  )
+  await chrome.storage.local.set({ [ADBLOCK_WALL_KEY]: trimmed })
+}
+
+export async function getAdblockWall(host: string): Promise<AdblockWall | null> {
+  if (!host) return null
+  const wall = (await readAdblockWalls())[host]
+  if (!wall) return null
+  return Date.now() - wall.at < ADBLOCK_WALL_TTL_MS ? wall : null
+}
+
+export async function clearAdblockWall(host: string): Promise<void> {
+  if (!host) return
+  const map = await readAdblockWalls()
+  if (!(host in map)) return
+  delete map[host]
+  await chrome.storage.local.set({ [ADBLOCK_WALL_KEY]: map })
+}
+
+// ---------------------------------------------------------------------------
 // Per-videoId analysis cache (LRU-ish: index ordered by insertion, oldest evicted)
 // ---------------------------------------------------------------------------
 

@@ -1540,8 +1540,84 @@ async function scanForAds() {
   return describeHiddenElements()
 }
 
+// ---------------------------------------------------------------------------
+// Anti-adblock wall detector. Some sites gate their content behind an "you're
+// using an ad blocker" message when they detect blocking. When that happens
+// there's nothing to *hide* — the user is stuck — so instead we flag it, and
+// the popup offers a recovery action (clear this site's cookies, which lifts
+// most soft walls). High-signal only: an ad-blocker TERM plus an ACTION/notice
+// word, inside a prominent (overlay or scroll-locking) element with focused
+// text. Fires at most once per page; the store side throttles per hostname.
+// ---------------------------------------------------------------------------
+const ADWALL_TERM_RE = /ad\s?blocker?|ad[-\s]?block/i
+const ADWALL_ACTION_RE =
+  /disable|turn(?:ing)?\s*off|switch\s*off|deactivate|whitelist|allow[-\s]?list|allow\s*ads|unblock|pause|detected|noticed|support us|switching off/i
+
+/** A visible element that both mentions an ad blocker and prompts an action,
+ * and is prominent enough to be a wall (a large overlay, or large while the
+ * page's scroll is locked). Returns true on the first such element. */
+function detectAdwall(): boolean {
+  if (window !== window.top) return false
+  const body = document.body
+  if (!body) return false
+  // Cheap gate: if the whole page never mentions both, there's no wall.
+  const pageText = body.innerText || ''
+  if (!(ADWALL_TERM_RE.test(pageText) && ADWALL_ACTION_RE.test(pageText))) return false
+
+  const html = document.documentElement
+  const scrollLocked =
+    getComputedStyle(html).overflowY === 'hidden' ||
+    getComputedStyle(body).overflowY === 'hidden'
+  const vw = window.innerWidth
+  const vh = window.innerHeight
+  let scanned = 0
+  for (const el of body.querySelectorAll<HTMLElement>(
+    'div,section,aside,article,dialog',
+  )) {
+    if (scanned++ > 4000) break // bound the cost on huge DOMs
+    const style = getComputedStyle(el)
+    if (
+      style.display === 'none' ||
+      style.visibility === 'hidden' ||
+      parseFloat(style.opacity) === 0
+    )
+      continue
+    const rect = el.getBoundingClientRect()
+    const coversLot =
+      rect.width > 220 && rect.height > 120 && rect.width * rect.height > vw * vh * 0.2
+    if (!coversLot) continue
+    const overlayish =
+      style.position === 'fixed' ||
+      style.position === 'sticky' ||
+      (style.position === 'absolute' && parseInt(style.zIndex || '0', 10) > 100)
+    if (!overlayish && !scrollLocked) continue
+    const text = el.innerText || ''
+    // Focused wall copy, not a long article that happens to discuss ad blockers.
+    if (text.length < 1500 && ADWALL_TERM_RE.test(text) && ADWALL_ACTION_RE.test(text))
+      return true
+  }
+  return false
+}
+
+let adwallReported = false
+
+async function checkAdwall() {
+  if (adwallReported || window !== window.top) return
+  if (!(await blockingActive())) return
+  if (!detectAdwall()) return
+  adwallReported = true
+  chrome.runtime
+    .sendMessage({ type: 'skipSensei:adblockWall', hostname: location.hostname })
+    .catch(() => {})
+  log('anti-adblock wall detected on', location.hostname)
+}
+
 function onPageReady() {
   scheduleReloadChecks()
+  // Walls often inject after the page's own detection script runs, so sample a
+  // couple of times rather than only at load.
+  setTimeout(() => void checkAdwall(), 2500)
+  setTimeout(() => void checkAdwall(), 6000)
   // Re-apply now the DOM exists: the gap-fill safety check needs real elements
   // to see whether a cached selector is hitting the site's own UI (it can't at
   // document_start), and purge it if so. A short follow-up catches late nav.

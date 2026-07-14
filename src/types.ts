@@ -271,6 +271,7 @@ export type Message =
   | { type: 'skipSensei:resetStats' } // → { ok: true }; zeroes lifetime+session stats
   // → string[] of domain-specific cosmetic selectors for the sender's hostname
   | { type: 'skipSensei:getCosmeticFilters'; hostname: string }
+  | { type: 'skipSensei:adblockWall'; hostname: string } // site is showing an ad-blocker wall
   | { type: 'skipSensei:tabNeedsReload'; needsReload: boolean } // badges the icon for the sender tab
   | { type: 'skipSensei:getTabBlocked'; tabId: number } // → number (ads blocked on that tab)
   | {
