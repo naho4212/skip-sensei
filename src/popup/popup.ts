@@ -766,6 +766,16 @@ async function main() {
   wireToggle(sponsorToggle, 'sponsorEngineEnabled')
   wireToggle(aiEnhancementsToggle, 'aiEnhancements')
   blockAdsToggle.addEventListener('change', async () => {
+    // Cosmetic hiding on the broad web needs the optional all-sites permission
+    // (network/DNR blocking doesn't). Request it on this click gesture when the
+    // user turns blocking on, so hiding empty ad slots/containers actually works
+    // — otherwise "Block all ads" would only strip network requests and leave
+    // husks behind. Declining still enables network blocking.
+    if (blockAdsToggle.checked) {
+      await chrome.permissions
+        .request({ origins: ['*://*/*'] })
+        .catch(() => false)
+    }
     renderSettings(await updateSettings({ blockAllAds: blockAdsToggle.checked }))
     // Give the service worker a moment to flip the rulesets, then report.
     setTimeout(() => {

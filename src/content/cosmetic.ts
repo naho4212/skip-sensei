@@ -1258,7 +1258,14 @@ function highlightAll(on: boolean) {
   if (selectors.length === 0) return
   const style = document.createElement('style')
   style.id = HIGHLIGHT_ALL_STYLE_ID
-  style.textContent = `${selectors.join(',')}{display:revert!important;outline:2px solid rgba(124,58,237,0.5)!important;outline-offset:1px!important}`
+  style.textContent =
+    // Reveal every hidden/collapsed element and frame it in faint purple.
+    `${selectors.join(',')}{display:revert!important;outline:2px solid rgba(124,58,237,0.5)!important;outline-offset:1px!important}` +
+    // Branded slots: hide our "AD SENSEI" card and un-blank the slot's own
+    // content, so the outline frames the real ad (or the empty slot the site
+    // left behind) rather than our placeholder.
+    `.${BRANDED_SLOT_CLASS} > .${SLOT_BRAND_CLASS}{display:none!important}` +
+    `.${BRANDED_SLOT_CLASS} > :not(.${SLOT_BRAND_CLASS}){visibility:visible!important}`
   ;(document.head ?? document.documentElement).appendChild(style)
 }
 
