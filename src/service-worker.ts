@@ -365,8 +365,11 @@ async function reviewPopupMsg(
   if (!settings.aiEnhancements) return false
   const controller = new AbortController()
   try {
-    const hide = await reviewPopup(html, settings, controller.signal)
-    const detail = desc ? ` — ${desc}` : ''
+    const { hide, summary } = await reviewPopup(html, settings, controller.signal)
+    // Prefer the AI's content summary ("Newsletter signup…"); fall back to the
+    // content script's structural label (tag + size) if the model gave none.
+    const content = summary || desc || ''
+    const detail = content ? ` — ${content}` : ''
     void recordActivity(
       'Block popup & overlay ads',
       hide

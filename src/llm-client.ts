@@ -329,14 +329,14 @@ export async function verifyAdCandidates(
   }
 }
 
-const POPUP_SYSTEM_PROMPT = `You decide whether an on-page overlay/popup should be hidden. HIDE only intrusive annoyances: newsletter/email-signup walls, promotional/discount popups, "subscribe" interstitials, app-install nags, survey/feedback popups, and popup/overlay ADS. KEEP (do not hide) anything functional or that the user may need: login/sign-in dialogs, authentication (OAuth), cookie/consent choices, age verification, payment/checkout, error or confirmation dialogs, and the site's actual content. When unsure, KEEP. Respond with ONLY JSON: {"hide": true|false}. No prose.`
+const POPUP_SYSTEM_PROMPT = `You decide whether an on-page overlay/popup should be hidden. HIDE only intrusive annoyances: newsletter/email-signup walls, promotional/discount popups, "subscribe" interstitials, app-install nags, survey/feedback popups, and popup/overlay ADS. KEEP (do not hide) anything functional or that the user may need: login/sign-in dialogs, authentication (OAuth), cookie/consent choices, age verification, payment/checkout, error or confirmation dialogs, and the site's actual content. When unsure, KEEP. Respond with ONLY JSON: {"hide": true|false, "summary": "<neutral 3-8 word description of what the popup is, e.g. 'Newsletter signup asking for email', 'Cookie consent banner', 'Login dialog', '20% discount promo'>"}. No prose.`
 
 /** Decide whether an overlay is an intrusive annoyance (hide) or functional (keep). */
 export async function reviewPopup(
   html: string,
   settings: Settings,
   signal: AbortSignal,
-): Promise<boolean> {
+): Promise<{ hide: boolean; summary: string }> {
   const raw = await completeSmart(
     POPUP_SYSTEM_PROMPT,
     `Overlay HTML:\n${html.slice(0, 4000)}`,
@@ -346,11 +346,15 @@ export async function reviewPopup(
   const cleaned = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '')
   const first = cleaned.indexOf('{')
   const last = cleaned.lastIndexOf('}')
-  if (first === -1 || last <= first) return false
+  if (first === -1 || last <= first) return { hide: false, summary: '' }
   try {
-    return JSON.parse(cleaned.slice(first, last + 1)).hide === true
+    const obj = JSON.parse(cleaned.slice(first, last + 1))
+    return {
+      hide: obj.hide === true,
+      summary: typeof obj.summary === 'string' ? obj.summary.trim().slice(0, 80) : '',
+    }
   } catch {
-    return false
+    return { hide: false, summary: '' }
   }
 }
 
