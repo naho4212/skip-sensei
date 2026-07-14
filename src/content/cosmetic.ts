@@ -231,8 +231,22 @@ function isValidSelectorList(list: string[]): string[] {
   })
 }
 
+/**
+ * Reveal mode (temporary, the cosmetic-layer sibling of CLOAK_ENABLED in
+ * ad-engine.ts): instead of hiding matched ads / blanking slots behind the
+ * AD SENSEI brand card, leave every ad visible and draw a purple outline on
+ * it, so what the layer would hide can be inspected on the live page and
+ * cross-checked against the popup's ad list. Selector matching, counters,
+ * and the 👎 review list run unchanged — only the visual treatment differs.
+ * Flip to false to restore real hiding.
+ */
+const REVEAL_ADS = true
+const REVEAL_CSS =
+  'outline:2px solid #7c3aed!important;outline-offset:-2px!important'
+
 function buildCss(selectors: string[]): string {
   if (selectors.length === 0) return ''
+  if (REVEAL_ADS) return `${selectors.join(',')}{${REVEAL_CSS}}`
   return `${selectors.join(',')}{display:none!important}`
 }
 
@@ -245,6 +259,8 @@ function buildCss(selectors: string[]): string {
  * gradient split at the "AD "/"SENSEI" boundary. */
 function buildPlaceholderCss(selectors: string[], dark: boolean): string {
   if (selectors.length === 0) return ''
+  // Reveal mode: outline the ad instead of blanking it behind the brand card.
+  if (REVEAL_ADS) return buildCss(selectors)
   const slots = selectors.join(',')
   const children = selectors.map((s) => `${s} > *`).join(',')
   const boxes = selectors.map((s) => `${s}::before`).join(',')
@@ -878,13 +894,21 @@ async function collapseEmptyAdSlots() {
   const collapse = (el: HTMLElement, guard: string) => {
     if (el.classList.contains(BRANDED_SLOT_CLASS)) {
       // Self-heal: re-add the overlay if something stripped it.
-      if (!el.querySelector(`:scope > .${SLOT_BRAND_CLASS}`))
+      if (!REVEAL_ADS && !el.querySelector(`:scope > .${SLOT_BRAND_CLASS}`))
         el.appendChild(buildSlotBrand())
       return
     }
     if (el.classList.contains(EMPTY_SLOT_CLASS)) return
     if (el.closest(guard)) return
     if (!isEmptyAdSlot(el)) return
+    // Reveal mode: tag the slot so the outline shows it, but skip the
+    // collapse/brand machinery — with no display:none the reclaim check
+    // below would always fail and brand every slot.
+    if (REVEAL_ADS) {
+      el.classList.add(EMPTY_SLOT_CLASS)
+      tagged++
+      return
+    }
     // Collapse, then check the page actually reclaimed the space. A slot in
     // a fixed rail (the parent still reserves the area) collapses into dead
     // white space — there, fill the slot with the branded AdBlockedSlot

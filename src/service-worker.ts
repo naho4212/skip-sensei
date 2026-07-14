@@ -19,6 +19,10 @@ import {
 import { getCosmeticFilters } from './cosmetic-filters'
 import { initPruneRegistration, syncPruneRegistration } from './prune-register'
 import {
+  initCosmeticRegistration,
+  syncCosmeticRegistration,
+} from './cosmetic-register'
+import {
   initScriptletRegistration,
   syncScriptletRegistration,
 } from './scriptlet-register'
@@ -699,6 +703,11 @@ initPruneRegistration()
 // for the broad web (dormant until broad host permission is granted).
 initScriptletRegistration()
 
+// Broad-web cosmetic filtering: (un)register the cosmetic content script for
+// *://*/* (dormant until a web-cosmetic feature is on AND the optional
+// all-sites host permission is granted). YouTube is covered statically.
+initCosmeticRegistration()
+
 // Cold-start gate: DNR ruleset state and chrome.scripting registrations persist
 // across service-worker restarts, so we only run the full sync on a genuine
 // cold start (browser launch / install / update) — not on every idle wake.
@@ -713,6 +722,7 @@ void (async () => {
       await syncNetBlocker()
       await syncPruneRegistration()
       await syncScriptletRegistration()
+      await syncCosmeticRegistration()
     })
   } else {
     await verifyNetBlocker()

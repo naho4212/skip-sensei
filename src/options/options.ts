@@ -53,6 +53,35 @@ const KEY_LINKS: Record<KeyedProvider, string> = {
 /** Providers whose free tier makes the key link say so. */
 const FREE_KEY_PROVIDERS = new Set<LlmProvider>(['gemini', 'groq', 'openrouter'])
 
+/** Optional host permission each provider's requests need (builtin needs none). */
+const PROVIDER_ORIGINS: Partial<Record<LlmProvider, string>> = {
+  gemini: 'https://generativelanguage.googleapis.com/*',
+  anthropic: 'https://api.anthropic.com/*',
+  openai: 'https://api.openai.com/*',
+  groq: 'https://api.groq.com/*',
+  openrouter: 'https://openrouter.ai/*',
+  ollama: 'http://localhost/*',
+  openclaw: 'http://127.0.0.1/*',
+}
+
+/**
+ * Request the optional host permission a cloud/local-gateway provider needs.
+ * Called from the provider-select change handler (a user gesture). If the user
+ * declines, the service worker's fetch to that host simply fails and analysis
+ * falls back to the on-device model — no worse than an unreachable provider.
+ */
+async function requestProviderHost(provider: LlmProvider): Promise<void> {
+  const origin = PROVIDER_ORIGINS[provider]
+  if (!origin) return
+  try {
+    if (await chrome.permissions.contains({ origins: [origin] })) return
+    await chrome.permissions.request({ origins: [origin] })
+  } catch {
+    // request() throws outside a user gesture — harmless; the fetch will just
+    // fall back to on-device AI if the permission never gets granted.
+  }
+}
+
 /** Sentinel select value that reveals the free-text model field. */
 const CUSTOM_MODEL = '__custom__'
 
@@ -749,9 +778,13 @@ async function main() {
     }),
   )
 
-  providerEl.addEventListener('change', () =>
-    save({ llmProvider: providerEl.value as LlmProvider }),
-  )
+  providerEl.addEventListener('change', () => {
+    const provider = providerEl.value as LlmProvider
+    // Cloud/local-gateway hosts are optional permissions — request the one this
+    // provider needs while we still have the user gesture from the change event.
+    void requestProviderHost(provider)
+    void save({ llmProvider: provider })
+  })
   apiKeyEl.addEventListener(
     'input',
     debounce(() => {

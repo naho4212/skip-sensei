@@ -608,7 +608,14 @@ async function completeSmart(
   settings: Settings,
   signal: AbortSignal,
 ): Promise<string> {
-  const provider = resolveHelperProvider(settings)
+  // Privacy default: helper prompts can embed short snippets of page markup
+  // (ad candidates, overlay/banner HTML), so they run on-device whenever
+  // Chrome's built-in model is ready. A cloud provider is used only when no
+  // on-device model is available — disclosed in the privacy policy.
+  const provider =
+    (await builtinAvailability()) === 'available'
+      ? 'builtin'
+      : resolveHelperProvider(settings)
   const model =
     provider === 'groq' ? GROQ_HELPER_MODEL : resolveModel(provider, settings)
   try {

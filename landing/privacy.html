@@ -97,11 +97,13 @@ what i<!doctype html>
       <strong>The short version.</strong> Almost everything happens on your
       device. Ad Sensei does not track your browsing, does not sell any data,
       and never injects its own ads. The only things that can leave your browser
-      are: (1) a video transcript sent to the AI provider <em>you</em> choose,
-      and only if you pick a cloud provider; (2) a privacy-preserving,
-      <em>hashed</em> SponsorBlock lookup; and (3) optional, anonymous crash
-      diagnostics you can turn off. Turn on <strong>Local-only mode</strong> and
-      nothing leaves your browser at all.
+      are: (1) a video transcript — and, for the optional AI page-cleanup
+      helpers, a short snippet of a page's ad/overlay markup — sent to the AI
+      provider <em>you</em> choose, and only if you pick a cloud provider (with
+      Chrome's on-device AI available, these never leave your device); (2) a
+      privacy-preserving, <em>hashed</em> SponsorBlock lookup; and (3) optional,
+      anonymous crash diagnostics you can turn off. Turn on
+      <strong>Local-only mode</strong> and nothing leaves your browser at all.
     </div>
 
     <h2>1. Data processed only on your device</h2>
@@ -149,6 +151,21 @@ what i<!doctype html>
           database has no data. Using Chrome's built-in on-device AI, a local
           Ollama server, or Local-only mode means the transcript never leaves
           your device.
+        </td>
+      </tr>
+      <tr>
+        <td>
+          A short snippet of page markup (an ad candidate, popup overlay, or
+          cookie-consent banner — up to a few&nbsp;KB, never the whole page)
+        </td>
+        <td>The same AI provider <em>you</em> select</td>
+        <td>
+          Only for the optional AI enhancements (ad-candidate verification,
+          popup review, cookie-banner auto-reject / selector self-heal), and
+          only as a fallback: when Chrome's built-in on-device model is
+          available these run entirely on your device. Disabled with the
+          "AI enhancements" toggle, when no cloud provider is configured, and
+          in Local-only mode.
         </td>
       </tr>
       <tr>

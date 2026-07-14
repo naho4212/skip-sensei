@@ -85,9 +85,15 @@ crash/adaptation diagnostics (extension version, coarse browser tag, selected
 provider name, scrubbed error text, a self-heal CSS selector, a random install
 id). Off in Local-only mode and toggleable. No URLs, titles, keys, or personal
 data.
-**Website content:** Yes — a YouTube video transcript is sent to the user's
+**Website content:** Yes — (a) a YouTube video transcript is sent to the user's
 chosen AI provider for sponsor detection, only when a cloud provider is
-selected (never with on-device/local AI or in Local-only mode).
+selected (never with on-device/local AI or in Local-only mode); (b) for the
+optional AI enhancements (ad-candidate verification, popup review,
+cookie-banner auto-reject, selector self-heal), a short snippet of page markup
+(≤5 KB, never the full page) may be sent to that same provider — but only as a
+fallback when Chrome's built-in on-device model is unavailable; with the
+on-device model present these helpers never leave the device. Both disclosed
+in the privacy policy.
 
 **Certifications (all true):**
 - Data is NOT sold or transferred to third parties for purposes unrelated to
@@ -95,7 +101,9 @@ selected (never with on-device/local AI or in Local-only mode).
 - Data is NOT used or transferred for advertising or creditworthiness.
 - Data use is limited to providing the user-facing features.
 
-**Privacy policy URL:** https://<landing-domain>/privacy.html
+**Privacy policy URL:** https://landing-beta-three-23.vercel.app/privacy.html
+(replace with the custom domain once one is attached — it must stay in sync
+with the telemetry endpoint host in `src/error-reporting.ts`)
 
 ---
 

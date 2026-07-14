@@ -15,6 +15,16 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.2.13',
+    date: '2026-07-14',
+    items: [
+      'Web-wide ad hiding now asks for all-sites access only when you turn it on — a fresh install stays scoped to YouTube',
+      'Cookie clearing and cloud AI providers now request permission only when you use them, so the extension asks for less up front',
+      'The AI page-cleanup helpers now stay on your device whenever Chrome’s built-in AI is available',
+      'Clearer first-run note about optional, anonymous crash reports, with a toggle right there',
+    ],
+  },
+  {
     version: '0.2.12',
     date: '2026-07-14',
     items: [

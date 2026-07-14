@@ -613,6 +613,13 @@ async function clearYouTubeCookiesAndReload(btn: HTMLButtonElement) {
   btn.disabled = true
   btn.textContent = 'Clearing…'
   try {
+    // `cookies` is an optional permission — request it on this click gesture.
+    const granted = await chrome.permissions.request({ permissions: ['cookies'] })
+    if (!granted) {
+      btn.disabled = false
+      btn.textContent = original
+      return
+    }
     await clearCookiesFor({ domain: 'youtube.com' })
     await clearYtBackoff()
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
@@ -669,7 +676,10 @@ async function clearSiteCookiesAndReload(btn: HTMLButtonElement) {
   btn.textContent = 'Clearing…'
   try {
     const origin = new URL(active.url).origin
-    const granted = await chrome.permissions.request({ origins: [`${origin}/*`] })
+    const granted = await chrome.permissions.request({
+      permissions: ['cookies'],
+      origins: [`${origin}/*`],
+    })
     if (!granted) {
       btn.disabled = false
       btn.textContent = original
