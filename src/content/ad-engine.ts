@@ -88,7 +88,13 @@ const WALLS_BEFORE_BREAKER = 1
  * Cloak: opaque cover over the player while an ad is being neutralized, so
  * the user sees a calm "Skipping ad…" panel instead of the 16x flicker,
  * click churn, and pod transitions. Removed the moment the ad is gone.
+ *
+ * DISABLED for now: with skips landing near-instantly the cover mostly hides
+ * what the engine is doing, and we want the ad visible while tuning skip
+ * behavior. Flip to re-enable — everything else (mute, skip, cleanup) is
+ * unchanged, and removeCloak() still runs so stale covers get cleared.
  */
+const CLOAK_ENABLED = false
 const CLOAK_ID = 'skip-sensei-ad-cloak'
 const CLOAK_STYLE_ID = 'skip-sensei-ad-cloak-style'
 /**
@@ -506,6 +512,7 @@ export class AdEngine {
       this.mutedForAd = true
       video.muted = true
     }
+    if (!CLOAK_ENABLED) return
     if (this.cloak?.isConnected) return
     if (!document.getElementById(CLOAK_STYLE_ID)) {
       const style = document.createElement('style')
