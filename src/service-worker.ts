@@ -356,17 +356,22 @@ async function findConsent(html: string): Promise<string | null> {
 }
 
 /** AI popup review: is this overlay an intrusive annoyance (hide) or functional (keep)? */
-async function reviewPopupMsg(html: string, host?: string): Promise<boolean> {
+async function reviewPopupMsg(
+  html: string,
+  host?: string,
+  desc?: string,
+): Promise<boolean> {
   const settings = await getSettings()
   if (!settings.aiEnhancements) return false
   const controller = new AbortController()
   try {
     const hide = await reviewPopup(html, settings, controller.signal)
+    const detail = desc ? ` — ${desc}` : ''
     void recordActivity(
       'Block popup & overlay ads',
       hide
-        ? 'reviewed a popup — hid it (intrusive)'
-        : 'reviewed a popup — kept it (looks functional)',
+        ? `reviewed a popup, hid it (intrusive)${detail}`
+        : `reviewed a popup, kept it (looks functional)${detail}`,
       host,
     )
     return hide
@@ -553,7 +558,9 @@ chrome.runtime.onMessage.addListener(
         void verifyCandidates(message.candidates).then(sendResponse)
         return true
       case 'skipSensei:reviewPopup':
-        void reviewPopupMsg(message.html, senderHost(sender)).then(sendResponse)
+        void reviewPopupMsg(message.html, senderHost(sender), message.desc).then(
+          sendResponse,
+        )
         return true
       case 'skipSensei:findConsentReject':
         void findConsent(message.html).then(sendResponse)

@@ -1,5 +1,5 @@
 import { log } from '../log'
-import { getSettings, recordActivity } from '../storage'
+import { getSettings } from '../storage'
 
 /**
  * AI-reviewed popup/overlay blocking. When "Block popup & overlay ads" is on
@@ -72,18 +72,15 @@ async function review(el: Element) {
   if (isFunctional(el)) return // never touch logins / consent / checkout
 
   const html = (el as HTMLElement).outerHTML.slice(0, 4000)
+  // Pass a short label so the service worker's activity entry (logged for both
+  // the hide and keep outcomes) can say WHAT was reviewed, not just that one was.
+  const desc = describePopup(el)
   const hide: boolean | null = await chrome.runtime
-    .sendMessage({ type: 'skipSensei:reviewPopup', html })
+    .sendMessage({ type: 'skipSensei:reviewPopup', html, desc })
     .catch(() => null)
   if (hide && el.isConnected) {
-    const desc = describePopup(el)
     ;(el as HTMLElement).style.setProperty('display', 'none', 'important')
     log('AI hid an intrusive popup', desc)
-    void recordActivity(
-      'Block popup & overlay ads',
-      `hid an intrusive popup${desc ? ` — ${desc}` : ''}`,
-      location.hostname,
-    )
   }
 }
 
