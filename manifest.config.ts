@@ -53,9 +53,12 @@ export default defineManifest({
       // Match all of youtube.com, not just /watch*: YouTube is an SPA, so a
       // user landing on the homepage and clicking a video never triggers a new
       // page load. The script gates itself to watch pages at runtime.
+      // document_start, not document_idle: on a cold watch-page load the
+      // pre-roll starts playing seconds before document_idle fires, so the
+      // engine must already be polling for the player by then.
       matches: ['*://*.youtube.com/*'],
       js: ['src/content/index.ts'],
-      run_at: 'document_idle',
+      run_at: 'document_start',
     },
     {
       // Aggressive-mode controller (isolated world): keeps the localStorage

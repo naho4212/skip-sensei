@@ -62,13 +62,6 @@ export function playerShowsAd(
 const HEAL_AFTER_MS = 7000
 
 /**
- * How long after clicking a skip button we wait for the ad to actually end
- * before concluding the click was ignored (YouTube's newer skip button
- * intermittently drops synthetic clicks) and burning through instead.
- */
-const SKIP_CLICK_GRACE_MS = 1500
-
-/**
  * Floor between check() runs. The MutationObserver fires for every player
  * DOM mutation, and check() itself mutates (event dispatch, seeks) — without
  * a floor that feeds back into a mutation storm that pegs the main thread.
@@ -231,9 +224,9 @@ export class AdEngine {
   private mutedForAd = false
   private attachRetryTimer: number | null = null
   /**
-   * When we first clicked the current ad's skip button. Clicking can silently
-   * fail, so this also gates the fallback: an ad that outlives the click by
-   * more than the grace period gets fast-forwarded instead. Reset whenever the
+   * When we first clicked the current ad's skip button. Attribution only
+   * (timing method + skip-count dedup): the click and the seek-to-end fallback
+   * now fire in the same tick, so nothing waits on this. Reset whenever the
    * button disappears or the ad ends, so each ad in a pod gets its own click
    * (and its own skip count).
    */
@@ -313,11 +306,14 @@ export class AdEngine {
     return this.observer !== null
   }
 
-  /** The player renders asynchronously after SPA navigation; poll until it exists. */
+  /** The player renders asynchronously after SPA navigation; poll until it
+   * exists. 80 × 250ms: the script now starts at document_start, when the DOM
+   * is empty, so the poll must cover the whole slow-connection render window
+   * (yt-navigate-finish re-kicks the engine if it still expires). */
   private attachWhenPlayerExists(attempt = 0) {
     const player = document.querySelector<HTMLElement>(PLAYER)
     if (!player) {
-      if (attempt < 40) {
+      if (attempt < 80) {
         this.attachRetryTimer = window.setTimeout(
           () => this.attachWhenPlayerExists(attempt + 1),
           250,
@@ -394,19 +390,13 @@ export class AdEngine {
     if (this.adShowingSince === null) this.adShowingSince = Date.now()
     this.applyCloak()
 
-    if (this.clickSkipButton()) {
-      // Give the click a moment to take effect — but no longer. YouTube's
-      // skip button sometimes ignores synthetic clicks; an ad that survives
-      // the click (the 2nd ad of a pod, typically) must not park here at
-      // normal speed, so past the grace period we fall through and burn it.
-      if (Date.now() - this.skipClickedAt! <= SKIP_CLICK_GRACE_MS) {
-        // Rate back to normal for the transition, but STAY muted/cloaked —
-        // the ad is still on screen until the click lands.
-        const video = document.querySelector<HTMLVideoElement>(VIDEO)
-        if (video && video.playbackRate !== 1) video.playbackRate = 1
-        return
-      }
-    } else {
+    // Click the skip button AND seek-to-end in the same tick. YouTube's skip
+    // button intermittently ignores synthetic clicks, and the old "wait a
+    // grace period before burning through" fallback cost 1.5s per failed
+    // click — across an ad pod plus the seek-retry floor that compounded into
+    // multi-second skips. The seek is harmless when the click lands: the ad
+    // video is discarded either way.
+    if (!this.clickSkipButton()) {
       this.skipClickedAt = null
     }
     // Ad has played a while with no working skip button — YouTube may have
@@ -710,11 +700,16 @@ export class AdEngine {
     // not the whole ad. Retry at most every 1.5s (not while a seek is in
     // flight): if YouTube resets the seek on a non-seekable ad, this stops it
     // fighting itself, and the 16x rate above still burns through in between.
+    // After a click, only seek while the ad-showing class is still up: in the
+    // click→content transition the skip button can linger after the ad class
+    // drops, and a seek landing on the freshly-swapped MAIN video would jump
+    // it to its end. (Without a click there was no transition to race.)
     const target = video.duration - 0.4
     if (
       !video.seeking &&
       target > video.currentTime + 1 &&
-      now - this.ffLastSeekAt > 1500
+      now - this.ffLastSeekAt > 1500 &&
+      (this.skipClickedAt === null || playerShowsAd(this.player))
     ) {
       this.ffLastSeekAt = now
       video.currentTime = target
@@ -722,7 +717,10 @@ export class AdEngine {
 
     if (!this.fastForwarding) {
       this.fastForwarding = true
-      this.onSkip('fast-forward')
+      // A clicked ad is already counted (and timing-attributed) as
+      // 'skip-button'; firing here too would double-count it now that the
+      // click and the seek fallback run in the same tick.
+      if (this.skipClickedAt === null) this.onSkip('fast-forward')
     }
   }
 
