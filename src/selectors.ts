@@ -43,6 +43,9 @@ export const LIVE_BADGE = `${PLAYER} .ytp-live`
  * Most likely to change when YouTube updates detection — update here.
  */
 export const ENFORCEMENT_MESSAGE = 'ytd-enforcement-message-view-model'
+/** Player error screen — where the final "playback blocked" enforcement stage renders. */
+export const PLAYABILITY_ERROR_SCREEN =
+  '#error-screen, yt-playability-error-supported-renderers'
 export const POPUP_DIALOG = 'ytd-popup-container tp-yt-paper-dialog'
 export const MODAL_BACKDROP = 'tp-yt-iron-overlay-backdrop'
 

@@ -3,6 +3,7 @@ import {
   AD_SHOWING_CLASSES,
   ENFORCEMENT_MESSAGE,
   MODAL_BACKDROP,
+  PLAYABILITY_ERROR_SCREEN,
   OVERLAY_ADS,
   OVERLAY_CLOSE_BUTTONS,
   PAUSE_OVERLAY_ADS,
@@ -163,6 +164,55 @@ const CLOAK_CSS = `
 `
 
 /**
+ * Recovery panel for the final enforcement stage (playability ERROR): the
+ * server refuses to send a video stream, so the only fix is clearing
+ * youtube.com cookies, which drops the session flag YouTube set.
+ */
+const HARD_BLOCK_ID = 'skip-sensei-hard-block'
+const HARD_BLOCK_STYLE_ID = 'skip-sensei-hard-block-style'
+const HARD_BLOCK_CSS = `
+#${HARD_BLOCK_ID} {
+  position: absolute;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 24px;
+  background: #0c0c0c;
+  color: #f1f1f1;
+  font-family: Roboto, Arial, sans-serif;
+  text-align: center;
+  cursor: default;
+}
+#${HARD_BLOCK_ID} .hb-title { font-size: 20px; font-weight: 500; }
+#${HARD_BLOCK_ID} .hb-body {
+  max-width: 460px; font-size: 14px; line-height: 1.5; color: #aaaaaa;
+}
+#${HARD_BLOCK_ID} .hb-clear {
+  margin-top: 6px; padding: 10px 20px; border: none; border-radius: 18px;
+  background: #7c3aed; color: #ffffff; font: 500 14px Roboto, Arial, sans-serif;
+  cursor: pointer;
+}
+#${HARD_BLOCK_ID} .hb-clear:hover { background: #8b5cf6; }
+#${HARD_BLOCK_ID} .hb-clear:disabled { opacity: 0.6; cursor: default; }
+#${HARD_BLOCK_ID} .hb-dismiss {
+  padding: 6px 12px; border: none; border-radius: 14px;
+  background: transparent; color: #6a6a6a;
+  font: 400 12px Roboto, Arial, sans-serif; cursor: pointer;
+}
+#${HARD_BLOCK_ID} .hb-dismiss:hover { color: #aaaaaa; }
+#${HARD_BLOCK_ID} .hb-brand {
+  display: flex; gap: 6px; font-size: 11px; font-weight: 700;
+  letter-spacing: 0.2em; margin-top: 10px;
+}
+#${HARD_BLOCK_ID} .hb-brand .ad { color: #7c3aed; }
+#${HARD_BLOCK_ID} .hb-brand .sensei { color: #6a6a6a; }
+`
+
+/**
  * Ad Engine: detects YouTube-served ads on the current watch page and
  * neutralizes them. One instance per watch page; SPA navigation tears it
  * down and creates a fresh one.
@@ -201,6 +251,8 @@ export class AdEngine {
   /** Enforcement walls dismissed this session (aggressive-mode circuit breaker). */
   private wallsSeen = 0
   private breakerTripped = false
+  /** True once the final "playback blocked" stage was seen on this page. */
+  private hardBlockSeen = false
   /** AI-healed skip-button selectors (kept apart from the trusted hardcoded
    * list: healed matches must additionally pass looksLikeSkipControl). */
   private healedSkipSelectors: string[] = []
@@ -248,6 +300,7 @@ export class AdEngine {
     // Teardown must leave the video watchable (orphaned scripts included):
     // uncover the player and restore speed/audio.
     this.removeCloak()
+    document.getElementById(HARD_BLOCK_ID)?.remove()
     const video = document.querySelector<HTMLVideoElement>(VIDEO)
     if (video) {
       if (video.playbackRate !== 1) video.playbackRate = 1
@@ -698,6 +751,17 @@ export class AdEngine {
       return
     }
 
+    // Final enforcement stage: the server answered the watch request with a
+    // playability ERROR — the enforcement message renders inside the player's
+    // #error-screen instead of a dismissible dialog, and no video stream
+    // exists. Removing the message here just leaves a dead black player (and
+    // is how earlier builds "handled" it). Leave the DOM alone and offer the
+    // real remedy in place: clearing youtube.com cookies lifts the flag.
+    if (message.closest(PLAYABILITY_ERROR_SCREEN)) {
+      this.handleHardBlock()
+      return
+    }
+
     this.wallsSeen++
     void this.maybeTripAggressiveBreaker()
 
@@ -713,6 +777,101 @@ export class AdEngine {
     document.body.style.overflow = ''
     const video = document.querySelector<HTMLVideoElement>(VIDEO)
     if (video && video.paused) void video.play().catch(() => {})
+  }
+
+  /**
+   * Final enforcement stage: playback is refused server-side, so back off
+   * (same breaker as the modal wall), flag the popup notice, and offer the
+   * one real fix — clearing youtube.com cookies — right on the dead player.
+   */
+  private handleHardBlock() {
+    if (!this.hardBlockSeen) {
+      this.hardBlockSeen = true
+      this.wallsSeen++
+      void this.maybeTripAggressiveBreaker()
+      // The breaker only records the backoff when it flips the aggressive
+      // setting; the popup notice must show even when it was already off.
+      void setYtBackoff(this.wallsSeen)
+      void recordActivity(
+        'Skip YouTube ads',
+        'YouTube blocked playback for this session — offered the cookie-clear fix',
+        'youtube.com',
+      )
+      void this.send({
+        type: 'skipSensei:event',
+        kind: 'yt_hard_block',
+        fields: { walls: String(this.wallsSeen) },
+      })
+      log('YouTube hard playback block detected — showing recovery panel')
+    }
+    this.showHardBlockPanel()
+  }
+
+  private showHardBlockPanel() {
+    if (document.getElementById(HARD_BLOCK_ID)) return
+    const host =
+      this.player ?? document.querySelector<HTMLElement>(PLAYER)
+    if (!host) return
+
+    if (!document.getElementById(HARD_BLOCK_STYLE_ID)) {
+      const style = document.createElement('style')
+      style.id = HARD_BLOCK_STYLE_ID
+      style.textContent = HARD_BLOCK_CSS
+      document.head.appendChild(style)
+    }
+
+    const panel = document.createElement('div')
+    panel.id = HARD_BLOCK_ID
+
+    const title = document.createElement('div')
+    title.className = 'hb-title'
+    title.textContent = 'YouTube has blocked playback for this session'
+
+    const body = document.createElement('div')
+    body.className = 'hb-body'
+    body.textContent =
+      'YouTube flagged this browser session for ad blocking, so it refuses to ' +
+      'play videos — reloading won’t help. Clearing YouTube’s cookies lifts ' +
+      'the flag. You’ll be signed out of YouTube and may need to sign back in.'
+
+    const clear = document.createElement('button')
+    clear.className = 'hb-clear'
+    clear.textContent = 'Clear YouTube cookies & reload'
+    clear.addEventListener('click', () => {
+      clear.disabled = true
+      clear.textContent = 'Clearing…'
+      void this.send<{ ok: boolean } | null>({
+        type: 'skipSensei:clearYtCookies',
+      }).then((res) => {
+        // On success the service worker reloads this tab; only a failure
+        // needs handling here.
+        if (!res?.ok) {
+          clear.disabled = false
+          clear.textContent = 'Clear YouTube cookies & reload'
+          body.textContent =
+            'Clearing failed — you can clear cookies for youtube.com from ' +
+            'the browser’s site settings instead, then reload.'
+        }
+      })
+    })
+
+    const dismiss = document.createElement('button')
+    dismiss.className = 'hb-dismiss'
+    dismiss.textContent = "Dismiss and show YouTube's message"
+    dismiss.addEventListener('click', () => panel.remove())
+
+    const brand = document.createElement('div')
+    brand.className = 'hb-brand'
+    const ad = document.createElement('span')
+    ad.className = 'ad'
+    ad.textContent = 'AD'
+    const sensei = document.createElement('span')
+    sensei.className = 'sensei'
+    sensei.textContent = 'SENSEI'
+    brand.append(ad, sensei)
+
+    panel.append(title, body, clear, dismiss, brand)
+    host.appendChild(panel)
   }
 
   /**

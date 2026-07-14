@@ -22,10 +22,12 @@ import {
   initScriptletRegistration,
   syncScriptletRegistration,
 } from './scriptlet-register'
+import { clearCookiesFor } from './cookies'
 import { isColdStart, runColdStart } from './lifecycle'
 import { fetchSponsorBlockSegments } from './sponsorblock'
 import { initErrorReporting, reportError, reportEvent } from './error-reporting'
 import {
+  clearYtBackoff,
   getCachedAnalysis,
   getSettings,
   incrementStat,
@@ -493,6 +495,24 @@ chrome.runtime.onMessage.addListener(
       case 'skipSensei:adblockWall':
         void recordAdblockWall(message.hostname)
         return false
+      case 'skipSensei:clearYtCookies':
+        // The in-player recovery panel's action: clear youtube.com cookies to
+        // lift YouTube's ad-blocker-detection flag (same remedy as the popup
+        // button), drop the backoff notice, and reload the blocked tab.
+        // Respond BEFORE reloading — the reload destroys the sender's context.
+        void (async () => {
+          try {
+            await clearCookiesFor({ domain: 'youtube.com' })
+            await clearYtBackoff()
+            sendResponse({ ok: true })
+            if (sender.tab?.id !== undefined) {
+              await chrome.tabs.reload(sender.tab.id)
+            }
+          } catch {
+            sendResponse({ ok: false })
+          }
+        })()
+        return true
       case 'skipSensei:tabNeedsReload':
         if (sender.tab?.id !== undefined) {
           setReloadBadge(sender.tab.id, message.needsReload)

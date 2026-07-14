@@ -15,6 +15,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.2.12',
+    date: '2026-07-14',
+    items: [
+      'When YouTube fully blocks playback for ad blocking, the player now shows a recovery panel with a one-click "Clear YouTube cookies & reload" fix (instead of a silent black screen)',
+      "Fixed cookie clearing missing YouTube's partitioned session cookies — the ones the ad-blocker flag actually lives on — so the fix now really lifts the block",
+    ],
+  },
+  {
     version: '0.2.11',
     date: '2026-07-10',
     items: ['Polished the welcome page and fixed its layout.'],

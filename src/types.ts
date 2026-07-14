@@ -272,6 +272,8 @@ export type Message =
   // → string[] of domain-specific cosmetic selectors for the sender's hostname
   | { type: 'skipSensei:getCosmeticFilters'; hostname: string }
   | { type: 'skipSensei:adblockWall'; hostname: string } // site is showing an ad-blocker wall
+  // → { ok: boolean }; clears youtube.com cookies + the backoff flag, then reloads the sender tab
+  | { type: 'skipSensei:clearYtCookies' }
   | { type: 'skipSensei:tabNeedsReload'; needsReload: boolean } // badges the icon for the sender tab
   | { type: 'skipSensei:getTabBlocked'; tabId: number } // → number (ads blocked on that tab)
   | {

@@ -1,4 +1,5 @@
 import { changesSince } from '../changelog'
+import { clearCookiesFor } from '../cookies'
 import {
   clearAdblockWall,
   clearYtBackoff,
@@ -612,15 +613,7 @@ async function clearYouTubeCookiesAndReload(btn: HTMLButtonElement) {
   btn.disabled = true
   btn.textContent = 'Clearing…'
   try {
-    const cookies = await chrome.cookies.getAll({ domain: 'youtube.com' })
-    await Promise.all(
-      cookies.map((c) => {
-        const url = `http${c.secure ? 's' : ''}://${c.domain.replace(/^\./, '')}${c.path}`
-        return chrome.cookies
-          .remove({ url, name: c.name, storeId: c.storeId })
-          .catch(() => undefined)
-      }),
-    )
+    await clearCookiesFor({ domain: 'youtube.com' })
     await clearYtBackoff()
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
     let onYouTube = false
@@ -682,15 +675,7 @@ async function clearSiteCookiesAndReload(btn: HTMLButtonElement) {
       btn.textContent = original
       return
     }
-    const cookies = await chrome.cookies.getAll({ url: active.url })
-    await Promise.all(
-      cookies.map((c) => {
-        const url = `http${c.secure ? 's' : ''}://${c.domain.replace(/^\./, '')}${c.path}`
-        return chrome.cookies
-          .remove({ url, name: c.name, storeId: c.storeId })
-          .catch(() => undefined)
-      }),
-    )
+    await clearCookiesFor({ url: active.url })
     await clearAdblockWall(active.host)
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
     if (tab?.id !== undefined) await chrome.tabs.reload(tab.id)
