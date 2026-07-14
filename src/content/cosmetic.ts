@@ -240,7 +240,7 @@ function isValidSelectorList(list: string[]): string[] {
  * and the 👎 review list run unchanged — only the visual treatment differs.
  * Flip to false to restore real hiding.
  */
-const REVEAL_ADS = true
+const REVEAL_ADS = false
 const REVEAL_CSS =
   'outline:2px solid #7c3aed!important;outline-offset:-2px!important'
 
