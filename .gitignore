@@ -3,4 +3,5 @@ dist/
 .DS_Store
 public/rulesets/
 public/cosmetic/
+public/scriptlets/
 .vercel
