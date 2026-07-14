@@ -847,6 +847,32 @@ footer {
   opacity: 0.5;
 }
 
+/* Manual "reset this site" — subtle full-width action above the footer. */
+.reset-site {
+  display: block;
+  width: calc(100% - 32px);
+  margin: 10px 16px 0;
+  padding: 8px 12px;
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--text-2);
+  background: var(--panel-2);
+  border: 1px solid var(--divider);
+  border-radius: 8px;
+  cursor: pointer;
+  transition:
+    color 0.15s,
+    border-color 0.15s;
+}
+.reset-site:hover {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.reset-site:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 /* ── Switch ─────────────────────────────────────────────────────────── */
 .switch {
   position: relative;

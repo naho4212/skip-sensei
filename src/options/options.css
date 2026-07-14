@@ -714,3 +714,71 @@ button:disabled {
     grid-template-columns: 1fr;
   }
 }
+
+/* ── Reset panel (About) ─────────────────────────────────────────────── */
+.reset-panel {
+  margin-top: 28px;
+  padding-top: 20px;
+  border-top: 1px solid var(--divider);
+}
+.reset-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--divider);
+}
+.reset-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+.reset-copy b {
+  font-size: 14px;
+}
+.reset-btn {
+  flex-shrink: 0;
+  background: var(--field-bg);
+  border: 1px solid var(--divider);
+}
+.reset-btn:hover {
+  background: var(--divider);
+}
+.reset-keep {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--text-2);
+  cursor: pointer;
+}
+.reset-keep input {
+  accent-color: var(--accent);
+}
+.reset-row.danger b {
+  color: #d9534f;
+}
+.danger-btn {
+  background: color-mix(in srgb, #d9534f 14%, transparent);
+  color: #d9534f;
+  border: 1px solid color-mix(in srgb, #d9534f 40%, transparent);
+}
+.danger-btn:hover {
+  background: color-mix(in srgb, #d9534f 24%, transparent);
+}
+.reset-confirm {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 10px;
+  background: color-mix(in srgb, #d9534f 8%, transparent);
+}
+#reset-result {
+  margin-top: 12px;
+  color: var(--accent);
+}

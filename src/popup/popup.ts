@@ -271,16 +271,14 @@ async function reviewTabId(): Promise<number | null> {
   return tab.id
 }
 
-// Collapsed by default — the review list is an occasional tool, not a
-// glanceable stat, and it was pushing Share/coffee off-screen. Remembered
-// across popup opens.
-const HIDDEN_COLLAPSED_KEY = 'skipSensei.hiddenReviewCollapsed'
-
+// The review list is an occasional tool, not a glanceable stat (and it pushes
+// Share/coffee off-screen), so every popup open starts collapsed. The user
+// expands it with the "Hidden ads here" button when they want to look; it
+// isn't remembered across opens — reopening the popup always starts collapsed.
 function setHiddenCollapsed(collapsed: boolean) {
   $('hidden-body').hidden = collapsed
   $('hidden-chevron').textContent = collapsed ? '▸' : '▾'
   $('hidden-toggle').setAttribute('aria-expanded', String(!collapsed))
-  localStorage.setItem(HIDDEN_COLLAPSED_KEY, collapsed ? '1' : '0')
 }
 
 async function renderHiddenReview() {
@@ -714,6 +712,15 @@ async function main() {
   $('adblock-wall-clear').addEventListener('click', (e) => {
     void clearSiteCookiesAndReload(e.currentTarget as HTMLButtonElement)
   })
+  // Always-available "reset this site": clear cookies + reload. Only meaningful
+  // on a real web page, so reveal it only when the active tab has an http(s) host.
+  const resetSiteBtn = $<HTMLButtonElement>('reset-site-btn')
+  void activeTabHost().then((active) => {
+    resetSiteBtn.hidden = !active
+  })
+  resetSiteBtn.addEventListener('click', (e) => {
+    void clearSiteCookiesAndReload(e.currentTarget as HTMLButtonElement)
+  })
   renderSettings(await getSettings())
   renderStats(await getStats(), await fetchSessionStats())
   onStatsChanged((stats) => {
@@ -799,7 +806,7 @@ async function main() {
   void renderSiteSection()
   void renderHiddenReview()
 
-  setHiddenCollapsed(localStorage.getItem(HIDDEN_COLLAPSED_KEY) !== '0')
+  setHiddenCollapsed(true) // always start collapsed on open
   $('hidden-toggle').addEventListener('click', () =>
     setHiddenCollapsed(!$('hidden-body').hidden),
   )

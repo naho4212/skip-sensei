@@ -608,6 +608,75 @@ export async function clearAnalysisCache(): Promise<number> {
 }
 
 // ---------------------------------------------------------------------------
+// Reset controls (options → Reset panel). Each is scoped so the user can undo
+// a specific kind of learning/state without nuking the rest.
+// ---------------------------------------------------------------------------
+
+/** The telemetry install id lives here (mirrors error-reporting.ts) — preserved
+ * across a factory reset so diagnostics identity/dedup isn't fragmented. */
+const INSTALL_ID_KEY = 'skipSensei.installId'
+
+/**
+ * Forget everything the AI learned about what is/isn't an ad: the 👍/👎 feedback
+ * (confirmed, rejected, vetoed gap-fill selectors) and any AI-healed selectors.
+ * Filter lists, settings, stats, and cache are untouched.
+ */
+export async function clearAdFeedback(): Promise<void> {
+  await chrome.storage.local.remove([
+    GAPFILL_KEY,
+    GAPFILL_REJECTED_KEY,
+    GAPFILL_VETOED_KEY,
+    GAPFILL_CONFIRMED_KEY,
+    HEALED_KEY,
+  ])
+}
+
+/**
+ * Reset the settings object to defaults, keeping the named fields from the
+ * current settings (e.g. keep apiKeys/provider so a "reset toggles" doesn't make
+ * the user re-enter keys). Pass [] to reset every setting.
+ */
+export async function resetSettingsToDefaults(
+  preserve: (keyof Settings)[] = [],
+): Promise<Settings> {
+  const current = await getSettings()
+  const next: Settings = { ...DEFAULT_SETTINGS }
+  for (const key of preserve) {
+    ;(next as unknown as Record<string, unknown>)[key] = current[key]
+  }
+  await chrome.storage.local.set({ [SETTINGS_KEY]: next })
+  void appendSettingsLog(diffSettings(current, next))
+  return next
+}
+
+/**
+ * Full factory reset: wipe all extension data and restore defaults. Preserves
+ * the telemetry install id and the last-seen version (so the "what's new"
+ * banner doesn't re-appear), and optionally the AI provider + API keys.
+ */
+export async function factoryReset(
+  opts: { keepApiKeys?: boolean } = {},
+): Promise<void> {
+  const all = await chrome.storage.local.get(null)
+  const prevSettings: Partial<Settings> = all[SETTINGS_KEY] ?? {}
+  await chrome.storage.local.clear()
+
+  const settings: Settings = { ...DEFAULT_SETTINGS }
+  if (opts.keepApiKeys) {
+    settings.apiKeys = prevSettings.apiKeys ?? {}
+    if (prevSettings.llmProvider) settings.llmProvider = prevSettings.llmProvider
+    if (prevSettings.model !== undefined) settings.model = prevSettings.model
+    if (prevSettings.openclawUrl) settings.openclawUrl = prevSettings.openclawUrl
+  }
+
+  const restore: Record<string, unknown> = { [SETTINGS_KEY]: settings }
+  if (all[INSTALL_ID_KEY]) restore[INSTALL_ID_KEY] = all[INSTALL_ID_KEY]
+  if (all[LAST_SEEN_VERSION_KEY])
+    restore[LAST_SEEN_VERSION_KEY] = all[LAST_SEEN_VERSION_KEY]
+  await chrome.storage.local.set(restore)
+}
+
+// ---------------------------------------------------------------------------
 // User corrections ("that was wrong") — raw log for tuning, plus the cached
 // segment is flagged dismissed so it is never auto-skipped again.
 // ---------------------------------------------------------------------------

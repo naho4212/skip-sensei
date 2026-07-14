@@ -1,7 +1,9 @@
 import {
   clearActivityLog,
+  clearAdFeedback,
   clearAnalysisCache,
   clearSettingsLog,
+  factoryReset,
   getActivityLog,
   getApiUsage,
   getCacheStats,
@@ -9,6 +11,7 @@ import {
   getSettingsLog,
   getStats,
   resetApiUsage,
+  resetSettingsToDefaults,
   setSiteAllowlisted,
   updateSettings,
 } from '../storage'
@@ -931,6 +934,63 @@ async function main() {
   $('about-version').textContent = version
   $<HTMLAnchorElement>('contact-link').href =
     `mailto:info@singlefinmedia.com?subject=${encodeURIComponent(`Ad Sensei v${version} — feedback`)}`
+
+  // Reset panel (About). Targeted resets re-render in place; the wider ones
+  // reload the page so every control reflects the new state.
+  const DEFAULT_OPENCLAW_URL = 'http://127.0.0.1:18789/v1/chat/completions'
+  const flashReset = (msg: string) => {
+    const el = $('reset-result')
+    el.textContent = msg
+    el.hidden = false
+  }
+  $<HTMLButtonElement>('reset-toggles').addEventListener('click', async () => {
+    // Keep AI config, paused sites, and (via storage) stats/cache/feedback.
+    await resetSettingsToDefaults([
+      'apiKeys',
+      'llmProvider',
+      'model',
+      'openclawUrl',
+      'allowlist',
+    ])
+    location.reload()
+  })
+  $<HTMLButtonElement>('reset-allowlist').addEventListener('click', async () => {
+    render(await updateSettings({ allowlist: [] }))
+    await renderAllowlist()
+    flashReset('Paused sites cleared.')
+  })
+  $<HTMLButtonElement>('reset-feedback').addEventListener('click', async () => {
+    await clearAdFeedback()
+    flashReset('Ad-detection feedback forgotten.')
+  })
+  $<HTMLButtonElement>('reset-keys').addEventListener('click', async () => {
+    render(
+      await updateSettings({
+        apiKeys: {},
+        llmProvider: 'builtin',
+        model: '',
+        openclawUrl: DEFAULT_OPENCLAW_URL,
+      }),
+    )
+    flashReset('API keys removed — back to on-device AI.')
+  })
+
+  // Full factory reset — two-step confirm.
+  const resetAllBtn = $<HTMLButtonElement>('reset-all')
+  const resetConfirm = $('reset-all-confirm')
+  resetAllBtn.addEventListener('click', () => {
+    resetConfirm.hidden = false
+    resetAllBtn.hidden = true
+  })
+  $<HTMLButtonElement>('reset-all-no').addEventListener('click', () => {
+    resetConfirm.hidden = true
+    resetAllBtn.hidden = false
+  })
+  $<HTMLButtonElement>('reset-all-yes').addEventListener('click', async () => {
+    const keepKeys = $<HTMLInputElement>('reset-keep-keys').checked
+    await factoryReset({ keepApiKeys: keepKeys })
+    location.reload()
+  })
 
   // Activity & logs panel.
   $<HTMLButtonElement>('logs-reload').addEventListener('click', renderLogs)

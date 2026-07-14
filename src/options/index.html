@@ -463,6 +463,91 @@
               >
             </p>
           </section>
+
+          <section class="reset-panel">
+            <h3>Reset</h3>
+            <p class="hint">
+              Roll back a specific kind of data, or everything at once. These
+              can’t be undone.
+            </p>
+
+            <div class="reset-row">
+              <div class="reset-copy">
+                <b>Feature settings</b>
+                <span class="hint"
+                  >All toggles &amp; sliders back to defaults. Keeps your AI keys,
+                  paused sites, and stats.</span
+                >
+              </div>
+              <button type="button" id="reset-toggles" class="reset-btn">
+                Reset
+              </button>
+            </div>
+
+            <div class="reset-row">
+              <div class="reset-copy">
+                <b>Paused sites</b>
+                <span class="hint"
+                  >Clear the allowlist so ad blocking resumes everywhere.</span
+                >
+              </div>
+              <button type="button" id="reset-allowlist" class="reset-btn">
+                Clear
+              </button>
+            </div>
+
+            <div class="reset-row">
+              <div class="reset-copy">
+                <b>Ad-detection feedback</b>
+                <span class="hint"
+                  >Forget every 👍/👎 you’ve given and any AI-learned
+                  selectors.</span
+                >
+              </div>
+              <button type="button" id="reset-feedback" class="reset-btn">
+                Forget
+              </button>
+            </div>
+
+            <div class="reset-row">
+              <div class="reset-copy">
+                <b>AI provider &amp; keys</b>
+                <span class="hint"
+                  >Remove saved API keys and switch back to on-device AI.</span
+                >
+              </div>
+              <button type="button" id="reset-keys" class="reset-btn">
+                Remove
+              </button>
+            </div>
+
+            <div class="reset-row danger">
+              <div class="reset-copy">
+                <b>Everything</b>
+                <span class="hint"
+                  >Factory reset — settings, paused sites, feedback, stats,
+                  history, and cache.</span
+                >
+                <label class="reset-keep">
+                  <input type="checkbox" id="reset-keep-keys" checked />
+                  <span>Keep my AI API keys</span>
+                </label>
+              </div>
+              <button type="button" id="reset-all" class="reset-btn danger-btn">
+                Reset everything
+              </button>
+            </div>
+            <div class="reset-confirm" id="reset-all-confirm" hidden>
+              <span class="hint">This wipes all your data. Are you sure?</span>
+              <button type="button" id="reset-all-yes" class="danger-btn">
+                Yes, reset everything
+              </button>
+              <button type="button" id="reset-all-no" class="reset-btn">
+                Cancel
+              </button>
+            </div>
+            <p class="hint" id="reset-result" hidden></p>
+          </section>
         </div>
       </main>
     </div>

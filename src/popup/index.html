@@ -324,6 +324,13 @@
         </div>
       </section>
 
+      <!-- Manual site reset: clear the current site's cookies and reload. Handy
+           when a site is misbehaving or gating content — clears its login/consent
+           state for a fresh start. Hidden on non-web tabs. -->
+      <button type="button" id="reset-site-btn" class="reset-site" hidden>
+        ↻ Clear cookies &amp; reload this site
+      </button>
+
       <footer>
         <button type="button" id="share-btn" class="footer-link">
           ↗ Share
