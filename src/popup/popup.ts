@@ -602,12 +602,49 @@ async function renderYtBackoff() {
   if (!fresh && backoff) void clearYtBackoff()
 }
 
+// Clear youtube.com cookies to lift YouTube's ad-blocker-detection flag, then
+// reload the active tab if it's YouTube. Cookies are scoped to youtube.com,
+// which we already hold host permission for — nothing else is touched.
+async function clearYouTubeCookiesAndReload(btn: HTMLButtonElement) {
+  const original = btn.textContent
+  btn.disabled = true
+  btn.textContent = 'Clearing…'
+  try {
+    const cookies = await chrome.cookies.getAll({ domain: 'youtube.com' })
+    await Promise.all(
+      cookies.map((c) => {
+        const url = `http${c.secure ? 's' : ''}://${c.domain.replace(/^\./, '')}${c.path}`
+        return chrome.cookies
+          .remove({ url, name: c.name, storeId: c.storeId })
+          .catch(() => undefined)
+      }),
+    )
+    await clearYtBackoff()
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+    let onYouTube = false
+    try {
+      onYouTube = !!tab?.url && /(^|\.)youtube\.com$/.test(new URL(tab.url).hostname)
+    } catch {
+      onYouTube = false
+    }
+    if (tab?.id !== undefined && onYouTube) await chrome.tabs.reload(tab.id)
+    window.close()
+  } catch {
+    // Best effort — restore the button so the user can retry or act manually.
+    btn.disabled = false
+    btn.textContent = original
+  }
+}
+
 async function main() {
   void renderUpdateBanner()
   void renderYtBackoff()
   $('yt-backoff-dismiss').addEventListener('click', () => {
     $('yt-backoff').hidden = true
     void clearYtBackoff()
+  })
+  $('yt-backoff-clear').addEventListener('click', (e) => {
+    void clearYouTubeCookiesAndReload(e.currentTarget as HTMLButtonElement)
   })
   renderSettings(await getSettings())
   renderStats(await getStats(), await fetchSessionStats())

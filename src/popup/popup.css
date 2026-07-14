@@ -241,6 +241,25 @@ body.disabled main > *:not(.site-hero) {
   background: var(--hover);
   color: var(--text);
 }
+.yt-backoff-action {
+  margin-top: 10px;
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid color-mix(in srgb, #e0a52e 55%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, #e0a52e 22%, var(--panel));
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.yt-backoff-action:hover {
+  background: color-mix(in srgb, #e0a52e 32%, var(--panel));
+}
+.yt-backoff-action:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
 
 /* ── Active-site hero ───────────────────────────────────────────────── */
 .site-hero {

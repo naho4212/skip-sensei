@@ -23,6 +23,10 @@ export default defineManifest({
     'declarativeNetRequestFeedback',
     // Runtime (un)registration of the MAIN-world aggressive-mode pruner.
     'scripting',
+    // Lets the popup clear a site's cookies to lift an ad-blocker-detection
+    // flag (e.g. YouTube's). Scoped by host_permissions — only cookies for
+    // hosts we already hold permission for (youtube.com) can be touched.
+    'cookies',
   ],
   host_permissions: [
     '*://*.youtube.com/*',
