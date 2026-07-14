@@ -222,6 +222,32 @@ export async function resetStats(): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// YouTube ad-wall back-off notice. When YouTube's "ad blocker detected" wall is
+// hit, the ad engine auto-disables aggressive mode and drops this flag; the
+// popup surfaces a one-time recovery notice (the flag itself is session-tied,
+// so tell the user how to fully clear it). Dismissing clears the flag.
+// ---------------------------------------------------------------------------
+const YT_BACKOFF_KEY = 'skipSensei.ytBackoff'
+
+export interface YtBackoff {
+  at: number
+  walls: number
+}
+
+export async function setYtBackoff(walls: number): Promise<void> {
+  await chrome.storage.local.set({ [YT_BACKOFF_KEY]: { at: Date.now(), walls } })
+}
+
+export async function getYtBackoff(): Promise<YtBackoff | null> {
+  const result = await chrome.storage.local.get(YT_BACKOFF_KEY)
+  return (result[YT_BACKOFF_KEY] as YtBackoff | undefined) ?? null
+}
+
+export async function clearYtBackoff(): Promise<void> {
+  await chrome.storage.local.remove(YT_BACKOFF_KEY)
+}
+
+// ---------------------------------------------------------------------------
 // Per-videoId analysis cache (LRU-ish: index ordered by insertion, oldest evicted)
 // ---------------------------------------------------------------------------
 

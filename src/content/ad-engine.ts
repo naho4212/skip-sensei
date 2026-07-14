@@ -18,6 +18,7 @@ import {
   getSettings,
   recordActivity,
   setHealedSelectors,
+  setYtBackoff,
   updateSettings,
 } from '../storage'
 import type { AdSkipMethod } from '../types'
@@ -82,11 +83,12 @@ const STUCK_AFTER_MS = 3000
 const MAX_STUCK_RECOVERIES = 3
 
 /**
- * Circuit breaker for aggressive pruning: enforcement walls this many times
- * in one page session → YouTube has likely detected the pruning. Turn it
- * off (reactive skipping continues) rather than escalate.
+ * Circuit breaker for aggressive pruning: one enforcement wall is enough to
+ * back off. YouTube can flag the signed-in session on the FIRST wall, so
+ * waiting for more just prolongs the exposure — the ABP posture is to detect
+ * the wall and stop fighting immediately. Reactive skipping continues.
  */
-const WALLS_BEFORE_BREAKER = 2
+const WALLS_BEFORE_BREAKER = 1
 
 /**
  * Cloak: opaque cover over the player while an ad is being neutralized, so
@@ -723,11 +725,16 @@ export class AdEngine {
     if (this.breakerTripped || this.wallsSeen < WALLS_BEFORE_BREAKER) return
     this.breakerTripped = true
     try {
+      // The wall means YouTube detected the pruning and may have flagged the
+      // session. Back off: turn aggressive mode off (reactive skipping stays
+      // on) and drop a flag so the popup can tell the user how to clear the
+      // flag YouTube set (the setting toggling alone won't lift it).
       if (!(await getSettings()).aggressivePruning) return
       await updateSettings({ aggressivePruning: false })
+      await setYtBackoff(this.wallsSeen)
       await recordActivity(
         'Aggressive ad blocking',
-        `auto-disabled after ${this.wallsSeen} YouTube ad-blocker warnings (reactive skipping still on)`,
+        'YouTube flagged the session — aggressive mode auto-disabled (reactive skipping still on)',
         'youtube.com',
       )
       // Detection signal: how often aggressive pruning gets caught in the
@@ -737,7 +744,7 @@ export class AdEngine {
         kind: 'aggressive_breaker',
         fields: { walls: String(this.wallsSeen) },
       })
-      log('aggressive pruning auto-disabled by circuit breaker')
+      log('aggressive pruning auto-disabled — YouTube enforcement wall')
     } catch {
       // storage failure — leave the setting as-is
     }

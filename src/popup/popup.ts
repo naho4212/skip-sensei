@@ -1,8 +1,10 @@
 import { changesSince } from '../changelog'
 import {
+  clearYtBackoff,
   getLastSeenVersion,
   getSettings,
   getStats,
+  getYtBackoff,
   onStatsChanged,
   setLastSeenVersion,
   setSiteAllowlisted,
@@ -590,8 +592,23 @@ async function renderUpdateBanner() {
   )
 }
 
+async function renderYtBackoff() {
+  const el = $('yt-backoff')
+  const backoff = await getYtBackoff()
+  // Show only while the notice is fresh (7 days) — the flag itself clears when
+  // the user acts, this just stops a very old one lingering.
+  const fresh = backoff && Date.now() - backoff.at < 7 * 24 * 60 * 60 * 1000
+  el.hidden = !fresh
+  if (!fresh && backoff) void clearYtBackoff()
+}
+
 async function main() {
   void renderUpdateBanner()
+  void renderYtBackoff()
+  $('yt-backoff-dismiss').addEventListener('click', () => {
+    $('yt-backoff').hidden = true
+    void clearYtBackoff()
+  })
   renderSettings(await getSettings())
   renderStats(await getStats(), await fetchSessionStats())
   onStatsChanged((stats) => {

@@ -48,6 +48,24 @@
       <ul class="update-list" id="update-list"></ul>
     </section>
 
+    <!-- YouTube flagged the session; aggressive mode auto-disabled. -->
+    <section class="yt-backoff" id="yt-backoff" hidden>
+      <button
+        type="button"
+        class="yt-backoff-dismiss"
+        id="yt-backoff-dismiss"
+        aria-label="Dismiss"
+      >
+        ×
+      </button>
+      <div class="yt-backoff-title">YouTube flagged your session</div>
+      <p class="yt-backoff-text">
+        Aggressive ad blocking was turned off automatically. Ads are still
+        skipped normally. To fully clear YouTube's flag, sign out and back in,
+        or clear youtube.com cookies, then reload.
+      </p>
+    </section>
+
     <main>
       <!-- Active site: prominent at the top. Shown only for the general
            "Block all ads" engine on a real web page. -->
