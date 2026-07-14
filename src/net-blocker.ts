@@ -1,4 +1,5 @@
 import { getSettings, onSettingsChanged } from './storage'
+import type { BlockBreakdown } from './types'
 
 /**
  * "Block all ads" engine (service-worker side): enables/disables the static
@@ -292,9 +293,27 @@ export async function getRulesetInfo(): Promise<RulesetInfo> {
   return { counts, enabled, availableTotal, loadedTotal }
 }
 
-const AD_SET = new Set(AD_RULESET_IDS)
-const TRACKER_SET = new Set(TRACKER_RULESET_IDS)
-const COOKIE_SET = new Set(['cookies'])
+/** Which breakdown category each DNR ruleset counts toward. */
+const CATEGORY_BY_RULESET: Record<string, keyof BlockBreakdown> = {
+  ads_base: 'ads',
+  ads_mobile: 'ads',
+  trackers: 'trackers',
+  cookies: 'cookies',
+  social: 'social',
+  popups: 'popups',
+  url_tracking: 'links',
+  malware: 'malware',
+}
+
+const emptyBreakdown = (): BlockBreakdown => ({
+  ads: 0,
+  trackers: 0,
+  cookies: 0,
+  social: 0,
+  popups: 0,
+  links: 0,
+  malware: 0,
+})
 
 /**
  * Count blocked web-ad requests for the popup stats + per-tab badge.
@@ -323,9 +342,10 @@ interface BlockCallbacks {
   /** New-since-last-poll counts → lifetime/session stats. One object so the
    *  recorder does ONE serialized read-modify-write (buckets land together). */
   onCounts: (c: { ads: number; trackers: number; cookies: number }) => void
-  /** The tab's CURRENT full ad+tracker total → the icon badge. Set, not added:
-   *  the badge is a snapshot of the page, so re-polling can't inflate it. */
-  onTabCount: (tabId: number, adsPlusTrackers: number) => void
+  /** The tab's CURRENT full per-type snapshot → the icon badge + popup
+   *  breakdown. Set, not added: it's a page snapshot, so re-polling can't
+   *  inflate it. */
+  onTabCount: (tabId: number, breakdown: BlockBreakdown) => void
 }
 
 let callbacks: BlockCallbacks | null = null
@@ -346,7 +366,7 @@ let callbacks: BlockCallbacks | null = null
 async function countTabBlocks(
   tabId: number,
   cb: BlockCallbacks,
-): Promise<{ ads: number; trackers: number; cookies: number } | null> {
+): Promise<BlockBreakdown | null> {
   const loadStart = tabLoadStart.get(tabId) ?? Date.now() - MATCH_RETENTION_MS
   try {
     const { rulesMatchedInfo } =
@@ -355,34 +375,30 @@ async function countTabBlocks(
         minTimeStamp: loadStart,
       })
     const since = lastPollTs.get(tabId) ?? loadStart
-    let ads = 0
-    let trackers = 0
-    let cookies = 0
-    let dAds = 0
-    let dTrackers = 0
-    let dCookies = 0
+    const snap = emptyBreakdown() // full page total, per type
+    const delta = emptyBreakdown() // new since last poll, per type
     let maxTs = since
     for (const info of rulesMatchedInfo) {
-      const id = info.rule.rulesetId
-      const isAd = AD_SET.has(id)
-      const isTracker = TRACKER_SET.has(id)
-      const isCookie = COOKIE_SET.has(id)
-      if (isAd) ads++
-      else if (isTracker) trackers++
-      else if (isCookie) cookies++
+      const cat = CATEGORY_BY_RULESET[info.rule.rulesetId]
+      if (!cat) continue
+      snap[cat]++
       // Only matches newer than the high-water are new to the cumulative stats.
       if (info.timeStamp > since) {
         if (info.timeStamp > maxTs) maxTs = info.timeStamp
-        if (isAd) dAds++
-        else if (isTracker) dTrackers++
-        else if (isCookie) dCookies++
+        delta[cat]++
       }
     }
     lastPollTs.set(tabId, maxTs + 1)
-    if (dAds || dTrackers || dCookies)
-      cb.onCounts({ ads: dAds, trackers: dTrackers, cookies: dCookies })
-    cb.onTabCount(tabId, ads + trackers)
-    return { ads, trackers, cookies }
+    // Cumulative stats keep their original three buckets (ads/trackers/cookies);
+    // the finer categories show only in the live per-tab breakdown.
+    if (delta.ads || delta.trackers || delta.cookies)
+      cb.onCounts({
+        ads: delta.ads,
+        trackers: delta.trackers,
+        cookies: delta.cookies,
+      })
+    cb.onTabCount(tabId, snap)
+    return snap
   } catch {
     return null
   }
@@ -393,7 +409,7 @@ async function countTabBlocks(
  *  "blocked here" accurate even for ads that loaded after the page finished. */
 export async function getTabBlockCounts(
   tabId: number,
-): Promise<{ ads: number; trackers: number; cookies: number } | null> {
+): Promise<BlockBreakdown | null> {
   if (!callbacks) return null
   return countTabBlocks(tabId, callbacks)
 }

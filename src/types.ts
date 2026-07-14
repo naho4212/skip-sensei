@@ -89,6 +89,29 @@ export interface Settings {
   openclawUrl: string
 }
 
+/** Per-tab blocked-item counts split by kind, for the popup's "blocked here"
+ * breakdown. The badge shows the sum. `ads` folds in cosmetic element hides. */
+export interface BlockBreakdown {
+  ads: number
+  trackers: number
+  cookies: number
+  social: number
+  popups: number
+  links: number
+  malware: number
+}
+
+/** Display order + labels for the breakdown (singular/plural handled at render). */
+export const BLOCK_CATEGORY_LABELS: Array<[keyof BlockBreakdown, string]> = [
+  ['ads', 'ad'],
+  ['trackers', 'tracker'],
+  ['cookies', 'cookie notice'],
+  ['popups', 'popup'],
+  ['social', 'social widget'],
+  ['links', 'tracking link'],
+  ['malware', 'malware block'],
+]
+
 export const DEFAULT_SETTINGS: Settings = {
   masterEnabled: true,
   adEngineEnabled: true,
@@ -275,7 +298,7 @@ export type Message =
   // → { ok: boolean }; clears youtube.com cookies + the backoff flag, then reloads the sender tab
   | { type: 'skipSensei:clearYtCookies' }
   | { type: 'skipSensei:tabNeedsReload'; needsReload: boolean } // badges the icon for the sender tab
-  | { type: 'skipSensei:getTabBlocked'; tabId: number } // → number (ads blocked on that tab)
+  | { type: 'skipSensei:getTabBlocked'; tabId: number } // → BlockBreakdown (per-type blocks on that tab)
   | {
       type: 'skipSensei:findSelector'
       html: string

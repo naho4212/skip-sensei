@@ -13,7 +13,9 @@ import {
   setSiteAllowlisted,
   updateSettings,
 } from '../storage'
+import { BLOCK_CATEGORY_LABELS } from '../types'
 import type {
+  BlockBreakdown,
   HiddenElement,
   Message,
   PageStatus,
@@ -96,18 +98,27 @@ async function renderSiteSection() {
   $('site-status').textContent = paused ? 'Paused here' : 'Blocking active'
 
   const pageBlockedEl = $('page-blocked')
+  const pageBreakdownEl = $('page-breakdown')
   if (paused) {
     pageBlockedEl.textContent = 'Tap the power button to resume'
+    pageBreakdownEl.textContent = ''
   } else {
     // Same live counter the icon badge uses, so the two never disagree.
-    let n = 0
+    let bd: BlockBreakdown | null = null
     if (tab?.id !== undefined) {
-      const count = await chrome.runtime
+      bd = await chrome.runtime
         .sendMessage({ type: 'skipSensei:getTabBlocked', tabId: tab.id })
-        .catch(() => 0)
-      n = typeof count === 'number' ? count : 0
+        .catch(() => null)
     }
-    pageBlockedEl.textContent = `${n} blocked here`
+    const total = bd ? BLOCK_CATEGORY_LABELS.reduce((s, [k]) => s + bd![k], 0) : 0
+    pageBlockedEl.textContent = `${total} blocked here`
+    // Per-type line: only the categories that actually blocked something.
+    pageBreakdownEl.textContent =
+      bd && total > 0
+        ? BLOCK_CATEGORY_LABELS.filter(([k]) => bd![k] > 0)
+            .map(([k, label]) => `${bd![k]} ${label}${bd![k] === 1 ? '' : 's'}`)
+            .join(' · ')
+        : ''
   }
 }
 
@@ -271,19 +282,29 @@ async function reviewTabId(): Promise<number | null> {
   return tab.id
 }
 
+// The active tab we're reviewing, cached once renderHiddenReview resolves it,
+// so the collapse toggle can drive the on-page faint outline without re-querying.
+let reviewTabIdCache: number | null = null
+
 // The review list is an occasional tool, not a glanceable stat (and it pushes
 // Share/coffee off-screen), so every popup open starts collapsed. The user
 // expands it with the "Hidden ads here" button when they want to look; it
 // isn't remembered across opens — reopening the popup always starts collapsed.
+// While it's open, every hidden element on the page gets a faint purple outline
+// (the hovered row gets the strong one); collapsing clears them.
 function setHiddenCollapsed(collapsed: boolean) {
   $('hidden-body').hidden = collapsed
   $('hidden-chevron').textContent = collapsed ? '▸' : '▾'
   $('hidden-toggle').setAttribute('aria-expanded', String(!collapsed))
+  if (reviewTabIdCache !== null && !collapsed)
+    sendHighlightAll(reviewTabIdCache, true)
+  else if (reviewTabIdCache !== null) sendHighlightAll(reviewTabIdCache, false)
 }
 
 async function renderHiddenReview() {
   const wrap = $('hidden-review')
   const tabId = await reviewTabId()
+  reviewTabIdCache = tabId
   if (tabId === null) {
     wrap.hidden = true
     return
@@ -353,7 +374,10 @@ const SOURCE_TAG: Record<string, string> = {
 let highlightPort: chrome.runtime.Port | null = null
 let highlightPortTab: number | null = null
 
-function sendHighlight(tabId: number, selector: string | null) {
+function postHighlight(
+  tabId: number,
+  msg: { selector?: string | null; all?: boolean },
+) {
   try {
     if (!highlightPort || highlightPortTab !== tabId) {
       highlightPort = chrome.tabs.connect(tabId, {
@@ -366,11 +390,21 @@ function sendHighlight(tabId: number, selector: string | null) {
         highlightPortTab = null
       })
     }
-    highlightPort.postMessage({ selector })
+    highlightPort.postMessage(msg)
   } catch {
     highlightPort = null
     highlightPortTab = null
   }
+}
+
+// Strong single-element highlight for the row being hovered.
+function sendHighlight(tabId: number, selector: string | null) {
+  postHighlight(tabId, { selector })
+}
+
+// Faint outline over every hidden element while the list is open.
+function sendHighlightAll(tabId: number, on: boolean) {
+  postHighlight(tabId, { all: on })
 }
 
 function hiddenItemRow(tabId: number, item: HiddenElement): HTMLLIElement {

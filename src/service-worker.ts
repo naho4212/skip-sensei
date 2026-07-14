@@ -43,6 +43,7 @@ import {
 } from './storage'
 import {
   ANALYSIS_VERSION,
+  type BlockBreakdown,
   type Message,
   type SessionStats,
   type TranscriptLine,
@@ -530,8 +531,8 @@ chrome.runtime.onMessage.addListener(
         // side is the content script's live tally. Falls back to the last
         // stored network count if the live query is throttled.
         void getTabBlockCounts(message.tabId).then((counts) => {
-          if (counts) setTabBlocked(message.tabId, counts.ads + counts.trackers)
-          sendResponse(tabBlockedTotal(message.tabId))
+          if (counts) setTabBlocked(message.tabId, counts)
+          sendResponse(tabBreakdown(message.tabId))
         })
         return true
       case 'skipSensei:cosmeticHideCount':
@@ -585,21 +586,44 @@ chrome.runtime.onMessage.addListener(
 // Per-tab icon badge. The count is the sum of two sources: DNR network blocks
 // (getMatchedRules, event-cadence) and cosmetic element hides (reported live by
 // the content script). A "↻" takes priority when the page needs a reload.
+const emptyBreakdown = (): BlockBreakdown => ({
+  ads: 0,
+  trackers: 0,
+  cookies: 0,
+  social: 0,
+  popups: 0,
+  links: 0,
+  malware: 0,
+})
+const sumBreakdown = (b: BlockBreakdown): number =>
+  b.ads + b.trackers + b.cookies + b.social + b.popups + b.links + b.malware
+
 interface TabBadge {
-  /** DNR network blocks (ads + trackers) — set by the block counter. */
-  network: number
+  /** DNR network blocks by type — set by the block counter. */
+  network: BlockBreakdown
   /** Ad elements hidden by the content script — reported live per page. */
   cosmetic: number
   needsReload: boolean
 }
 const tabBadges = new Map<number, TabBadge>()
+const freshBadge = (): TabBadge => ({
+  network: emptyBreakdown(),
+  cosmetic: 0,
+  needsReload: false,
+})
 const badgeState = (tabId: number): TabBadge =>
-  tabBadges.get(tabId) ?? { network: 0, cosmetic: 0, needsReload: false }
+  tabBadges.get(tabId) ?? freshBadge()
 
-/** Total shown on the badge / "blocked here": network blocks + hidden ads. */
+/** Total shown on the badge / "blocked here": all network blocks + hidden ads. */
 const tabBlockedTotal = (tabId: number): number => {
   const s = badgeState(tabId)
-  return s.network + s.cosmetic
+  return sumBreakdown(s.network) + s.cosmetic
+}
+
+/** Per-type snapshot for the popup breakdown; cosmetic hides fold into `ads`. */
+const tabBreakdown = (tabId: number): BlockBreakdown => {
+  const s = badgeState(tabId)
+  return { ...s.network, ads: s.network.ads + s.cosmetic }
 }
 
 function renderBadge(tabId: number) {
@@ -630,10 +654,10 @@ function setReloadBadge(tabId: number, show: boolean) {
 // Set the tab's DNR network count to the current page snapshot (net-blocker
 // recounts the whole page each poll, so this is a set, not an increment —
 // re-polling can correct the number up but never double-counts it).
-function setTabBlocked(tabId: number, count: number) {
+function setTabBlocked(tabId: number, breakdown: BlockBreakdown) {
   const state = badgeState(tabId)
-  if (state.network === count) return
-  state.network = count
+  if (sumBreakdown(state.network) === sumBreakdown(breakdown)) return
+  state.network = breakdown
   tabBadges.set(tabId, state)
   renderBadge(tabId)
 }
@@ -651,7 +675,7 @@ function setTabCosmetic(tabId: number, count: number) {
 // Reset a tab's count when it navigates to a new page (block counts are per-load).
 chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
   if (changeInfo.status === 'loading' && changeInfo.url) {
-    tabBadges.set(tabId, { network: 0, cosmetic: 0, needsReload: false })
+    tabBadges.set(tabId, freshBadge())
     renderBadge(tabId)
   }
 })
@@ -692,7 +716,7 @@ void (async () => {
 // "Block all ads" engine: enforce DNR ruleset state; count blocks (stats + badge).
 initNetBlocker({
   onCounts: (c) => recordBlockCounts(c),
-  onTabCount: (tabId, count) => setTabBlocked(tabId, count),
+  onTabCount: (tabId, breakdown) => setTabBlocked(tabId, breakdown),
 })
 
 // Aggressive-mode YouTube pruner: (un)register the MAIN-world content script

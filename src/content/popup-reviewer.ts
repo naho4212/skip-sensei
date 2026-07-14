@@ -1,5 +1,5 @@
 import { log } from '../log'
-import { getSettings } from '../storage'
+import { getSettings, recordActivity } from '../storage'
 
 /**
  * AI-reviewed popup/overlay blocking. When "Block popup & overlay ads" is on
@@ -52,6 +52,20 @@ function isOverlayCandidate(el: Element): boolean {
   return (coversLots && (z > 100 || looksModal)) || (looksModal && rect.height > 120)
 }
 
+/** A short, human label for the overlay so the activity log says what was hidden
+ * (a heading if there is one, else its leading text), plus its rough size. */
+function describePopup(el: Element): string {
+  const heading = el
+    .querySelector('h1, h2, h3, [role="heading"]')
+    ?.textContent?.trim()
+  const raw = (heading || el.textContent || '').replace(/\s+/g, ' ').trim()
+  const label = raw ? `“${raw.slice(0, 60)}${raw.length > 60 ? '…' : ''}”` : ''
+  const rect = (el as HTMLElement).getBoundingClientRect()
+  const size = `${Math.round(rect.width)}×${Math.round(rect.height)}`
+  const tag = el.tagName.toLowerCase()
+  return [label, `${tag}, ${size}`].filter(Boolean).join(' · ')
+}
+
 async function review(el: Element) {
   if (REVIEWED.has(el)) return
   REVIEWED.add(el)
@@ -62,8 +76,14 @@ async function review(el: Element) {
     .sendMessage({ type: 'skipSensei:reviewPopup', html })
     .catch(() => null)
   if (hide && el.isConnected) {
+    const desc = describePopup(el)
     ;(el as HTMLElement).style.setProperty('display', 'none', 'important')
-    log('AI hid an intrusive popup')
+    log('AI hid an intrusive popup', desc)
+    void recordActivity(
+      'Block popup & overlay ads',
+      `hid an intrusive popup${desc ? ` — ${desc}` : ''}`,
+      location.hostname,
+    )
   }
 }
 

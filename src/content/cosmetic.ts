@@ -1209,6 +1209,7 @@ async function confirmHiddenSelector(selector: string) {
  * Driven over a port so the highlight clears the moment the popup closes.
  */
 const HIGHLIGHT_STYLE_ID = 'skip-sensei-highlight'
+const HIGHLIGHT_ALL_STYLE_ID = 'skip-sensei-highlight-all'
 
 function highlightSelector(selector: string | null) {
   document.getElementById(HIGHLIGHT_STYLE_ID)?.remove()
@@ -1231,12 +1232,48 @@ function highlightSelector(selector: string | null) {
   }
 }
 
+/**
+ * While the popup's "Hidden ads here" list is open, reveal every element the
+ * layer is hiding with a FAINT purple outline, so the user sees the whole set
+ * at once. The strong single-element highlight (highlightSelector, injected
+ * later in the head) stays on top for whichever row they're hovering.
+ */
+function highlightAll(on: boolean) {
+  document.getElementById(HIGHLIGHT_ALL_STYLE_ID)?.remove()
+  if (!on) return
+  const selectors = [
+    ...activeSelectors,
+    ...activeGapfill,
+    ...activeVetoed,
+    `.${EMPTY_SLOT_CLASS}`,
+    `.${BRANDED_SLOT_CLASS}`,
+  ].filter((s) => {
+    try {
+      document.querySelector(s)
+      return true
+    } catch {
+      return false
+    }
+  })
+  if (selectors.length === 0) return
+  const style = document.createElement('style')
+  style.id = HIGHLIGHT_ALL_STYLE_ID
+  style.textContent = `${selectors.join(',')}{display:revert!important;outline:2px solid rgba(124,58,237,0.5)!important;outline-offset:1px!important}`
+  ;(document.head ?? document.documentElement).appendChild(style)
+}
+
 chrome.runtime.onConnect.addListener((port) => {
   if (port.name !== 'skipSensei:highlight') return
-  port.onMessage.addListener((msg: { selector?: string | null }) =>
-    highlightSelector(msg?.selector ?? null),
+  port.onMessage.addListener(
+    (msg: { selector?: string | null; all?: boolean }) => {
+      if (typeof msg?.all === 'boolean') highlightAll(msg.all)
+      if ('selector' in (msg ?? {})) highlightSelector(msg?.selector ?? null)
+    },
   )
-  port.onDisconnect.addListener(() => highlightSelector(null))
+  port.onDisconnect.addListener(() => {
+    highlightSelector(null)
+    highlightAll(false)
+  })
 })
 
 function reportGapfillFeedback(selector: string, verdict: 'ad' | 'not-ad') {
