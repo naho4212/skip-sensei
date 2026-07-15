@@ -164,6 +164,9 @@
     }, originalParse)
   } catch (e) {}
 
+  /* CWS-STRIP-START — outbound request spoof ships only in the full
+     (load-unpacked) build; scripts/make-cws-build.mjs removes this block
+     from the Chrome Web Store artifact. */
   // ---------------------------------------------------------------------------
   // 4) Outbound player-request context spoof.
   //    YouTube asks for ad-bearing player responses via POST to
@@ -247,6 +250,7 @@
   // The send() wrapper (both body spoof AND responseText shadow) lives in a
   // single override at the end of this file so cloaking stays clean — see the
   // "XHR send" block below.
+  /* CWS-STRIP-END */
 
   // ---------------------------------------------------------------------------
   // 5) HLS ad-segment pruning (m3u-prune) &
@@ -433,6 +437,9 @@
       var sendBody = body
       var spoofedBody = false
       try {
+        /* CWS-STRIP-START — spoof branch of the shared send() wrapper; with
+           it stripped, spoofedBody stays false and the wrapper is a pure
+           responseText shadow. */
         // (4) Outbound player-request context spoof.
         if (isPlayerUrl(this.__ssUrl) && typeof body === 'string') {
           var spoofed = spoofPlayerBody(body)
@@ -441,6 +448,7 @@
             spoofedBody = true
           }
         }
+        /* CWS-STRIP-END */
         // (5+6) Shadow responseText so completed HLS/XML bodies read pruned.
         if (nativeResponseTextGet && !this.__ssTextShadowed) {
           this.__ssTextShadowed = true
