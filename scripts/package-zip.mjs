@@ -24,9 +24,15 @@ for (const file of fs.readdirSync(landing)) {
   }
 }
 
-execFileSync('zip', ['-qr', path.join(landing, zipName), '.', '-x', '.*'], {
-  cwd: dist,
-})
+// Exclude _metadata: Chrome writes content-verification hashes into a loaded
+// unpacked dir (e.g. after a CDP test run loaded .output directly), and Chrome
+// REFUSES to load an unpacked extension that contains a _metadata folder — a
+// zip shipping it would be broken for every new user.
+execFileSync(
+  'zip',
+  ['-qr', path.join(landing, zipName), '.', '-x', '.*', '-x', '_metadata/*'],
+  { cwd: dist },
+)
 
 // Point every CTA at the new filename.
 const indexPath = path.join(landing, 'index.html')
