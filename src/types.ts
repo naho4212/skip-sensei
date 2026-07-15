@@ -355,7 +355,8 @@ export type Message =
     } // → string | null (AI-found CSS selector)
   | {
       type: 'skipSensei:verifyAdCandidates'
-      candidates: Array<{ index: number; html: string }>
+      candidates: Array<{ index: number; html: string; text: string }>
+      page: { host: string; title: string }
     } // → number[] (indexes the AI confirmed as ads; fail-closed empty)
   | { type: 'skipSensei:reviewPopup'; html: string; desc?: string } // → boolean (hide this overlay?)
   | { type: 'skipSensei:logActivity'; feature: string; action: string } // content-script action → activity log

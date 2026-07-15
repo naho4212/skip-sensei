@@ -820,6 +820,19 @@ let activeVetoed: string[] = []
 /** Apply this domain's AI-discovered ad selectors (from prior visits). */
 async function applyGapfill() {
   const domain = bareDomain()
+  // User-content apps (webmail/chat/docs): the gap-filler never runs here,
+  // and selectors cached BEFORE this exclusion existed must not keep hiding
+  // the user's own mail/messages — purge them so old victims self-heal.
+  if (isUserContentHost()) {
+    if ((await getGapfillSelectors(domain)).length > 0)
+      await setGapfillSelectors(domain, [])
+    if (((await getVetoedGapfill(domain)) ?? []).length > 0)
+      await setVetoedGapfill(domain, [])
+    activeGapfill = []
+    activeVetoed = []
+    document.getElementById(GAPFILL_STYLE_ID)?.remove()
+    return
+  }
   const rejected = new Set(await getRejectedGapfill(domain))
   // User pressed "it IS an ad" on a guard-vetoed selector — trust them.
   const confirmed = new Set(await getConfirmedGapfill(domain))
@@ -944,6 +957,9 @@ async function collapseEmptyAdSlots() {
   // Feature rides the same switch as the rest of cosmetic hiding; a user 👎
   // on .skip-sensei-empty-slot removes it from activeSelectors for the domain.
   if (!activeSelectors.includes(`.${EMPTY_SLOT_CLASS}`)) return
+  // Webmail/chat/docs never pre-reserve ad slots, and their minified class
+  // names collide with the ad tokens (Gmail's gb_ad chrome) — stay out.
+  if (isUserContentHost()) return
   // 👎 on the branded-slot entry: keep collapsing, stop branding here.
   const brandAllowed = !(await getRejectedGapfill(bareDomain())).includes(
     `.${BRANDED_SLOT_CLASS}`,
@@ -1477,6 +1493,22 @@ function scheduleReloadChecks() {
  * become an ad suspect (…downlo-AD…). */
 const CANDIDATE_NAME_RE =
   /(^|[-_ ])(ads?|advert(isement)?s?|sponsored?|promoted)([-_ ]|$)/i
+
+/**
+ * Apps whose page content IS the user's own data — webmail, chat, docs. The
+ * gap-filler is doubly unsafe here: minified class names collide with ad
+ * tokens (Gmail marks every message with class="adn ads" / "adf ads", and
+ * Google-bar chrome carries gb_ad — the AI confirmed real emails as ads), and
+ * even a perfect classifier would hide promotional EMAILS the user chose to
+ * receive. There's also nothing to win: these apps carry no third-party
+ * display ads that filter lists miss.
+ */
+const USER_CONTENT_HOST_RE =
+  /^(mail|webmail|email)\.|(^|\.)(outlook\.(live|office|office365)\.com|icloud\.com|fastmail\.com|proton\.me|tutanota\.com|web\.whatsapp\.com|web\.telegram\.org|messenger\.com|discord\.com|slack\.com|teams\.microsoft\.com|teams\.live\.com|docs\.google\.com|drive\.google\.com|calendar\.google\.com|chat\.google\.com|meet\.google\.com|keep\.google\.com|contacts\.google\.com|notion\.so)$/i
+
+function isUserContentHost(): boolean {
+  return USER_CONTENT_HOST_RE.test(location.hostname)
+}
 /**
  * Exact ad-disclosure label text (leaf nodes only), across common locales.
  * This is the one ad signal that generalizes to EVERY site: disclosure
@@ -1502,6 +1534,9 @@ function isSafeCandidate(el: HTMLElement): boolean {
   )
     return false
   if (el.querySelector('input, select, textarea')) return false
+  // Paragraphs of text mean content, not an ad unit — display ads are
+  // visual, and even native/sponsored cards stay well under this.
+  if ((el.innerText ?? '').trim().length > 600) return false
   const r = el.getBoundingClientRect()
   if (r.width < 60 || r.height < 20 || r.height > 1200) return false
   // A near-viewport-sized box is a page section, not an ad unit.
@@ -1573,16 +1608,25 @@ function collectAdCandidates(
     if (AD_IFRAME_HINTS.some((h) => src.includes(h)))
       push(frame.parentElement ?? frame)
   }
-  // 2. Ad/sponsor-named containers (token match).
+  // 2. Ad/sponsor-named containers (token match). A name token alone is NOT
+  // enough — minified class names collide with it constantly (Gmail's every
+  // message is class="adn ads"). Require the element to also LOOK like an ad
+  // unit: it embeds a frame / AdSense ins, or is a near-textless visual box.
+  // Text-heavy true ads (native/sponsored cards) carry a disclosure label,
+  // which rule 3 catches.
   for (const el of document.querySelectorAll<HTMLElement>(
     'div[class*="ad" i], div[id*="ad" i], section[class*="ad" i], section[id*="ad" i], div[class*="spons" i], div[class*="promo" i], section[class*="spons" i], article[class*="spons" i], aside[class*="ad" i], li[class*="spons" i], li[class*="ad" i]',
   )) {
     if (out.length >= 12) break
     if (
-      CANDIDATE_NAME_RE.test(el.id) ||
-      CANDIDATE_NAME_RE.test(el.getAttribute('class') ?? '')
+      !CANDIDATE_NAME_RE.test(el.id) &&
+      !CANDIDATE_NAME_RE.test(el.getAttribute('class') ?? '')
     )
-      push(el)
+      continue
+    const looksLikeAdUnit =
+      el.querySelector('iframe, ins.adsbygoogle') !== null ||
+      (el.innerText ?? '').trim().length < 120
+    if (looksLikeAdUnit) push(el)
   }
   // 3. Cards carrying an exact ad-disclosure label ("Sponsored", …).
   for (const label of document.querySelectorAll('span, div, p, small, b, em')) {
@@ -1622,7 +1666,11 @@ async function requestAndProcessProposals() {
       candidates: candidates.map((c, index) => ({
         index,
         html: c.el.outerHTML.slice(0, 700),
+        // Attribute soup alone hides what an element IS — the visible text
+        // is what let the AI see "that's someone's email, not an ad".
+        text: (c.el.innerText ?? '').trim().slice(0, 160),
       })),
+      page: { host: location.hostname, title: document.title.slice(0, 80) },
     })
     .catch(() => null)
   if (verdict === null) return // transient failure — retry next visit
@@ -1673,6 +1721,8 @@ async function runGapfill() {
   // YouTube is covered by curated selectors + the badge scanner; AI proposals
   // there risk the player (telemetry: it proposed #img and .style-scope).
   if (isYouTube()) return
+  // Webmail/chat/docs: the page IS the user's data — never scan it for ads.
+  if (isUserContentHost()) return
   const settings = await getSettings()
   if (!settings.aiEnhancements) return
   // Already scanned this domain (kept selectors were applied on load, vetoed
@@ -1690,7 +1740,12 @@ async function runGapfill() {
  */
 async function scanForAds() {
   const settings = await getSettings()
-  if (settings.aiEnhancements && !settings.localOnlyMode && !isYouTube()) {
+  if (
+    settings.aiEnhancements &&
+    !settings.localOnlyMode &&
+    !isYouTube() &&
+    !isUserContentHost()
+  ) {
     await requestAndProcessProposals()
   }
   await applyGapfill()

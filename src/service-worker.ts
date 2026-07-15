@@ -362,13 +362,14 @@ async function reviewPopupMsg(
  * failure means an ad might show — never that real UI gets hidden.
  */
 async function verifyCandidates(
-  candidates: Array<{ index: number; html: string }>,
+  candidates: Array<{ index: number; html: string; text?: string }>,
+  page?: { host: string; title: string },
 ): Promise<number[]> {
   const settings = await getSettings()
   if (!settings.aiEnhancements) return []
   const controller = new AbortController()
   try {
-    return await verifyAdCandidates(candidates, settings, controller.signal)
+    return await verifyAdCandidates(candidates, page, settings, controller.signal)
   } catch {
     return []
   }
@@ -538,7 +539,7 @@ chrome.runtime.onMessage.addListener(
         void findSelector(message.html, message.description).then(sendResponse)
         return true
       case 'skipSensei:verifyAdCandidates':
-        void verifyCandidates(message.candidates).then(sendResponse)
+        void verifyCandidates(message.candidates, message.page).then(sendResponse)
         return true
       case 'skipSensei:reviewPopup':
         void reviewPopupMsg(message.html, senderHost(sender), message.desc).then(

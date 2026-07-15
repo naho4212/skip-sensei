@@ -15,6 +15,15 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.2.17',
+    date: '2026-07-15',
+    items: [
+      'AI ad detection is now far stricter about what counts as an ad: an ad-like class name alone is no longer enough — the element must actually look like an ad unit, and the AI now sees the element\'s visible text and the page it\'s on before confirming anything',
+      'Gmail, Outlook, and other mail/chat/docs apps are now completely off-limits to the AI ad scanner — your emails and messages are never candidates (Gmail internally labels every email "ads", which fooled the scanner)',
+      'Anything the AI wrongly hid on those apps before this fix un-hides itself automatically on your next visit',
+    ],
+  },
+  {
     version: '0.2.16',
     date: '2026-07-15',
     items: [

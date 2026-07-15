@@ -286,7 +286,7 @@ export async function findElementSelector(
   }
 }
 
-const AD_VERIFY_SYSTEM_PROMPT = `You review suspected advertisement elements found on a web page. Each numbered candidate is an HTML snippet that carried an ad signal (ad-network iframe, ad/sponsor class name, or a "Sponsored" label). Confirm which candidates are DEFINITELY advertisements: banner/display ads, sponsored/promoted third-party content units, ad iframes. Anything that is or might be the site's own UI or real content — navigation, headers, article/product cards, buttons, forms, the site's own feature promos you'd expect a user to want — is NOT an ad. Return ONLY JSON: {"ads":[<candidate numbers>]}. When unsure about a candidate, leave it out. If none are ads, return {"ads":[]}. No prose, no markdown.`
+const AD_VERIFY_SYSTEM_PROMPT = `You review suspected advertisement elements found on a web page. Each numbered candidate carried a WEAK ad signal (ad-network iframe, ad-like class name, or a "Sponsored" label) and comes with its visible text and an HTML snippet. Confirm ONLY candidates that are beyond doubt advertisements: banner/display ad units, ad iframes, sponsored/promoted third-party content. Everything else is NOT an ad — the site's own UI (navigation, headers, buttons, forms, feature promos), real content (articles, product cards, search results), and especially USER CONTENT: emails, chat messages, comments, posts, documents, calendar events. Beware: many apps ship minified class names, so tokens like "ad"/"ads" land on non-ads by pure coincidence (Gmail puts class="adn ads" on every email) — a class name is NEVER sufficient evidence on its own; require the content itself to be promotional. Visible text with personal names, dates, or conversational replies means user content, never an ad. Return ONLY JSON: {"ads":[<candidate numbers>]}. When in any doubt, leave the candidate out. If none qualify, return {"ads":[]}. No prose, no markdown.`
 
 /**
  * AI gap-filler verifier (v2): the content script finds candidates
@@ -297,16 +297,23 @@ const AD_VERIFY_SYSTEM_PROMPT = `You review suspected advertisement elements fou
  * never that real UI gets hidden.
  */
 export async function verifyAdCandidates(
-  candidates: Array<{ index: number; html: string }>,
+  candidates: Array<{ index: number; html: string; text?: string }>,
+  page: { host: string; title: string } | undefined,
   settings: Settings,
   signal: AbortSignal,
 ): Promise<number[]> {
   const body = candidates
-    .map((c) => `#${c.index}:\n${c.html.slice(0, 700)}`)
+    .map((c) => {
+      const text = (c.text ?? '').slice(0, 160)
+      return `#${c.index}:\ntext: ${text || '(no visible text)'}\nhtml: ${c.html.slice(0, 700)}`
+    })
     .join('\n\n')
+  const header = page
+    ? `Page: ${page.host} — ${page.title.slice(0, 80)}\n`
+    : ''
   const raw = await completeSmart(
     AD_VERIFY_SYSTEM_PROMPT,
-    `Candidates:\n${body}`.slice(0, 9000),
+    `${header}Candidates:\n${body}`.slice(0, 9000),
     settings,
     signal,
   )
