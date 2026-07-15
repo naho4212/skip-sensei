@@ -21,15 +21,6 @@
             Automatically skips YouTube's ads — clicks “Skip” the instant it
             appears and fast-forwards the rest. On by default.
           </p>
-          <!-- Aggressive pruning is opt-in (needs no extra permission): strip
-               ad slots out of player responses so most ads never start. -->
-          <label class="telemetry-toggle aggressive-toggle">
-            <input type="checkbox" id="aggressive-optin" />
-            <span
-              >Stronger blocking: remove ads before they can load
-              <em class="beta-tag">beta</em></span
-            >
-          </label>
         </li>
         <li class="card">
           <h2>Skip sponsor segments</h2>
@@ -42,19 +33,58 @@
         <li class="card">
           <h2>Block ads across the web</h2>
           <p>
-            Optional filter-list ad (and tracker) blocking on every site, with a
-            per-site pause. <strong>Off by default.</strong>
-          </p>
-          <button type="button" id="enable-web-blocking" class="enable-btn">
-            Turn on ad blocking everywhere
-          </button>
-          <p class="enable-hint" id="enable-hint">
-            Chrome will ask to allow access to all sites — that's what lets Ad
-            Sensei block and hide ads on every page. You can pause any site, or
-            turn it off, from the toolbar popup.
+            Optional filter-list blocking of ads, trackers, cookie banners,
+            popups, and social widgets on every site, with a per-site pause.
+            <strong>Off by default</strong> — pick a level below.
           </p>
         </li>
       </ol>
+
+      <!-- One decision instead of five toggles: each level card lists exactly
+           what it turns on. Levels map to plain settings, so the popup and
+           options page can still adjust everything piecemeal afterwards. -->
+      <section class="levels">
+        <h2 class="levels-title">Pick your blocking level</h2>
+        <div class="level-grid">
+          <button type="button" class="level-card" data-level="low">
+            <span class="level-name">Essential</span>
+            <span class="level-desc">YouTube only — what's already on.</span>
+            <ul>
+              <li>Skip YouTube ads</li>
+              <li>Skip sponsor segments</li>
+              <li>Hide YouTube display ads</li>
+              <li>Malware domain blocking</li>
+            </ul>
+            <span class="level-perm">No extra permissions</span>
+          </button>
+          <button type="button" class="level-card" data-level="medium">
+            <span class="level-badge">Recommended</span>
+            <span class="level-name">Balanced</span>
+            <span class="level-desc">Essential + a cleaner web everywhere.</span>
+            <ul>
+              <li>Ads &amp; trackers on every site</li>
+              <li>Cookie banners auto-handled</li>
+              <li>Popups &amp; overlays hidden</li>
+            </ul>
+            <span class="level-perm">Chrome will ask for all-sites access</span>
+          </button>
+          <button type="button" class="level-card" data-level="high">
+            <span class="level-name">Max</span>
+            <span class="level-desc">Everything Ad Sensei can do.</span>
+            <ul>
+              <li>All of Balanced</li>
+              <li>Social widgets hidden</li>
+              <li>Aggressive YouTube blocking <em class="beta-tag">beta</em></li>
+            </ul>
+            <span class="level-perm">Chrome will ask for all-sites access</span>
+          </button>
+        </div>
+        <p class="enable-hint" id="level-hint">
+          Prefer to build your own?
+          <a href="#" id="diy-link">Pick individual features in settings.</a>
+          You can change level anytime from the popup or settings.
+        </p>
+      </section>
 
       <section class="ai-note">
         <h2>The sponsor-detection AI</h2>
@@ -66,8 +96,28 @@
           <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener"
             >Google Gemini API key</a
           >
-          in options — no credit card needed. Groq, OpenRouter, and fully-local
-          Ollama are supported too.
+          — no credit card needed. Groq, OpenRouter, and fully-local Ollama are
+          supported too (in settings).
+        </p>
+        <div class="key-row" id="key-row">
+          <input
+            type="text"
+            id="gemini-key"
+            placeholder="Paste your Gemini API key (optional)"
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <button type="button" id="save-key" class="enable-btn key-save">
+            Save
+          </button>
+          <button type="button" id="key-later" class="key-later">
+            Maybe later
+          </button>
+        </div>
+        <p class="enable-hint" id="key-hint">
+          Stored locally, sent only to Google. Chrome will ask to allow access
+          to Google's API host. “Maybe later” leaves a reminder in the toolbar
+          popup.
         </p>
       </section>
 
@@ -93,9 +143,13 @@
         </p>
       </section>
 
+      <!-- Activation now happens inline above, so browsing is the primary
+           exit and settings the secondary one. -->
       <div class="cta">
-        <button id="open-options" type="button">Open settings</button>
-        <button id="close" type="button" class="secondary">Start browsing</button>
+        <button id="close" type="button">Start browsing</button>
+        <button id="open-options" type="button" class="secondary">
+          Open settings
+        </button>
       </div>
     </main>
     <script type="module" src="./onboarding.ts"></script>

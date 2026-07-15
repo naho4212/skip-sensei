@@ -4,11 +4,13 @@ import {
   clearAdblockWall,
   clearYtBackoff,
   getAdblockWall,
+  getKeyReminder,
   getLastSeenVersion,
   getSettings,
   getStats,
   getYtBackoff,
   onStatsChanged,
+  setKeyReminder,
   setLastSeenVersion,
   setSiteAllowlisted,
   updateSettings,
@@ -644,6 +646,35 @@ async function renderUpdateBanner() {
   )
 }
 
+/** Gemini-key reminder queued by onboarding's "Maybe later". Self-clears if
+ * a key or non-builtin provider was configured in the meantime. */
+async function renderKeyReminder() {
+  if (!(await getKeyReminder())) return
+  const settings = await getSettings()
+  if (settings.llmProvider !== 'builtin' || settings.apiKeys.gemini) {
+    void setKeyReminder(false)
+    return
+  }
+  const banner = $('key-reminder')
+  banner.hidden = false
+  $('key-reminder-dismiss').addEventListener(
+    'click',
+    () => {
+      banner.hidden = true
+      void setKeyReminder(false)
+    },
+    { once: true },
+  )
+  $('key-reminder-open').addEventListener(
+    'click',
+    () => {
+      void setKeyReminder(false)
+      void chrome.runtime.openOptionsPage()
+    },
+    { once: true },
+  )
+}
+
 async function renderYtBackoff() {
   const el = $('yt-backoff')
   const backoff = await getYtBackoff()
@@ -751,6 +782,7 @@ async function clearSiteCookiesAndReload(
 
 async function main() {
   void renderUpdateBanner()
+  void renderKeyReminder()
   void renderYtBackoff()
   void renderAdblockWall()
   $('yt-backoff-dismiss').addEventListener('click', () => {

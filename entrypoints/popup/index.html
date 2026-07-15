@@ -48,6 +48,26 @@
       <ul class="update-list" id="update-list"></ul>
     </section>
 
+    <!-- "Remind me later" from onboarding's Gemini-key step -->
+    <section class="update-banner" id="key-reminder" hidden>
+      <button
+        type="button"
+        class="update-dismiss"
+        id="key-reminder-dismiss"
+        aria-label="Dismiss"
+      >
+        ×
+      </button>
+      <div class="update-title">Faster sponsor detection</div>
+      <p class="key-reminder-text">
+        Add a free Gemini API key — a big speed-up on long videos, no credit
+        card needed.
+      </p>
+      <button type="button" id="key-reminder-open" class="mini-btn">
+        Open settings
+      </button>
+    </section>
+
     <!-- YouTube flagged the session; aggressive mode auto-disabled. -->
     <section class="yt-backoff" id="yt-backoff" hidden>
       <button

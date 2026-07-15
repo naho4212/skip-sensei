@@ -248,6 +248,23 @@ export async function clearYtBackoff(): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// "Remind me later" from onboarding's Gemini-key step: the popup shows a
+// one-time banner while this flag is set. Cleared on dismiss, on opening
+// settings from the banner, or silently once a key/provider is configured.
+// ---------------------------------------------------------------------------
+const KEY_REMINDER_KEY = 'skipSensei.keyReminder'
+
+export async function setKeyReminder(on: boolean): Promise<void> {
+  if (on) await chrome.storage.local.set({ [KEY_REMINDER_KEY]: true })
+  else await chrome.storage.local.remove(KEY_REMINDER_KEY)
+}
+
+export async function getKeyReminder(): Promise<boolean> {
+  const result = await chrome.storage.local.get(KEY_REMINDER_KEY)
+  return result[KEY_REMINDER_KEY] === true
+}
+
+// ---------------------------------------------------------------------------
 // Anti-adblock wall notices (general web). The cosmetic content script detects
 // when a site is showing an "you're using an ad blocker" wall and records it
 // per-hostname; the popup surfaces a recovery notice for the active tab with a
