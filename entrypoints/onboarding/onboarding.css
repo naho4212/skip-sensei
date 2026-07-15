@@ -354,6 +354,20 @@
 .ai-note p + p {
   margin-top: 8px;
 }
+.ai-list {
+  list-style: none;
+  margin: 8px 0 10px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 13.5px;
+  color: var(--text-2);
+}
+.ai-list li::before {
+  content: '✓ ';
+  color: var(--accent-bright);
+}
 
 .ai-note a {
   color: var(--link);
