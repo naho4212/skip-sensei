@@ -26,15 +26,11 @@
   window.__skipSenseiPruned = true
 
   var AD_KEYS = ['adPlacements', 'adSlots', 'playerAds', 'adBreakHeartbeatParams']
-  // Only real ad SLOTS count as ads prevented. The other keys (playerAds
-  // config, adBreakHeartbeatParams) ride along in nearly every player response
-  // as ad-check machinery — we still strip them, we just don't tally them.
   var AD_SLOT_KEYS = { adPlacements: 1, adSlots: 1 }
-  // Distinct-count dedupe. YouTube refetches a video's player response many
-  // times (seeks, quality changes, navigation), re-serving the SAME ad slots
-  // each time. Count a video's ads only the FIRST time we strip them, keyed by
-  // videoId — so the tally is real ad breaks avoided, not prune events.
-  var countedVideos = Object.create(null)
+  // Dedupe schedule-posting per videoId. YouTube refetches a video's player
+  // response many times (seeks, quality changes, navigation), re-serving the
+  // SAME ad breaks — we hand the loader each video's schedule only once.
+  var scheduledVideos = Object.create(null)
 
   function videoIdOf(obj) {
     try {
@@ -47,54 +43,77 @@
     }
   }
 
-  function notify(count) {
+  // Read each ad break's scheduled position (ms into the content) from
+  // adPlacements BEFORE we strip it. Pre-roll = 0, mid-rolls = offset ms,
+  // post-roll = -1. This is the break SCHEDULE — how many breaks would play
+  // and where — which is all the response tells us. It does NOT say how many
+  // individual ads a break would contain (that comes from the ad request we
+  // block), so a "break" is the countable unit, not the creative.
+  function extractOffsets(target) {
+    var out = []
+    try {
+      var aps = target.adPlacements
+      if (!Array.isArray(aps)) return out
+      for (var i = 0; i < aps.length; i++) {
+        var r = aps[i] && aps[i].adPlacementRenderer
+        var cfg = r && r.config && r.config.adPlacementConfig
+        var off = cfg && cfg.adTimeOffset && cfg.adTimeOffset.offsetStartMilliseconds
+        if (off === undefined || off === null) continue
+        var ms = parseInt(off, 10)
+        if (!isNaN(ms)) out.push(ms)
+      }
+    } catch (e) {}
+    return out
+  }
+
+  // Strip the ad keys from one object; return true if any ad SLOT key was
+  // present (so we know the response actually carried ads).
+  function stripKeys(target) {
+    var hadSlots = false
+    for (var i = 0; i < AD_KEYS.length; i++) {
+      var key = AD_KEYS[i]
+      if (key in target) {
+        try {
+          if (AD_SLOT_KEYS[key]) hadSlots = true
+          delete target[key]
+        } catch (e) {}
+      }
+    }
+    return hadSlots
+  }
+
+  function postSchedule(vid, offsets) {
     try {
       window.postMessage(
-        { source: 'skip-sensei', type: 'ads-pruned', count: count },
+        {
+          source: 'skip-sensei',
+          type: 'ad-schedule',
+          videoId: vid,
+          offsets: offsets,
+        },
         '*',
       )
     } catch (e) {}
   }
 
-  // Strip the ad keys from one object; return how many real ad SLOTS (breaks)
-  // were removed (array length, so a placement list counts each break).
-  function stripKeys(target) {
-    // adPlacements and adSlots are two representations of the SAME ad breaks
-    // (legacy list + newer slot format). Count the LARGER, never the sum —
-    // summing double-counts (a 6-break movie has adPlacements:6 + adSlots:2,
-    // which would read as "8 ads"). Non-slot ad keys are stripped but never
-    // tallied.
-    var maxSlots = 0
-    for (var i = 0; i < AD_KEYS.length; i++) {
-      var key = AD_KEYS[i]
-      if (key in target) {
-        var val = target[key]
-        try {
-          delete target[key]
-          if (AD_SLOT_KEYS[key]) {
-            var n = Array.isArray(val) ? val.length : 1
-            if (n > maxSlots) maxSlots = n
-          }
-        } catch (e) {}
-      }
-    }
-    return maxSlots
-  }
-
   function prune(obj) {
     if (!obj || typeof obj !== 'object') return obj
-    var removed = stripKeys(obj)
-    // Some shapes nest the payload under playerResponse.
+    // Capture the break schedule BEFORE stripping — the loader counts each
+    // break only when playback actually reaches it, so a partial watch counts
+    // only the breaks you'd have hit, not the whole video's total.
+    var offsets = extractOffsets(obj)
+    var hadSlots = stripKeys(obj)
     if (obj.playerResponse && typeof obj.playerResponse === 'object') {
-      removed += stripKeys(obj.playerResponse)
+      offsets = offsets.concat(extractOffsets(obj.playerResponse))
+      if (stripKeys(obj.playerResponse)) hadSlots = true
     }
-    // Count the ad breaks once per video (dedupe YouTube's refetches). If we
-    // can't read a videoId, skip counting rather than risk over-counting.
-    if (removed > 0) {
+    if (hadSlots) {
       var vid = videoIdOf(obj)
-      if (vid && !countedVideos[vid]) {
-        countedVideos[vid] = 1
-        notify(removed)
+      if (vid && !scheduledVideos[vid]) {
+        scheduledVideos[vid] = 1
+        // Slots present but no readable offsets (rare shape) → treat as a
+        // single break at start so it isn't silently uncounted.
+        postSchedule(vid, offsets.length ? offsets : [0])
       }
     }
     return obj

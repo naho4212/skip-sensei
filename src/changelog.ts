@@ -15,6 +15,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.2.21',
+    date: '2026-07-15',
+    items: [
+      'YouTube ad count now reflects what you actually watched: instead of crediting a video\'s entire ad schedule the moment it loads, each ad break is counted only when playback reaches it — watch 25 minutes of a movie and it counts the 2 breaks you\'d have hit, not all 5',
+      'Fixed the reload button in Settings › Activity & logs sitting slightly off-center',
+    ],
+  },
+  {
     version: '0.2.20',
     date: '2026-07-15',
     items: [
