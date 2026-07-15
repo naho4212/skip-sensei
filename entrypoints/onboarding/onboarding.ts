@@ -91,45 +91,90 @@ DEFAULT_LEVEL_HINT_LINK?.addEventListener('click', (e) => {
   void chrome.runtime.openOptionsPage()
 })
 
-// ---- Optional Gemini key (or a reminder for later) --------------------
-const keyRow = document.getElementById('key-row')
+// ---- Optional AI keys (the recommended free pair, or a reminder) ------
+// Gemini becomes the main provider (transcript analysis). Groq is saved as a
+// key ONLY — resolveHelperProvider() routes the bursty helper calls (popup
+// review, consent clicks, selector repair) to it automatically whenever the
+// key exists, keeping Gemini's 5 RPM free tier for transcripts.
 const keyHint = document.getElementById('key-hint')
-const keyInput = document.getElementById('gemini-key') as HTMLInputElement | null
 
-function renderKeySaved() {
-  if (keyRow) keyRow.hidden = true
-  if (keyHint)
-    keyHint.textContent =
-      '✓ Gemini key saved — sponsor detection will use it from now on.'
+function wireKeyRow(opts: {
+  rowId: string
+  inputId: string
+  saveId: string
+  savedId: string
+  origin: string
+  save: (key: string) => Promise<void>
+}) {
+  const row = document.getElementById(opts.rowId)
+  const input = document.getElementById(opts.inputId) as HTMLInputElement | null
+  const savedLine = document.getElementById(opts.savedId)
+  const markSaved = () => {
+    if (row) row.hidden = true
+    if (savedLine) savedLine.hidden = false
+    // Both keys in? Nothing left to be reminded about.
+    if (
+      document.getElementById('key-row')?.hidden &&
+      document.getElementById('groq-row')?.hidden
+    )
+      document.getElementById('key-later')?.setAttribute('hidden', '')
+  }
+  document.getElementById(opts.saveId)?.addEventListener('click', async () => {
+    const key = input?.value.trim()
+    if (!key) {
+      input?.focus()
+      return
+    }
+    // Host grant on this click gesture; declining just means the fetch fails
+    // later and analysis falls back to on-device AI.
+    await chrome.permissions
+      .request({ origins: [opts.origin] })
+      .catch(() => false)
+    await opts.save(key)
+    await setKeyReminder(false)
+    markSaved()
+  })
+  return { markSaved }
 }
 
-void getSettings().then((settings) => {
-  if (settings.apiKeys.gemini) renderKeySaved()
+const geminiRow = wireKeyRow({
+  rowId: 'key-row',
+  inputId: 'gemini-key',
+  saveId: 'save-key',
+  savedId: 'gemini-saved',
+  origin: 'https://generativelanguage.googleapis.com/*',
+  save: async (key) => {
+    const settings = await getSettings()
+    await updateSettings({
+      llmProvider: 'gemini',
+      apiKeys: { ...settings.apiKeys, gemini: key },
+    })
+  },
 })
 
-document.getElementById('save-key')?.addEventListener('click', async () => {
-  const key = keyInput?.value.trim()
-  if (!key) {
-    keyInput?.focus()
-    return
-  }
-  // Host grant for Google's API on this click gesture; declining just means
-  // the fetch fails later and analysis falls back to on-device AI.
-  await chrome.permissions
-    .request({ origins: ['https://generativelanguage.googleapis.com/*'] })
-    .catch(() => false)
-  const settings = await getSettings()
-  await updateSettings({
-    llmProvider: 'gemini',
-    apiKeys: { ...settings.apiKeys, gemini: key },
-  })
-  await setKeyReminder(false)
-  renderKeySaved()
+const groqRow = wireKeyRow({
+  rowId: 'groq-row',
+  inputId: 'groq-key',
+  saveId: 'save-groq',
+  savedId: 'groq-saved',
+  origin: 'https://api.groq.com/*',
+  save: async (key) => {
+    // Key only — deliberately NOT the main provider; the helper router picks
+    // it up on its own.
+    const settings = await getSettings()
+    await updateSettings({ apiKeys: { ...settings.apiKeys, groq: key } })
+  },
+})
+
+void getSettings().then((settings) => {
+  if (settings.apiKeys.gemini) geminiRow.markSaved()
+  if (settings.apiKeys.groq) groqRow.markSaved()
 })
 
 document.getElementById('key-later')?.addEventListener('click', async () => {
   await setKeyReminder(true)
-  if (keyRow) keyRow.hidden = true
+  document.getElementById('key-row')?.setAttribute('hidden', '')
+  document.getElementById('groq-row')?.setAttribute('hidden', '')
   if (keyHint)
     keyHint.textContent =
       'No problem — a reminder will wait in the toolbar popup.'

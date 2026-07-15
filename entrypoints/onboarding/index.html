@@ -70,7 +70,10 @@
           </button>
           <button type="button" class="level-card" data-level="high">
             <span class="level-name">Max</span>
-            <span class="level-desc">Everything Ad Sensei can do.</span>
+            <span class="level-desc"
+              >Everything Ad Sensei can do — may occasionally hide real
+              content; pause any site from the popup.</span
+            >
             <ul>
               <li>All of Balanced</li>
               <li>Social widgets hidden</li>
@@ -96,28 +99,56 @@
           <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener"
             >Google Gemini API key</a
           >
-          — no credit card needed. Groq, OpenRouter, and fully-local Ollama are
+          — no credit card needed. OpenRouter and fully-local Ollama are
           supported too (in settings).
+        </p>
+        <p class="pair-note">
+          <strong>Recommended free pair:</strong> add a free
+          <a href="https://console.groq.com/keys" target="_blank" rel="noopener"
+            >Groq API key</a
+          >
+          alongside Gemini. They divide the work automatically: Gemini does
+          the deep transcript analysis, while the quick helpers (popup review,
+          cookie-consent clicks, selector repair) run on Groq's roomier free
+          tier — so those bursts never eat Gemini's 5-requests-per-minute
+          quota.
         </p>
         <div class="key-row" id="key-row">
           <input
             type="text"
             id="gemini-key"
-            placeholder="Paste your Gemini API key (optional)"
+            placeholder="Gemini API key (optional)"
             autocomplete="off"
             spellcheck="false"
           />
           <button type="button" id="save-key" class="enable-btn key-save">
             Save
           </button>
-          <button type="button" id="key-later" class="key-later">
-            Maybe later
+        </div>
+        <p class="enable-hint key-saved" id="gemini-saved" hidden>
+          ✓ Gemini key saved — sponsor detection will use it from now on.
+        </p>
+        <div class="key-row" id="groq-row">
+          <input
+            type="text"
+            id="groq-key"
+            placeholder="Groq API key (optional)"
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <button type="button" id="save-groq" class="enable-btn key-save">
+            Save
           </button>
         </div>
+        <p class="enable-hint key-saved" id="groq-saved" hidden>
+          ✓ Groq key saved — the quick AI helpers will use it automatically.
+        </p>
         <p class="enable-hint" id="key-hint">
-          Stored locally, sent only to Google. Chrome will ask to allow access
-          to Google's API host. “Maybe later” leaves a reminder in the toolbar
-          popup.
+          Keys are stored locally and sent only to their own provider; Chrome
+          will ask to allow access to each API host.
+          <button type="button" id="key-later" class="key-later">
+            Maybe later — remind me in the toolbar popup
+          </button>
         </p>
       </section>
 

@@ -21,7 +21,8 @@ export const CHANGELOG: ChangelogEntry[] = [
       'The Ad Sensei skip overlay is back — a calm branded panel covers the player while an ad is being skipped, instead of the fast-forward flicker',
       'One activity entry per ad break: consecutive ads are combined into a single line showing how much ad time was skipped and how fast',
       'Cleaner popup: per-video status now sits under its own toggle, the hidden-ads review lives under Block all ads, and site reset joined the menu',
-      'The welcome page now sets you up in one decision: pick a blocking level (Essential / Balanced / Max, each listing exactly what it turns on), add a Gemini key right there or ask to be reminded later, or jump to settings to build your own',
+      'The welcome page now sets you up in one decision: pick a blocking level (Essential / Balanced / Max, each listing exactly what it turns on), or jump to settings to build your own',
+      'Recommended free AI pair, right on the welcome page: add Gemini and Groq keys side by side — Gemini analyzes transcripts while quick helpers automatically run on Groq, so neither hits its free-tier limits ("Maybe later" leaves a reminder in the popup)',
     ],
   },
   {

@@ -217,11 +217,36 @@
   color: var(--text-3);
 }
 
-/* Gemini key row inside the AI callout */
+/* AI key rows inside the AI callout */
+.pair-note {
+  margin: 10px 0 0 !important;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(124, 58, 237, 0.1);
+  font-size: 13px !important;
+}
 .key-row {
   display: flex;
   gap: 8px;
   margin-top: 12px;
+}
+.key-saved {
+  color: var(--accent-bright) !important;
+}
+.key-later {
+  display: inline;
+  height: auto;
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--text-3);
+  font-size: 12.5px;
+  font-family: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.key-later:hover {
+  color: var(--text);
 }
 .key-row input {
   flex: 1;
@@ -240,19 +265,6 @@
 }
 .enable-btn.key-save {
   margin-top: 0;
-}
-.key-later {
-  height: 38px;
-  padding: 0 12px;
-  background: none;
-  border: none;
-  color: var(--text-3);
-  font-size: 13px;
-  font-family: inherit;
-  cursor: pointer;
-}
-.key-later:hover {
-  color: var(--text);
 }
 
 /* ⓘ tooltips (same pattern as the popup's) */
