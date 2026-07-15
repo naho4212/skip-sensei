@@ -1205,10 +1205,15 @@ function findSponsoredFeedCard(label: Element): HTMLElement | null {
   // Ad badges are small; a headline-sized "Sponsored" is content, not a badge.
   if (lr.width === 0 || lr.height === 0 || lr.height > 40) return null
   let node = label.parentElement
-  for (let i = 0; i < 7 && node; i++, node = node.parentElement) {
+  // Depth 10: LinkedIn nests a feed post's actor line ~8 levels deep.
+  for (let i = 0; i < 10 && node; i++, node = node.parentElement) {
     const r = node.getBoundingClientRect()
-    if (r.height > 1200) return null // grew past card size — give up
-    if (r.height < 80 || r.width < 120) continue
+    // 2200, not 1200: promoted posts with document/carousel attachments run
+    // ~1800px tall and were escaping here. The several-similar-siblings
+    // check below is what really bounds the blast radius, not this ceiling.
+    if (r.height > 2200) return null // page-scale — give up
+    // Floor 60: right-rail promoted units are ~66px compact rows.
+    if (r.height < 60 || r.width < 120) continue
     if (
       r.width >= window.innerWidth * 0.98 &&
       r.height >= window.innerHeight * 0.8

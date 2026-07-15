@@ -15,6 +15,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.2.19',
+    date: '2026-07-15',
+    items: [
+      'LinkedIn "Promoted" posts are now caught: tall promoted posts (document/carousel attachments) and compact right-rail promoted units both escaped the sponsored-post detector\'s size limits — the limits now fit them while the feed-pattern safety check stays in place',
+    ],
+  },
+  {
     version: '0.2.18',
     date: '2026-07-15',
     items: [
