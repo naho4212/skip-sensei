@@ -18,6 +18,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     version: '0.2.15',
     date: '2026-07-14',
     items: [
+      'Redesigned popup: two views — “This site” (blocking status, stats, and per-page tools) and “Controls” (every toggle, now including aggressive mode and tappable pills for the five web-blocking lists) — with nothing cut off and the footer always in reach',
       'Honest ad counting: the per-site "blocked here" number and the popup totals now measure the same thing, so your totals are simply every page\'s number added up',
       'One ad now counts as one — nested fragments of the same ad slot are counted once, and a hidden slot only counts as an ad when an ad had actually loaded in it (empty leftovers of already-blocked ads no longer inflate the number)',
       'Stat cards now show "today" instead of "this session" — a number you can actually reason about',
@@ -30,7 +31,6 @@ export const CHANGELOG: ChangelogEntry[] = [
     items: [
       'The Ad Sensei skip overlay is back — a calm branded panel covers the player while an ad is being skipped, instead of the fast-forward flicker',
       'One activity entry per ad break: consecutive ads are combined into a single line showing how much ad time was skipped and how fast',
-      'Redesigned popup: two views — “This site” (blocking status, stats, and per-page tools) and “Controls” (every toggle, now including aggressive mode and tappable pills for the five web-blocking lists) — with nothing cut off and the footer always in reach',
       'The welcome page now sets you up in one decision: pick a blocking level (Essential / Balanced / Max, each listing exactly what it turns on), or jump to settings to build your own',
       'Recommended free AI pair, right on the welcome page: add Gemini and Groq keys side by side — Gemini analyzes transcripts while quick helpers automatically run on Groq, so neither hits its free-tier limits ("Maybe later" leaves a reminder in the popup)',
     ],
