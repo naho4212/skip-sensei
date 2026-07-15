@@ -392,6 +392,11 @@ export interface HiddenElement {
   text: string
   /** 'list' = filter-list selector, 'ai' = AI gap-filler, 'youtube' = YT ads. */
   source: 'list' | 'ai' | 'youtube'
+  /** Whether the slot held a loaded creative when described. False = empty
+   * shell: the ad was blocked before it could load (counted as a network
+   * block, not an extra hidden ad) — this is what reconciles "N hidden here"
+   * with the smaller "ads" figure in the blocked-here breakdown. */
+  filled?: boolean
   /** AI proposed it but the safety guard kept it visible (looks like real UI).
    * Shown in the review so the user can 👍 (hide it anyway) or 👎 (dismiss). */
   vetoed?: boolean

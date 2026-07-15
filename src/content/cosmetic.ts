@@ -1240,6 +1240,7 @@ function describeHiddenElements() {
       count: els.length,
       tag: first.tagName.toLowerCase(),
       text: (first.textContent ?? '').trim().replace(/\s+/g, ' ').slice(0, 70),
+      filled: els.some(isFilledAdSlot),
     })
     if (out.length >= 25) break
   }
@@ -1253,6 +1254,7 @@ function describeHiddenElements() {
       count: collapsed,
       tag: 'div',
       text: 'Empty ad slot — collapsed, content moved up',
+      filled: false,
     })
   const brandedSlots = document.querySelectorAll(`.${BRANDED_SLOT_CLASS}`).length
   if (brandedSlots > 0)
@@ -1262,6 +1264,7 @@ function describeHiddenElements() {
       count: brandedSlots,
       tag: 'div',
       text: 'Empty ad slot — filled with the Ad Sensei card',
+      filled: false,
     })
   return out
 }

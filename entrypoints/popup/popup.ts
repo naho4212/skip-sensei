@@ -366,9 +366,19 @@ async function renderFeedbackReset(tabId: number) {
 
 function paintHiddenItems(tabId: number, items: HiddenElement[]) {
   const hiddenCount = items.filter((i) => !i.vetoed).length
-  $('hidden-title').textContent = hiddenCount
-    ? `Hidden ads here (${hiddenCount})`
-    : 'Hidden ads here'
+  const badge = $('hidden-count')
+  badge.textContent = String(hiddenCount)
+  badge.hidden = hiddenCount === 0
+  // Reconcile this list with the smaller "ads" number in "blocked here":
+  // empty slots are shells whose ad was blocked before it could load — that
+  // block is already counted, so the shell isn't counted again as an ad.
+  const emptyCount = items.filter((i) => !i.vetoed && i.filled === false).length
+  const emptyNote =
+    emptyCount > 0
+      ? ` ${emptyCount === hiddenCount ? (emptyCount === 1 ? 'It’s an empty slot' : 'All are empty slots') : `${emptyCount} are empty slots`} — the ad inside was blocked before it could load, so it’s counted in “blocked here”, not as another ad.`
+      : ''
+  $('hidden-hint').textContent =
+    `What the extension hid on this page.${emptyNote} “👎 Not ad” shows it again and stops hiding it on this site.`
   const list = $<HTMLUListElement>('hidden-list')
   list.replaceChildren(...items.map((item) => hiddenItemRow(tabId, item)))
   $('hidden-empty').hidden = items.length > 0
@@ -438,6 +448,17 @@ function hiddenItemRow(tabId: number, item: HiddenElement): HTMLLIElement {
   const detail = document.createElement('span')
   detail.textContent = `${item.tag || '?'}${item.count > 1 ? ` ×${item.count}` : ''}`
   meta.append(src, detail)
+  // Empty shells aren't extra "ads" in the blocked-here count — say so per
+  // row, so "9 hidden, 1 ad" doesn't read as a broken counter. YouTube rows
+  // skip this: there every hide IS a counted ad (no network-block half).
+  if (item.filled === false && !item.vetoed && item.source !== 'youtube') {
+    const empty = document.createElement('span')
+    empty.className = 'hidden-src src-empty'
+    empty.textContent = 'empty'
+    empty.title =
+      'This slot was empty — its ad was blocked before it could load, so it’s counted in “blocked here”, not as another hidden ad.'
+    meta.append(empty)
+  }
   if (item.vetoed) {
     const kept = document.createElement('span')
     kept.className = 'hidden-src src-vetoed'
@@ -507,13 +528,15 @@ let sponsorSegmentsExpanded = false
 function sponsorTitle(status: PageStatus): {
   title: string
   expandable: boolean
+  count?: number
 } {
   switch (status.sponsorStatus) {
     case 'ready':
       return status.segmentCount > 0
         ? {
-            title: `Sponsor segments (${status.segmentCount})`,
+            title: 'Sponsor segments',
             expandable: true,
+            count: status.segmentCount,
           }
         : { title: 'No sponsor segments found', expandable: false }
     case 'analyzing': {
@@ -534,8 +557,11 @@ function sponsorTitle(status: PageStatus): {
 }
 
 /** Apply title + expand state to the sponsor detail row. */
-function setSponsorRow(title: string, expandable: boolean) {
+function setSponsorRow(title: string, expandable: boolean, count = 0) {
   videoStatusEl.textContent = title
+  const badge = $('sponsor-count')
+  badge.textContent = String(count)
+  badge.hidden = count === 0
   if (!expandable) sponsorSegmentsExpanded = false
   const chevron = $('sponsor-chevron')
   chevron.hidden = !expandable
@@ -598,11 +624,11 @@ async function renderVideoStatus() {
     }
     adDetail.hidden = false
     adStatusEl.textContent = status.adEngineActive
-      ? 'Watching this video for ads.'
-      : 'Ad skipping is off.'
+      ? 'Watching this video for ads'
+      : 'Ad skipping is off'
     sponsorDetail.hidden = false
-    const { title, expandable } = sponsorTitle(status)
-    setSponsorRow(title, expandable)
+    const { title, expandable, count } = sponsorTitle(status)
+    setSponsorRow(title, expandable, count ?? 0)
     renderProgress(status)
     renderSegments(status)
   } catch {
