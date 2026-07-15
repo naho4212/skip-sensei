@@ -159,32 +159,6 @@
         <button class="mini-btn" id="blocker-reload" hidden>↻ Reload</button>
       </div>
 
-      <!-- Analytics -->
-      <section class="stat-row">
-        <div class="stat-card">
-          <span class="stat-num" id="alltime-youtube">0</span>
-          <span class="stat-label">YouTube</span>
-          <span class="stat-sub"><span id="today-youtube">0</span> today</span>
-        </div>
-        <div class="stat-card">
-          <span class="stat-num" id="alltime-web-blocks">0</span>
-          <span class="stat-label">Web ads</span>
-          <span class="stat-sub"
-            ><span id="today-web-blocks">0</span> today</span
-          >
-        </div>
-        <div class="stat-card">
-          <span class="stat-num" id="alltime-trackers">0</span>
-          <span class="stat-label">Trackers</span>
-          <span class="stat-sub"><span id="today-trackers">0</span> today</span>
-        </div>
-        <div class="stat-card">
-          <span class="stat-num" id="alltime-cookies">0</span>
-          <span class="stat-label">Cookies</span>
-          <span class="stat-sub"><span id="today-cookies">0</span> today</span>
-        </div>
-      </section>
-
       <!-- Per-page tools -->
       <section class="controls page-card">
         <!-- Contextual per-video status for the ad engine (watch pages only) -->
@@ -205,6 +179,7 @@
           >
             <span class="hidden-chevron" id="sponsor-chevron" hidden>▸</span>
             <span class="section-title" id="video-status"></span>
+            <span class="count-badge" id="sponsor-count" hidden></span>
           </button>
           <div class="progress" id="analysis-progress" hidden>
             <div class="progress-bar" id="analysis-bar"></div>
@@ -223,13 +198,14 @@
             >
               <span class="hidden-chevron" id="hidden-chevron">▸</span>
               <span class="section-title" id="hidden-title">Hidden ads here</span>
+              <span class="count-badge" id="hidden-count" hidden></span>
             </button>
             <button type="button" id="scan-ads-btn" class="mini-btn">
               Scan for ads
             </button>
           </div>
           <div id="hidden-body" hidden>
-            <p class="hidden-hint">
+            <p class="hidden-hint" id="hidden-hint">
               What the extension hid on this page. “👎 Not ad” shows it again and
               stops hiding it on this site.
             </p>
@@ -262,8 +238,37 @@
               >Clear cookies &amp; reload the page</span
             >
           </span>
-          <span class="chevron" aria-hidden="true">↻</span>
         </button>
+      </section>
+
+      <!-- Analytics: global running tally, so it closes the view rather than
+           interrupting the site-scoped blocks above. -->
+      <section class="stat-block">
+        <div class="stat-eyebrow">Blocked everywhere</div>
+        <div class="stat-row">
+          <div class="stat-card">
+            <span class="stat-num" id="alltime-youtube">0</span>
+            <span class="stat-label">YouTube</span>
+            <span class="stat-sub"><span id="today-youtube">0</span> today</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-num" id="alltime-web-blocks">0</span>
+            <span class="stat-label">Web ads</span>
+            <span class="stat-sub"
+              ><span id="today-web-blocks">0</span> today</span
+            >
+          </div>
+          <div class="stat-card">
+            <span class="stat-num" id="alltime-trackers">0</span>
+            <span class="stat-label">Trackers</span>
+            <span class="stat-sub"><span id="today-trackers">0</span> today</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-num" id="alltime-cookies">0</span>
+            <span class="stat-label">Cookies</span>
+            <span class="stat-sub"><span id="today-cookies">0</span> today</span>
+          </div>
+        </div>
       </section>
     </main>
 
@@ -327,7 +332,7 @@
           </span>
           <span class="ctl-text">
             <span class="ctl-title"
-              >Aggressive YouTube blocking
+              >Aggressive blocking
               <em class="beta-tag">beta</em><span
                 class="info"
                 tabindex="0"
@@ -335,7 +340,7 @@
                 >ⓘ</span
               ></span
             >
-            <span class="ctl-sub">Remove ads before they can load</span>
+            <span class="ctl-sub">Remove YouTube ads before they load</span>
           </span>
           <span class="switch">
             <input type="checkbox" id="aggressive-toggle" />

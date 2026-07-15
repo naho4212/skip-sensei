@@ -111,7 +111,6 @@ header {
   align-items: center;
   justify-content: space-between;
   padding: 12px 16px;
-  border-bottom: 1px solid var(--divider);
 }
 
 .brand {
@@ -194,16 +193,34 @@ main {
   gap: 10px;
 }
 
+/* The global stat tally sits flush at the bottom of the view, with the
+ * spare space above it — a footer summary, not part of the site stack. */
+#view-site {
+  min-height: 100%;
+}
+#view-site .stat-block {
+  margin-top: auto;
+}
+
 body.disabled main > *:not(.site-hero) {
   opacity: 0.4;
   pointer-events: none;
 }
 
 /* Per-page tools card ("This site" tab): details sit flush, not indented
- * under a toggle icon like in the Controls card. */
+ * under a toggle icon like in the Controls card. Every row shares the
+ * 50px height of the Reset ctl-row (8px padding + 34px icon) so the card
+ * reads as one even list. */
 .page-card .ctl-detail {
   margin-top: 0;
-  padding: 11px 14px;
+  padding: 12px 14px;
+  min-height: 50px;
+  justify-content: center;
+}
+/* The ad-status row has no chevron; indent it to the section-title edge
+ * (14px row padding + 11px chevron + 6px gap). */
+.page-card #ad-detail {
+  padding-left: 31px;
 }
 .page-card > * + * {
   border-top: 1px solid var(--divider);
@@ -211,7 +228,7 @@ body.disabled main > *:not(.site-hero) {
 
 /* Granular web-blocking pills under "Block all ads" */
 .pill-group {
-  padding: 0 14px 10px 56px;
+  padding: 9px 14px 10px 56px;
 }
 .pill-title {
   font-size: 9.5px;
@@ -224,17 +241,20 @@ body.disabled main > *:not(.site-hero) {
 .pills {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 5px;
 }
+/* Sized so three active chips (✓ Trackers / ✓ Cookie banners / ✓ Popups)
+ * fit on one row within the 274px the group gets. */
 .pill {
   font-family: inherit;
-  font-size: 11px;
+  font-size: 10.5px;
   color: var(--text-2);
   border: 1px solid var(--divider);
   border-radius: 14px;
-  padding: 4px 10px;
+  padding: 4px 8px;
   background: var(--hover);
   cursor: pointer;
+  white-space: nowrap;
 }
 .pill.on {
   color: var(--accent-bright);
@@ -520,6 +540,16 @@ body.disabled main > *:not(.site-hero) {
 }
 
 /* ── Analytics cards ────────────────────────────────────────────────── */
+/* Scope label: the tiles are global lifetime counts on a "This site" tab,
+ * so say so. Same voice as the other caps eyebrows. */
+.stat-eyebrow {
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  margin: 0 2px 6px;
+}
 .stat-row {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -559,11 +589,19 @@ body.disabled main > *:not(.site-hero) {
 }
 
 /* ── Control rows ───────────────────────────────────────────────────── */
+/* No overflow:hidden — the ⓘ tooltips must escape the card (they were
+ * clipped at the card edge). Rounded corners are kept by radiusing the
+ * first/last child rows instead, so hover backgrounds still fit. */
 .controls {
   border: 1px solid var(--border);
   border-radius: 14px;
   background: var(--panel);
-  overflow: hidden;
+}
+.controls > :first-child {
+  border-radius: 13px 13px 0 0;
+}
+.controls > :last-child {
+  border-radius: 0 0 13px 13px;
 }
 .ctl-row {
   position: relative;
@@ -577,6 +615,8 @@ body.disabled main > *:not(.site-hero) {
 }
 .ctl-row + .ctl-row,
 .ctl-detail + .ctl-row,
+.ctl-row + .pill-group,
+.pill-group + .ctl-row,
 .controls .link-row {
   border-top: 1px solid var(--divider);
 }
@@ -659,12 +699,16 @@ body.disabled main > *:not(.site-hero) {
   color: var(--accent-bright);
   outline: none;
 }
+/* Tooltips open UPWARD by default: most ⓘ rows sit in the lower half of
+ * the popup, where a downward tooltip runs past the scroll area and gets
+ * cut off. The top two rows of a card open downward instead (above them
+ * is the view edge). */
 .info::after {
   content: attr(data-tip);
   position: absolute;
   left: 14px;
   right: 14px;
-  top: calc(100% - 4px);
+  bottom: calc(100% - 4px);
   background: var(--text);
   color: var(--bg);
   padding: 8px 11px;
@@ -674,12 +718,17 @@ body.disabled main > *:not(.site-hero) {
   line-height: 1.35;
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
   opacity: 0;
-  transform: translateY(-2px);
+  transform: translateY(2px);
   pointer-events: none;
   transition:
     opacity 0.12s,
     transform 0.12s;
   z-index: 20;
+}
+.ctl-row:nth-child(-n + 2) .info::after {
+  top: calc(100% - 4px);
+  bottom: auto;
+  transform: translateY(-2px);
 }
 .info:hover::after,
 .info:focus::after {
@@ -688,7 +737,8 @@ body.disabled main > *:not(.site-hero) {
 }
 
 /* ── Section label ──────────────────────────────────────────────────── */
-.section-title {
+.section-title,
+#ad-status {
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.08em;
@@ -805,12 +855,25 @@ body.disabled main > *:not(.site-hero) {
 .hidden-toggle {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   background: none;
   border: none;
   padding: 0;
   margin: 0;
   cursor: pointer;
+}
+
+/* Count of items behind a collapsible section row — replaces the old
+ * "(2)" baked into the uppercase title. */
+.count-badge {
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 3px 6px;
+  border-radius: 8px;
+  color: var(--accent-bright);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  font-variant-numeric: tabular-nums;
 }
 .hidden-toggle:hover .section-title {
   color: var(--text);
@@ -824,13 +887,29 @@ body.disabled main > *:not(.site-hero) {
   color: var(--text-2);
 }
 .hidden-chevron {
-  font-size: 9px;
+  font-size: 10px;
   color: var(--text-3);
-  width: 10px;
+  width: 11px;
 }
+/* A chevron-less state (nothing to expand) keeps its slot so every
+ * section title shares one left edge — out-specificities the global
+ * `[hidden] { display: none !important }` rule. */
+.hidden-chevron[hidden] {
+  display: block !important;
+  visibility: hidden;
+}
+/* Quieter than the solid mini-btn: an outlined chip in the pills' accent
+ * tint, so the section titles keep the visual weight. */
 #scan-ads-btn {
   font-size: 11px;
-  padding: 4px 11px;
+  font-weight: 500;
+  padding: 3px 10px;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 50%, transparent);
+  color: var(--accent-bright);
+}
+#scan-ads-btn:hover {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
 }
 .hidden-hint,
 .hidden-empty {
@@ -898,6 +977,10 @@ body.disabled main > *:not(.site-hero) {
 .hidden-src.src-youtube {
   color: #ff6b6b;
   background: rgba(255, 107, 107, 0.14);
+}
+.hidden-src.src-empty {
+  color: var(--text-3);
+  background: rgba(128, 128, 128, 0.14);
 }
 .hidden-src.src-vetoed {
   color: #fbbf24;
