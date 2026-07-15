@@ -318,7 +318,7 @@ const SETTING_LABELS: Record<string, string> = {
   confidenceThreshold: 'Confidence threshold',
   showSkipToast: 'Skip toast',
   aiEnhancements: 'AI enhancements',
-  aggressivePruning: 'Aggressive YouTube ad blocking',
+  aggressivePruning: "Block YouTube's first-party video ads",
   debugLogging: 'Debug logging',
   telemetryEnabled: 'Anonymous error reports',
   localOnlyMode: 'Local-only mode',

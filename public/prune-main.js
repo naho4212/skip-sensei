@@ -1,15 +1,24 @@
 /**
- * Aggressive-mode pruner — runs in the PAGE (MAIN) world at document_start,
- * registered directly in the manifest with "world": "MAIN" so it executes
- * SYNCHRONOUSLY before YouTube's first inline script sets
- * ytInitialPlayerResponse. (A content script injected from the isolated
- * world can't do this: the CRXJS module loader imports asynchronously and
- * lands too late for the initial page load.)
+ * First-party YouTube ad pruner — runs in the PAGE (MAIN) world at
+ * document_start with "world": "MAIN" so it executes SYNCHRONOUSLY before
+ * YouTube's first inline script sets ytInitialPlayerResponse. A statically
+ * declared content script can't reach the MAIN world synchronously at the
+ * initial page load; the service worker registers this file directly via
+ * chrome.scripting (see src/prune-register.ts), and only while the first-party
+ * ad-blocking setting is on — so registration itself is the gate, no in-script
+ * flag check needed, and the script is simply absent when off.
  *
- * It strips ad slots out of YouTube player responses (uBO "json-prune"), so
- * most ads never start. It's only injected when aggressive mode is on: the
- * service worker registers/unregisters it at runtime via chrome.scripting,
- * so registration itself is the gate — no in-script flag check needed.
+ * It strips ad slots out of YouTube player responses (uBO "json-prune") and
+ * removes ad segments from HLS/DASH/VAST manifests, so most ads never start.
+ * The A/B in this repo's history showed json-prune alone accounts for the
+ * blocking (a plain WEB player request still carries every ad slot; the
+ * response-side strip is what removes them).
+ *
+ * TWO BUILD VARIANTS (see scripts/make-cws-build.mjs): the full load-unpacked
+ * build ALSO rewrites the outbound /youtubei/v1/player request (section 4,
+ * fenced with CWS-STRIP markers) as a redundant belt-and-braces layer. The
+ * Chrome Web Store build strips that block — response-side pruning only — so
+ * the store artifact never manipulates an outbound request.
  *
  * This file is intentionally plain ES5-ish JS with no imports: it's copied
  * verbatim from public/ and injected as-is into the page.

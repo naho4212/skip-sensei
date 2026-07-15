@@ -15,7 +15,8 @@ import { getSettings, onSettingsChanged } from './storage'
  * all-sites host permission. So this layer is dormant until that permission is
  * granted (e.g. when the user enables URL-tracking protection), then activates
  * automatically. It must run in the PAGE world at document_start, which — like
- * the pruner — rules out a CRXJS-wrapped manifest content script.
+ * the pruner — rules out a statically declared manifest content script;
+ * it's registered directly via chrome.scripting with world:'MAIN'.
  */
 
 const SCRIPT_ID = 'skip-sensei-scriptlets'

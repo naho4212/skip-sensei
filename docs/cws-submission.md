@@ -1,10 +1,16 @@
-# Chrome Web Store submission reference — Ad Sensei (full app)
+# Chrome Web Store submission reference — Ad Sensei
 
-Copy-paste source for the CWS developer dashboard fields. Written for the FULL
-feature set (YouTube ad skipping + aggressive mode + anti-adblock scriptlets +
-web blocking + AI sponsor detection). See the risk notes at the bottom — some of
-these justifications describe behavior a reviewer may still reject; a store-safe
-build variant is the lower-risk path.
+Copy-paste source for the CWS developer dashboard fields.
+
+**Submit the CWS build, not the full build.** `npm run build:cws` produces
+`.output/chrome-mv3-cws/` (+ `ad-sensei-cws-v<version>.zip`) — identical to the
+full load-unpacked build except the outbound `/youtubei/v1/player` request
+rewrite is stripped out (the `CWS-STRIP` block in `public/prune-main.js`, cut by
+`scripts/make-cws-build.mjs`). That request rewrite was the single
+highest-risk behavior and an A/B proved it redundant (see note 1), so removing
+it costs no ad-blocking effectiveness. Everything else — web/tracker blocking,
+response-side YouTube pruning, reactive ad skipping, AI sponsor detection — is
+unchanged.
 
 > These are drafts. Have a human review the privacy policy and disclosures
 > before submitting; this is not legal advice.
@@ -13,9 +19,11 @@ build variant is the lower-risk path.
 
 ## Single-purpose description
 
-> Ad Sensei removes advertising interruptions from web browsing: it blocks ads
-> and trackers on websites and skips ads and sponsor segments on YouTube, so
-> pages load cleaner and videos play without interruptions.
+> Ad Sensei is an ad blocker. It blocks third-party ads and trackers across the
+> web using filter lists, and hides the first-party ads that sites serve from
+> their own domains — on Pinterest, Amazon, Reddit, and others, and on YouTube,
+> where it also removes in-stream video ads and creator sponsor segments. The
+> result: pages load cleaner and videos play without interruptions.
 
 Keep the listing framed on this one purpose. Do not enumerate every sub-feature
 as if they were separate products.
@@ -109,11 +117,37 @@ with the telemetry endpoint host in `src/error-reporting.ts`)
 
 ## Known review-risk notes (read before submitting the full app)
 
-1. **YouTube ad circumvention with active evasion** (aggressive mode cloaks
-   `Function.prototype.toString` and spoofs `/youtubei/v1/player`; the
-   anti-adblock scriptlet layer defeats detection). Highest rejection/takedown
-   risk. Off-by-default / permission-gated, but visible to reviewers. Strongest
-   mitigation: ship a store build that excludes these two layers.
+1. **YouTube player-response manipulation** (`public/prune-main.js`, gated
+   behind the first-party ad-blocking setting). Two distinct behaviors that must
+   not be conflated:
+
+   a. **Outbound request rewrite** (section 4, the `CWS-STRIP` block): set
+      `clientScreen = "CHANNEL"` on the `/youtubei/v1/player` request to solicit
+      an ad-free response variant. This is request tampering — not a standard
+      blocker technique — and was the genuine outlier / highest-risk item.
+      **RESOLVED for the store build: `make-cws-build.mjs` strips it, so the CWS
+      artifact never touches an outbound request.** An in-repo behavioral A/B
+      (full vs. spoof-stripped build, on YouTube's free-with-ads catalog)
+      confirmed it was redundant — response-side json-prune already empties the
+      player's ad schedule (the player held 0 of 6 ad placements with the spoof
+      absent), so dropping it changed nothing a user sees.
+
+   b. **Response-side json-prune** (scrubs `adPlacements`/`adSlots` etc. out of
+      the player response): **still present in the CWS build.** This is the same
+      class as uBlock Origin's `json-prune` scriptlet and is what actually does
+      the blocking, but note it still reads as "modifies YouTube's player data,"
+      which general-purpose store blockers don't ship by default. Residual,
+      lower risk. If a reviewer pushes back specifically on this, the fallback is
+      a build that also drops json-prune and relies on reactive skipping only —
+      less effective, so not the default. Off-by-default / permission-gated
+      either way.
+
+   NOT a distinguishing risk: the `Function.prototype.toString` cloaking and the
+   anti-adblock `set-constant` scriptlets (`public/scriptlets-main.js`) are a
+   documented subset of uBlock Origin's scriptlet library — the same `safeSelf`
+   toString-cloak pattern ships in uBlock Origin Lite on the Web Store today. It
+   reads as evasion out of context, but it's standard, store-approved technique;
+   don't let its presence drive the build decision.
 2. **Obfuscation is banned** — do NOT minify-to-conceal or obfuscate to hide the
    above; that is a separate, account-level violation. Compliance = not shipping
    the code, not hiding it.
