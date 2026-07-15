@@ -90,12 +90,13 @@ export interface Settings {
 }
 
 /** Per-tab blocked-item counts split by kind, for the popup's "blocked here"
- * breakdown. The badge shows the sum. `ads` folds in FILLED cosmetic hides —
- * hidden slots that contained a loaded creative (an ad the network layer
- * missed). Empty shells hidden around DNR-blocked requests don't count: the
- * block itself already did, and one ad must never count twice. This keeps the
- * page line and the lifetime totals in the same units, so totals are simply
- * the page numbers summed. */
+ * breakdown. The badge shows the sum. `ads` counts hidden topmost ad slots —
+ * one slot ≈ one ad the user would have seen (empty or filled; an empty
+ * slot's ad was stopped upstream but is still one prevented ad). Blocked ad
+ * REQUESTS are not the unit: one blocked library empties every slot, one
+ * rendered ad fires dozens of requests — they only stand in on pages with no
+ * hideable slots. Trackers/cookies stay request-based (each blocked request
+ * is one tracking attempt), and lifetime totals use the same units. */
 export interface BlockBreakdown {
   ads: number
   trackers: number
@@ -308,16 +309,12 @@ export type Message =
     }
   | { type: 'skipSensei:sponsorSkipped'; videoId: string }
   // Live per-tab hidden-ad tally, topmost slots only (nested fragments of one
-  // slot count once). `count`/`added` are the page total and its delta;
-  // `filled`/`filledAdded` are the subset whose slot held a loaded creative —
-  // an ad the network layer missed, safe to count as blocked without
-  // double-counting a DNR block (a blocked request leaves an empty shell).
+  // slot count once). `count` is the page total, `added` its delta since the
+  // last report — one slot ≈ one blocked ad, empty or filled alike.
   | {
       type: 'skipSensei:cosmeticHideCount'
       count: number
       added: number
-      filled: number
-      filledAdded: number
     }
   // Content-side operational telemetry → forwarded to reportEvent.
   | {
@@ -393,9 +390,8 @@ export interface HiddenElement {
   /** 'list' = filter-list selector, 'ai' = AI gap-filler, 'youtube' = YT ads. */
   source: 'list' | 'ai' | 'youtube'
   /** Whether the slot held a loaded creative when described. False = empty
-   * shell: the ad was blocked before it could load (counted as a network
-   * block, not an extra hidden ad) — this is what reconciles "N hidden here"
-   * with the smaller "ads" figure in the blocked-here breakdown. */
+   * shell: the ad was stopped upstream before it could load. Informational
+   * (drives the "empty" chip) — empty and filled slots count as ads alike. */
   filled?: boolean
   /** AI proposed it but the safety guard kept it visible (looks like real UI).
    * Shown in the review so the user can 👍 (hide it anyway) or 👎 (dismiss). */

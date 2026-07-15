@@ -518,21 +518,17 @@ async function apply() {
 // are monotonic (a WeakSet dedupes, so a re-tally never double-counts and a
 // removed element doesn't decrement).
 //
-// Each slot is also classified FILLED or empty. Filled = it held a loaded
-// creative (completed <img>, playing <video>, committed ad iframe, or a filled
-// AdSense slot) — an ad that got past the network layer, which cosmetic hiding
-// alone stopped. Empty = a shell: either DNR blocked the creative's request
-// (that ad is already counted as a network block) or the slot never held
-// anything. Only filled hides count as ads in the badge and lifetime stats —
-// that's what lets network + cosmetic sum WITHOUT double-counting, since one
-// ad cannot both load (filled) and be network-blocked. Slots counted while
-// still empty are re-checked on later passes: a creative that finishes loading
-// after our first look upgrades its slot to filled.
+// Every topmost hidden slot counts as ONE ad, empty or filled alike: a slot
+// is the page's declared intent to show one ad, and an empty shell just means
+// the ad was stopped upstream (a blocked library or creative request) before
+// it could render — still one ad the user didn't see. Blocked ad REQUESTS are
+// deliberately not the unit (see service-worker cosmeticHideCount): one
+// blocked gpt.js empties every slot on the page, and one rendered ad fires
+// dozens of bid/beacon requests, so requests mis-count in both directions.
+// isFilledAdSlot below is informational only now — it drives the review
+// list's "empty" chip, not the count.
 // ---------------------------------------------------------------------------
 const countedHides = new WeakSet<Element>()
-/** Slots counted as empty so far — re-checked each pass for a late-loading
- *  creative until they leave the DOM. */
-let pendingEmptyHides: Array<WeakRef<Element>> = []
 
 // Frame-presence registry. This script runs in every http(s) frame
 // (allFrames), so a frame that COMMITTED a real document announces itself to
@@ -563,9 +559,7 @@ if (window !== window.top) {
   }
 }
 let cosmeticHideCount = 0
-let cosmeticFilledCount = 0
 let cosmeticReportedCount = 0
-let cosmeticReportedFilled = 0
 let cosmeticReportTimer: ReturnType<typeof setTimeout> | null = null
 let cosmeticObserver: MutationObserver | null = null
 let cosmeticTallyScheduled = false
@@ -578,16 +572,12 @@ function reportCosmeticCount() {
     // own monotonic counts) keeps lifetime stats correct across SPA
     // navigation without the SW having to reason about page loads.
     const added = cosmeticHideCount - cosmeticReportedCount
-    const filledAdded = cosmeticFilledCount - cosmeticReportedFilled
     cosmeticReportedCount = cosmeticHideCount
-    cosmeticReportedFilled = cosmeticFilledCount
     chrome.runtime
       .sendMessage({
         type: 'skipSensei:cosmeticHideCount',
         count: cosmeticHideCount,
         added,
-        filled: cosmeticFilledCount,
-        filledAdded,
       })
       .catch(() => {})
   }, 300)
@@ -648,21 +638,8 @@ function tallyCosmeticHides() {
     if (hasCountedAncestor(el, matched)) continue
     countedHides.add(el)
     cosmeticHideCount++
-    if (isFilledAdSlot(el)) cosmeticFilledCount++
-    else pendingEmptyHides.push(new WeakRef(el))
     changed = true
   }
-  // Upgrade pass: a slot counted before its creative finished loading moves to
-  // the filled bucket once the content shows up. Slots gone from the DOM stop
-  // being checked — they can never fill.
-  pendingEmptyHides = pendingEmptyHides.filter((ref) => {
-    const el = ref.deref()
-    if (!el || !el.isConnected) return false
-    if (!isFilledAdSlot(el)) return true
-    cosmeticFilledCount++
-    changed = true
-    return false
-  })
   if (changed) reportCosmeticCount()
 }
 

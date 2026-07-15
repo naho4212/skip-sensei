@@ -390,7 +390,9 @@ async function countTabBlocks(
     }
     lastPollTs.set(tabId, maxTs + 1)
     // Cumulative stats keep their original three buckets (ads/trackers/cookies);
-    // the finer categories show only in the live per-tab breakdown.
+    // the finer categories show only in the live per-tab breakdown. (The SW's
+    // recorder zeroes the ads bucket — lifetime web-ads counts hidden slots,
+    // not requests — but the delta is still computed here for the snapshot.)
     if (delta.ads || delta.trackers || delta.cookies)
       cb.onCounts({
         ads: delta.ads,

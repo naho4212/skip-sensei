@@ -15,6 +15,15 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.2.16',
+    date: '2026-07-15',
+    items: [
+      'Ad counting now counts ads, not requests: every ad slot removed from a page counts as one blocked ad — including slots left empty because the ad was stopped before it could even load (blocking one ad script can kill every ad on the page; the count now reflects that)',
+      'The "blocked here" breakdown and the hidden-ads list finally agree — empty slots are tagged "empty" in the review list with an explanation of where their ad went',
+      'Global stats moved to a "Blocked everywhere" block at the bottom of the This-site view, so per-site and lifetime numbers stop reading as the same thing',
+    ],
+  },
+  {
     version: '0.2.15',
     date: '2026-07-14',
     items: [

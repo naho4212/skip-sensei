@@ -503,7 +503,7 @@ chrome.runtime.onMessage.addListener(
         }
         return false
       case 'skipSensei:getTabBlocked':
-        // "Blocked here" = DNR network blocks + filled cosmetic hides. The
+        // "Blocked here" = hidden ad slots + non-ad DNR network blocks. The
         // network side is a live recount on popup open (a user gesture →
         // generally quota-exempt), so it reflects ads that loaded after the
         // page finished; it also refreshes the stored network count. The
@@ -516,21 +516,19 @@ chrome.runtime.onMessage.addListener(
         return true
       case 'skipSensei:cosmeticHideCount':
         if (sender.tab?.id !== undefined) {
-          // On YouTube every hidden slot is a served ad with no network-block
-          // counterpart (YouTube is DNR-exempt), so the full topmost count is
-          // both the badge number and the YouTube card increment. Elsewhere
-          // only FILLED hides count as ads — an empty shell means the network
-          // layer already blocked (and counted) the ad, or there was nothing
-          // in the slot to begin with.
+          // One ad = one hidden topmost slot, empty or filled. A slot is the
+          // page's declared intent to show one ad — the closest countable
+          // thing to "an ad you would have seen". Blocked ad REQUESTS are
+          // never added on top: one blocked library (gpt.js) empties every
+          // slot on the page, and one rendered ad fires dozens of bid/beacon
+          // requests, so requests can't be the ad unit in either direction.
+          // YouTube slots go to the YouTube card instead of web-ads.
           const onYouTube = Boolean(sender.tab.url?.includes('youtube.com'))
-          setTabCosmetic(
-            sender.tab.id,
-            onYouTube ? message.count : message.filled,
-          )
+          setTabCosmetic(sender.tab.id, message.count)
           if (onYouTube) recordYtAdsHidden(message.added)
-          else if (message.filledAdded > 0)
+          else if (message.added > 0)
             recordBlockCounts({
-              ads: message.filledAdded,
+              ads: message.added,
               trackers: 0,
               cookies: 0,
             })
@@ -576,9 +574,9 @@ chrome.runtime.onMessage.addListener(
 )
 
 // Per-tab icon badge. The count is the sum of two sources: DNR network blocks
-// (getMatchedRules, event-cadence) and ad-counting cosmetic hides (filled
-// slots; on YouTube all slots — reported live by the content script). A "↻"
-// takes priority when the page needs a reload.
+// (getMatchedRules, event-cadence) and hidden ad slots (topmost, deduped —
+// reported live by the content script). A "↻" takes priority when the page
+// needs a reload.
 const emptyBreakdown = (): BlockBreakdown => ({
   ads: 0,
   trackers: 0,
@@ -594,9 +592,9 @@ const sumBreakdown = (b: BlockBreakdown): number =>
 interface TabBadge {
   /** DNR network blocks by type — set by the block counter. */
   network: BlockBreakdown
-  /** Ad-counting cosmetic hides from the content script's live tally: filled
-   *  slots only (all slots on YouTube) — the hides that ARE ads the network
-   *  layer didn't already block and count. */
+  /** Hidden topmost ad slots from the content script's live tally — the ad
+   *  count (one slot ≈ one ad). Empty and filled alike: an empty slot's ad
+   *  was stopped upstream, but it's still one ad the user didn't see. */
   cosmetic: number
   needsReload: boolean
 }
@@ -609,17 +607,19 @@ const freshBadge = (): TabBadge => ({
 const badgeState = (tabId: number): TabBadge =>
   tabBadges.get(tabId) ?? freshBadge()
 
-/** Total shown on the badge / "blocked here": all network blocks + hidden ads. */
-const tabBlockedTotal = (tabId: number): number => {
-  const s = badgeState(tabId)
-  return sumBreakdown(s.network) + s.cosmetic
-}
-
-/** Per-type snapshot for the popup breakdown; cosmetic hides fold into `ads`. */
+/** Per-type snapshot for the popup breakdown. `ads` = hidden topmost slots
+ *  (one slot ≈ one ad you'd have seen). Blocked ad requests only stand in
+ *  when the page had NO hideable slots at all — some ads are fought off with
+ *  no container to hide, and "0 ads" would be wrong there. Never both. */
 const tabBreakdown = (tabId: number): BlockBreakdown => {
   const s = badgeState(tabId)
-  return { ...s.network, ads: s.network.ads + s.cosmetic }
+  return { ...s.network, ads: s.cosmetic > 0 ? s.cosmetic : s.network.ads }
 }
+
+/** Total shown on the badge / "blocked here": sum of the displayed breakdown,
+ *  so the badge and the popup line can never disagree. */
+const tabBlockedTotal = (tabId: number): number =>
+  sumBreakdown(tabBreakdown(tabId))
 
 function renderBadge(tabId: number) {
   const { needsReload } = badgeState(tabId)
@@ -710,7 +710,11 @@ void (async () => {
 
 // "Block all ads" engine: enforce DNR ruleset state; count blocks (stats + badge).
 initNetBlocker({
-  onCounts: (c) => recordBlockCounts(c),
+  // Lifetime "web ads" counts hidden slots (see cosmeticHideCount above);
+  // blocked ad REQUESTS never increment it — one library block hides many
+  // ads, one ad fires many requests. Trackers/cookies stay request-based:
+  // there each blocked request genuinely is one tracking attempt.
+  onCounts: (c) => recordBlockCounts({ ...c, ads: 0 }),
   onTabCount: (tabId, breakdown) => setTabBlocked(tabId, breakdown),
 })
 
