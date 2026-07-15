@@ -235,6 +235,22 @@ section {
 }
 
 /* Info tooltip (ⓘ) */
+/* Small BETA pill next to a setting label (shared with onboarding). */
+.beta-tag {
+  font-style: normal;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent-bright);
+  border: 1px solid rgba(124, 58, 237, 0.45);
+  border-radius: 4px;
+  padding: 1px 5px;
+  margin-left: 2px;
+  margin-right: 2px;
+  vertical-align: 1px;
+}
+
 .info {
   position: relative;
   margin-left: 6px;
