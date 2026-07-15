@@ -122,6 +122,9 @@
 /* Blocking-level chooser */
 .levels {
   margin: 20px 0 0;
+  /* options.css's page shell puts a border-bottom on every <section> —
+   * that rendered as a stray divider line above the AI callout. */
+  border-bottom: none;
 }
 .levels-title {
   font-size: 16px;
