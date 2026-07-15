@@ -18,6 +18,11 @@ import {
   verifyNetBlocker,
 } from './net-blocker'
 import { getCosmeticFilters } from './cosmetic-filters'
+import {
+  initFilterUpdates,
+  checkForUpdates,
+  getFilterUpdateStatus,
+} from './filter-updates'
 import { initPruneRegistration, syncPruneRegistration } from './prune-register'
 import {
   initCosmeticRegistration,
@@ -507,6 +512,12 @@ chrome.runtime.onMessage.addListener(
       case 'skipSensei:getCosmeticFilters':
         void getCosmeticFilters(message.hostname).then(sendResponse)
         return true
+      case 'skipSensei:checkFilterUpdates':
+        void checkForUpdates(true).then(sendResponse)
+        return true
+      case 'skipSensei:getFilterUpdateStatus':
+        void getFilterUpdateStatus().then(sendResponse)
+        return true
       case 'skipSensei:adblockWall':
         void recordAdblockWall(message.hostname)
         return false
@@ -764,6 +775,10 @@ initScriptletRegistration()
 // *://*/* (dormant until a web-cosmetic feature is on AND the optional
 // all-sites host permission is granted). YouTube is covered statically.
 initCosmeticRegistration()
+
+// Differential filter-list updates: periodic + cold-start check for refreshed
+// cosmetic-shard DATA (self-throttling; gated on filterUpdatesEnabled).
+initFilterUpdates()
 
 // Cold-start gate: DNR ruleset state and chrome.scripting registrations persist
 // across service-worker restarts, so we only run the full sync on a genuine

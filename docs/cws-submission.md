@@ -49,6 +49,9 @@ and evaluated by the browser; the extension never sees your requests.
 its own rules blocked, to show the "blocked here" number and lifetime totals.
 It reads only match counts, not request contents.
 
+**alarms** — Schedules the periodic check for updated ad-filter rules (see the
+Website-content data note below). Only used to time that background check.
+
 ---
 
 ## Host permission justifications
@@ -100,6 +103,15 @@ cookie-banner auto-reject, selector self-heal), a short snippet of page markup
 fallback when Chrome's built-in on-device model is unavailable; with the
 on-device model present these helpers never leave the device. Both disclosed
 in the privacy policy.
+
+**Remote data (not user data):** the extension periodically downloads refreshed
+filter-rule lists (CSS selectors that identify ad elements) from our update
+server (`landing-beta-three-23.vercel.app/filters`). This is a one-way download
+of DATA — no remote code — integrity-checked (SHA-256) before use; static
+network rulesets remain bundled and update only with releases. The request sends
+no user data (a plain GET); the server sees only that some install checked in
+and its version. On by default, toggleable, off in Local-only mode. Disclosed in
+the privacy policy (section 4).
 
 **Certifications (all true):**
 - Data is NOT sold or transferred to third parties for purposes unrelated to

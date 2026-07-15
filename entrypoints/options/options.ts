@@ -17,6 +17,7 @@ import {
 } from '../../src/storage'
 import {
   FREE_TIER_DAILY_LIMIT,
+  type FilterUpdateStatus,
   type KeyedProvider,
   type LlmProvider,
   type Message,
@@ -832,6 +833,7 @@ async function main() {
     ['yt-dismiss-stillwatching', 'ytDismissStillWatching'],
     ['defuse-anti-adblock', 'defuseAntiAdblock'],
     ['telemetry', 'telemetryEnabled'],
+    ['filter-updates', 'filterUpdatesEnabled'],
   ]
   const loaded = await getSettings()
   for (const [elId, key] of extraLists) {
@@ -845,6 +847,52 @@ async function main() {
   aiEnhancementsEl.addEventListener('change', () =>
     save({ aiEnhancements: aiEnhancementsEl.checked }),
   )
+
+  // Filter-update status line + manual "check now".
+  const fuStatusEl = $<HTMLElement>('filter-update-status')
+  const fuCheckEl = $<HTMLButtonElement>('filter-update-check')
+  const renderFilterUpdate = (s: FilterUpdateStatus) => {
+    if (!s.enabled) {
+      fuStatusEl.textContent =
+        'Filter auto-updates are off (or Local-only mode is on). Using bundled lists.'
+    } else if (s.lastSuccess) {
+      const when = new Date(s.lastSuccess).toLocaleString()
+      const ver = s.listVersion ? ` (${s.listVersion})` : ''
+      const shards = s.shardsApplied
+        ? ` · ${s.shardsApplied} shard${s.shardsApplied === 1 ? '' : 's'} refreshed`
+        : ''
+      fuStatusEl.textContent = `Filters last updated ${when}${ver}${shards}.`
+    } else if (s.lastError) {
+      fuStatusEl.textContent = `Last check failed: ${s.lastError}. Using bundled lists.`
+    } else {
+      fuStatusEl.textContent = 'Filter lists: bundled with this version.'
+    }
+  }
+  try {
+    renderFilterUpdate(
+      await chrome.runtime.sendMessage({
+        type: 'skipSensei:getFilterUpdateStatus',
+      }),
+    )
+  } catch {
+    /* SW asleep / no status yet — leave the default hint */
+  }
+  fuCheckEl.addEventListener('click', async () => {
+    fuCheckEl.disabled = true
+    const prev = fuStatusEl.textContent
+    fuStatusEl.textContent = 'Checking…'
+    try {
+      renderFilterUpdate(
+        await chrome.runtime.sendMessage({
+          type: 'skipSensei:checkFilterUpdates',
+        }),
+      )
+    } catch {
+      fuStatusEl.textContent = prev
+    } finally {
+      fuCheckEl.disabled = false
+    }
+  })
 
   // SponsorBlock enable + per-category checkboxes.
   const sbEnabledEl = $<HTMLInputElement>('sponsorblock-enabled')

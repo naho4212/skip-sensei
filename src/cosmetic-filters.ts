@@ -35,16 +35,40 @@ interface Shard {
   unhide: Record<string, string[]>
 }
 
-/** Shards are immutable build artifacts — cache them for the worker's life. */
+/** storage.local key holding a differential-update override for a shard. The
+ * filter-updates module writes these; a present override wins over the bundled
+ * shard. Keep the prefix identical with src/filter-updates.ts. */
+export const cosmeticOverrideKey = (index: number): string =>
+  `skipSensei.filterShard.cosmetic.${index}`
+
+/** Shards are stable within an update cycle — cache them for the worker's life.
+ * filter-updates.ts calls invalidateShardCache() after applying an override so
+ * the next lookup re-reads the new data instead of the bundled shard. */
 const shardCache = new Map<number, Shard | null>()
+
+/** Drop cached shards (all, or a specific set) so freshly-applied overrides
+ * take effect without waiting for a service-worker restart. */
+export function invalidateShardCache(indices?: number[]): void {
+  if (!indices) shardCache.clear()
+  else for (const i of indices) shardCache.delete(i)
+}
 
 async function loadShard(index: number): Promise<Shard | null> {
   const cached = shardCache.get(index)
   if (cached !== undefined) return cached
   let shard: Shard | null = null
   try {
-    const url = chrome.runtime.getURL(`cosmetic/${index}.json`)
-    shard = (await (await fetch(url)).json()) as Shard
+    // A differential update may have replaced this shard with a newer version;
+    // it's stored under the override key. Fall back to the bundled artifact.
+    const key = cosmeticOverrideKey(index)
+    const stored = await chrome.storage.local.get(key)
+    const override = stored[key] as Shard | undefined
+    if (override && override.hide && override.unhide) {
+      shard = override
+    } else {
+      const url = chrome.runtime.getURL(`cosmetic/${index}.json`)
+      shard = (await (await fetch(url)).json()) as Shard
+    }
   } catch {
     // Missing/corrupt shard — cosmetic filtering degrades to the built-in
     // selectors rather than breaking the content script.

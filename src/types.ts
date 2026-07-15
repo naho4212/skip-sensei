@@ -80,6 +80,14 @@ export interface Settings {
   debugLogging: boolean
   /** Anonymous sanitized error reports (no usage tracking — CWS stats cover that). On by default, disclosed in options. */
   telemetryEnabled: boolean
+  /**
+   * Fetch filter-list data updates between extension releases (ABP-style
+   * data-only refresh of the bundled cosmetic/scriptlet shards). No code is
+   * ever fetched — only selector/rule DATA, integrity-checked before it's
+   * applied. A background GET to the update host reveals the install is running
+   * (coarse version only), so it's gated like telemetry: on by default, off in
+   * localOnlyMode, and individually switchable in options. */
+  filterUpdatesEnabled: boolean
   llmProvider: LlmProvider
   /** Per-provider API keys, so switching providers never reuses the wrong key. */
   apiKeys: Partial<Record<KeyedProvider, string>>
@@ -118,6 +126,19 @@ export const BLOCK_CATEGORY_LABELS: Array<[keyof BlockBreakdown, string]> = [
   ['malware', 'malware block'],
 ]
 
+/** Reported to the options page so it can show "filters last updated …". */
+export interface FilterUpdateStatus {
+  enabled: boolean
+  /** Version string of the currently-applied payload, or null if none applied. */
+  listVersion: string | null
+  generatedAt: string | null
+  lastCheck: number | null
+  lastSuccess: number | null
+  lastError: string | null
+  /** How many cosmetic shards currently have an update override applied. */
+  shardsApplied: number
+}
+
 export const DEFAULT_SETTINGS: Settings = {
   masterEnabled: true,
   adEngineEnabled: true,
@@ -143,6 +164,7 @@ export const DEFAULT_SETTINGS: Settings = {
   localOnlyMode: false,
   debugLogging: false,
   telemetryEnabled: true,
+  filterUpdatesEnabled: true,
   llmProvider: 'builtin',
   apiKeys: {},
   model: '',
@@ -344,6 +366,10 @@ export type Message =
   | { type: 'skipSensei:resetStats' } // → { ok: true }; zeroes lifetime+today stats
   // → string[] of domain-specific cosmetic selectors for the sender's hostname
   | { type: 'skipSensei:getCosmeticFilters'; hostname: string }
+  // → FilterUpdateStatus; force-checks the update host now (options "Check now")
+  | { type: 'skipSensei:checkFilterUpdates' }
+  // → FilterUpdateStatus; reads the last-applied filter-update metadata
+  | { type: 'skipSensei:getFilterUpdateStatus' }
   | { type: 'skipSensei:adblockWall'; hostname: string } // site is showing an ad-blocker wall
   // → { ok: boolean }; clears youtube.com cookies + the backoff flag, then reloads the sender tab
   | { type: 'skipSensei:clearYtCookies' }

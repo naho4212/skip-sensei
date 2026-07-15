@@ -188,6 +188,18 @@ what i<!doctype html>
           in Local-only mode. See section 3.
         </td>
       </tr>
+      <tr>
+        <td>
+          A check for updated filter rules (a plain download that sends nothing
+          about you)
+        </td>
+        <td>Our update server (<code>*.vercel.app/filters</code>)</td>
+        <td>
+          Periodically, to download refreshed ad-selector lists — rule data
+          only, integrity-checked, never code. On by default, toggle under
+          Settings → AI &amp; privacy, off in Local-only mode. See section 4.
+        </td>
+      </tr>
     </table>
     <p>
       Your API keys are never sent to us. Before any diagnostic is sent, keys
@@ -211,7 +223,23 @@ what i<!doctype html>
       time, and it is always off in Local-only mode.
     </p>
 
-    <h2>4. What Ad Sensei does not do</h2>
+    <h2>4. Filter-list updates (optional)</h2>
+    <p>
+      So ad-blocking keeps working when a site changes how it serves ads, the
+      extension periodically downloads refreshed filter rules — lists of CSS
+      selectors that identify ad elements on a page — from our update server
+      (landing-beta-three-23.vercel.app). This is a one-way download of rule
+      <strong>data</strong> only: no program code is ever downloaded or run, and
+      every list is integrity-checked (SHA-256) before it is applied.
+    </p>
+    <p>
+      The request sends no information about you. Like any web request, it lets
+      our server observe that some installation checked for updates, along with
+      the extension version. You can turn this off under Settings → AI &amp;
+      privacy, and it is always off in Local-only mode.
+    </p>
+
+    <h2>5. What Ad Sensei does not do</h2>
     <ul>
       <li>It does not track, log, or transmit your browsing history.</li>
       <li>It does not sell or rent any data to anyone.</li>
@@ -223,7 +251,7 @@ what i<!doctype html>
       </li>
     </ul>
 
-    <h2>5. Your controls</h2>
+    <h2>6. Your controls</h2>
     <ul>
       <li>
         <strong>Local-only mode</strong> — forces on-device AI, turns off
@@ -234,6 +262,7 @@ what i<!doctype html>
         transcripts never leave your machine.
       </li>
       <li>Turn diagnostics off under Settings → AI &amp; privacy.</li>
+      <li>Turn filter-list updates off under Settings → AI &amp; privacy.</li>
       <li>
         Reset all counters under Settings → Analytics, or clear the local logs
         and cache under Settings → Activity &amp; logs.
@@ -241,7 +270,7 @@ what i<!doctype html>
       <li>Uninstalling the extension removes all locally stored data.</li>
     </ul>
 
-    <h2>6. Third-party services</h2>
+    <h2>7. Third-party services</h2>
     <p>
       When you use them, these services receive data as described above and are
       governed by their own privacy policies: your chosen AI provider (Google,
@@ -250,7 +279,7 @@ what i<!doctype html>
       review their policies.
     </p>
 
-    <h2>7. Data retention &amp; children</h2>
+    <h2>8. Data retention &amp; children</h2>
     <p>
       Locally stored data remains until you clear it or uninstall. Anonymous
       diagnostics are retained only as long as needed to diagnose issues. Ad
@@ -258,7 +287,7 @@ what i<!doctype html>
       data from them.
     </p>
 
-    <h2>8. Changes &amp; contact</h2>
+    <h2>9. Changes &amp; contact</h2>
     <p>
       We will update this page if our data practices change and revise the date
       above. Questions? Contact

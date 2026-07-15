@@ -35,6 +35,10 @@ export default defineConfig({
       'declarativeNetRequestFeedback',
       // Runtime (un)registration of the MAIN-world aggressive-mode pruner.
       'scripting',
+      // Periodic background check for filter-data updates (see filter-updates.ts).
+      // Warning-free permission — adding it never disables the extension for
+      // existing users on update.
+      'alarms',
     ],
     optional_permissions: [
       // Clearing a site's cookies to lift an ad-blocker-detection flag (e.g.

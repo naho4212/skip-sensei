@@ -322,6 +322,23 @@
               Transcripts go only to the AI provider you chose above, and
               everything else stays in this browser.
             </p>
+            <label class="field checkbox">
+              <input type="checkbox" id="filter-updates" />
+              <span
+                >Auto-update filter lists<span
+                  class="info"
+                  tabindex="0"
+                  data-tip="Refreshes the bundled ad-hiding rules between extension releases, so a site that changes how it serves ads gets fixed without waiting for a store update. Only rule DATA is fetched (never code), verified before it's applied. A background check contacts the update server, revealing only that an install is running and its version — turned off automatically in Local-only mode."
+                  >ⓘ</span
+                ></span
+              >
+            </label>
+            <p class="hint" id="filter-update-status">
+              Filter lists: bundled with this version.
+            </p>
+            <button id="filter-update-check" type="button">
+              Check for updates now
+            </button>
           </section>
         </div>
 
