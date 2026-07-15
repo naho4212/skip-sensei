@@ -2,15 +2,13 @@
 
 Copy-paste source for the CWS developer dashboard fields.
 
-**Submit the CWS build, not the full build.** `npm run build:cws` produces
-`.output/chrome-mv3-cws/` (+ `ad-sensei-cws-v<version>.zip`) — identical to the
-full load-unpacked build except the outbound `/youtubei/v1/player` request
-rewrite is stripped out (the `CWS-STRIP` block in `public/prune-main.js`, cut by
-`scripts/make-cws-build.mjs`). That request rewrite was the single
-highest-risk behavior and an A/B proved it redundant (see note 1), so removing
-it costs no ad-blocking effectiveness. Everything else — web/tracker blocking,
-response-side YouTube pruning, reactive ad skipping, AI sponsor detection — is
-unchanged.
+**One build.** `npm run build` produces the single artifact used everywhere —
+daily load-unpacked use, the landing download, and the Web Store submission
+(zip via `npm run package`). It contains no outbound-request manipulation: the
+YouTube `/youtubei/v1/player` request rewrite that once existed was the single
+highest-risk behavior, an A/B proved it redundant (see note 1), and it was
+removed outright. Everything else — web/tracker blocking, response-side YouTube
+pruning, reactive ad skipping, AI sponsor detection — is unchanged.
 
 > These are drafts. Have a human review the privacy policy and disclosures
 > before submitting; this is not legal advice.
@@ -121,26 +119,26 @@ with the telemetry endpoint host in `src/error-reporting.ts`)
    behind the first-party ad-blocking setting). Two distinct behaviors that must
    not be conflated:
 
-   a. **Outbound request rewrite** (section 4, the `CWS-STRIP` block): set
+   a. **Outbound request rewrite** — REMOVED. An earlier build set
       `clientScreen = "CHANNEL"` on the `/youtubei/v1/player` request to solicit
-      an ad-free response variant. This is request tampering — not a standard
-      blocker technique — and was the genuine outlier / highest-risk item.
-      **RESOLVED for the store build: `make-cws-build.mjs` strips it, so the CWS
-      artifact never touches an outbound request.** An in-repo behavioral A/B
-      (full vs. spoof-stripped build, on YouTube's free-with-ads catalog)
-      confirmed it was redundant — response-side json-prune already empties the
-      player's ad schedule (the player held 0 of 6 ad placements with the spoof
-      absent), so dropping it changed nothing a user sees.
+      an ad-free response variant. That was request tampering — not a standard
+      blocker technique — and the genuine outlier / highest-risk item. A
+      behavioral A/B (spoof vs. no-spoof build, on YouTube's free-with-ads
+      catalog) confirmed it was redundant: response-side json-prune already
+      empties the player's ad schedule (the player held 0 of 6 ad placements
+      with the spoof absent), so it was deleted from the source outright. The
+      shipping build never manipulates an outbound request. (Code preserved in
+      git history + project memory if it ever needs restoring for a non-store
+      channel.)
 
    b. **Response-side json-prune** (scrubs `adPlacements`/`adSlots` etc. out of
-      the player response): **still present in the CWS build.** This is the same
-      class as uBlock Origin's `json-prune` scriptlet and is what actually does
-      the blocking, but note it still reads as "modifies YouTube's player data,"
-      which general-purpose store blockers don't ship by default. Residual,
-      lower risk. If a reviewer pushes back specifically on this, the fallback is
-      a build that also drops json-prune and relies on reactive skipping only —
-      less effective, so not the default. Off-by-default / permission-gated
-      either way.
+      the player response): **present, and it's what does the blocking.** Same
+      class as uBlock Origin's `json-prune` scriptlet, but note it still reads as
+      "modifies YouTube's player data," which general-purpose store blockers
+      don't ship by default. Residual, lower risk. If a reviewer pushes back
+      specifically on this, the fallback is a build that also drops json-prune
+      and relies on reactive skipping only — less effective, so not the default.
+      Off-by-default / permission-gated either way.
 
    NOT a distinguishing risk: the `Function.prototype.toString` cloaking and the
    anti-adblock `set-constant` scriptlets (`public/scriptlets-main.js`) are a

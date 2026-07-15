@@ -10,15 +10,12 @@
  *
  * It strips ad slots out of YouTube player responses (uBO "json-prune") and
  * removes ad segments from HLS/DASH/VAST manifests, so most ads never start.
- * The A/B in this repo's history showed json-prune alone accounts for the
- * blocking (a plain WEB player request still carries every ad slot; the
- * response-side strip is what removes them).
- *
- * TWO BUILD VARIANTS (see scripts/make-cws-build.mjs): the full load-unpacked
- * build ALSO rewrites the outbound /youtubei/v1/player request (section 4,
- * fenced with CWS-STRIP markers) as a redundant belt-and-braces layer. The
- * Chrome Web Store build strips that block — response-side pruning only — so
- * the store artifact never manipulates an outbound request.
+ * It ONLY removes ad data from responses YouTube already sent — it never
+ * manipulates outbound requests. (An earlier build also rewrote the outbound
+ * /youtubei/v1/player request to solicit an ad-free variant; a behavioral A/B
+ * proved it redundant — json-prune alone empties the player's ad schedule —
+ * and it was removed for a cleaner Web Store posture. See the spoof-code
+ * archive in project memory + git history if it ever needs restoring.)
  *
  * This file is intentionally plain ES5-ish JS with no imports: it's copied
  * verbatim from public/ and injected as-is into the page.
@@ -173,93 +170,6 @@
     }, originalParse)
   } catch (e) {}
 
-  /* CWS-STRIP-START — outbound request spoof ships only in the full
-     (load-unpacked) build; scripts/make-cws-build.mjs removes this block
-     from the Chrome Web Store artifact. */
-  // ---------------------------------------------------------------------------
-  // 4) Outbound player-request context spoof.
-  //    YouTube asks for ad-bearing player responses via POST to
-  //    /youtubei/v1/player. We intercept the OUTBOUND request body (fetch +
-  //    XHR) and set context.client.clientScreen = "CHANNEL", which nudges
-  //    YouTube toward an ad-free response variant. (We use CHANNEL, not EMBED:
-  //    EMBED enforces per-video embed permissions and would break playback of
-  //    embedding-disabled videos; CHANNEL is a WEB sub-context with no such
-  //    restriction.) Only player requests are
-  //    touched; everything else passes through byte-for-byte. If anything
-  //    fails to parse we forward the ORIGINAL body untouched — we never drop
-  //    or corrupt a request.
-  // ---------------------------------------------------------------------------
-  var PLAYER_PATH = '/youtubei/v1/player'
-
-  function isPlayerUrl(url) {
-    try {
-      return typeof url === 'string' && url.indexOf(PLAYER_PATH) !== -1
-    } catch (e) {
-      return false
-    }
-  }
-
-  function spoofPlayerBody(body) {
-    // Only string bodies are handled; anything else is returned as-is.
-    if (typeof body !== 'string' || !body) return body
-    try {
-      var data = originalParse(body)
-      if (!data || typeof data !== 'object') return body
-      if (!data.context || typeof data.context !== 'object') data.context = {}
-      if (!data.context.client || typeof data.context.client !== 'object') {
-        data.context.client = {}
-      }
-      data.context.client.clientScreen = 'CHANNEL'
-      return JSON.stringify(data)
-    } catch (e) {
-      // Parse/serialize failure — forward the original body unchanged.
-      return body
-    }
-  }
-
-  // 4a) fetch()
-  try {
-    var originalFetch = window.fetch
-    if (typeof originalFetch === 'function') {
-      window.fetch = cloak(function (input, init) {
-        try {
-          var url = ''
-          if (typeof input === 'string') url = input
-          else if (input && typeof input.url === 'string') url = input.url
-
-          if (isPlayerUrl(url) && init && typeof init.body === 'string') {
-            var spoofed = spoofPlayerBody(init.body)
-            if (spoofed !== init.body) {
-              // Shallow-clone init so we don't mutate the caller's object.
-              var newInit = {}
-              for (var k in init) {
-                if (Object.prototype.hasOwnProperty.call(init, k)) newInit[k] = init[k]
-              }
-              newInit.body = spoofed
-              return originalFetch.call(this, input, newInit)
-            }
-          }
-        } catch (e) {}
-        return originalFetch.apply(this, arguments)
-      }, originalFetch)
-    }
-  } catch (e) {}
-
-  // 4b) XMLHttpRequest — track the URL on open(), spoof the body on send().
-  try {
-    var originalOpen = XMLHttpRequest.prototype.open
-    XMLHttpRequest.prototype.open = cloak(function (method, url) {
-      try {
-        this.__ssUrl = url
-      } catch (e) {}
-      return originalOpen.apply(this, arguments)
-    }, originalOpen)
-  } catch (e) {}
-
-  // The send() wrapper (both body spoof AND responseText shadow) lives in a
-  // single override at the end of this file so cloaking stays clean — see the
-  // "XHR send" block below.
-  /* CWS-STRIP-END */
 
   // ---------------------------------------------------------------------------
   // 5) HLS ad-segment pruning (m3u-prune) &
@@ -442,22 +352,8 @@
     var nativeResponseTextGet =
       xhrTextDesc && typeof xhrTextDesc.get === 'function' ? xhrTextDesc.get : null
 
-    XMLHttpRequest.prototype.send = cloak(function (body) {
-      var sendBody = body
-      var spoofedBody = false
+    XMLHttpRequest.prototype.send = cloak(function () {
       try {
-        /* CWS-STRIP-START — spoof branch of the shared send() wrapper; with
-           it stripped, spoofedBody stays false and the wrapper is a pure
-           responseText shadow. */
-        // (4) Outbound player-request context spoof.
-        if (isPlayerUrl(this.__ssUrl) && typeof body === 'string') {
-          var spoofed = spoofPlayerBody(body)
-          if (spoofed !== body) {
-            sendBody = spoofed
-            spoofedBody = true
-          }
-        }
-        /* CWS-STRIP-END */
         // (5+6) Shadow responseText so completed HLS/XML bodies read pruned.
         if (nativeResponseTextGet && !this.__ssTextShadowed) {
           this.__ssTextShadowed = true
@@ -476,7 +372,6 @@
           })
         }
       } catch (e) {}
-      if (spoofedBody) return nativeXHRSend.call(this, sendBody)
       return nativeXHRSend.apply(this, arguments)
     }, nativeXHRSend)
   } catch (e) {}

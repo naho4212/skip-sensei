@@ -8,7 +8,6 @@
     "dev": "npm run rulesets && wxt",
     "build": "npm run rulesets && tsc --noEmit && wxt build",
     "rulesets": "node scripts/build-rulesets.mjs && node scripts/build-malware-ruleset.mjs && node scripts/build-cosmetic-filters.mjs && node scripts/build-ruleset-counts.mjs",
-    "build:cws": "npm run build && node scripts/make-cws-build.mjs",
     "package": "npm run build && node scripts/package-zip.mjs",
     "typecheck": "tsc --noEmit",
     "postinstall": "wxt prepare"
