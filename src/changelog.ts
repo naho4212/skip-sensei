@@ -15,6 +15,16 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.2.15',
+    date: '2026-07-14',
+    items: [
+      'Honest ad counting: the per-site "blocked here" number and the popup totals now measure the same thing, so your totals are simply every page\'s number added up',
+      'One ad now counts as one — nested fragments of the same ad slot are counted once, and a hidden slot only counts as an ad when an ad had actually loaded in it (empty leftovers of already-blocked ads no longer inflate the number)',
+      'Stat cards now show "today" instead of "this session" — a number you can actually reason about',
+      'Fixed a stray "reload to clear ads" hint appearing for ad frames that were already blocked',
+    ],
+  },
+  {
     version: '0.2.14',
     date: '2026-07-14',
     items: [

@@ -90,7 +90,12 @@ export interface Settings {
 }
 
 /** Per-tab blocked-item counts split by kind, for the popup's "blocked here"
- * breakdown. The badge shows the sum. `ads` folds in cosmetic element hides. */
+ * breakdown. The badge shows the sum. `ads` folds in FILLED cosmetic hides —
+ * hidden slots that contained a loaded creative (an ad the network layer
+ * missed). Empty shells hidden around DNR-blocked requests don't count: the
+ * block itself already did, and one ad must never count twice. This keeps the
+ * page line and the lifetime totals in the same units, so totals are simply
+ * the page numbers summed. */
 export interface BlockBreakdown {
   ads: number
   trackers: number
@@ -149,9 +154,40 @@ export interface Stats {
   /** YouTube display ads (feed/sidebar/masthead) hidden — folded into the
    *  popup's YouTube card, kept separate from video ad-skips. */
   allTimeYtAdsHidden: number
+  /** DNR network blocks + filled cosmetic hides — same units as the popup's
+   *  per-page "blocked here" line, so this is that line summed over time. */
   allTimeWebAdsBlocked: number
   allTimeTrackersBlocked: number
   allTimeCookiesBlocked: number
+  /** Daily counters, local-date keyed. Zeroed on read/write when `date` rolls
+   *  over — "today" is a window users can reason about, unlike the old
+   *  "this session" (invisible reset, uninterpretable timespan). */
+  today: TodayStats
+}
+
+/** One day's counters — each lifetime counter's daily twin. */
+export interface TodayStats {
+  /** Local date "YYYY-MM-DD" these counts belong to. */
+  date: string
+  adSkips: number
+  sponsorSkips: number
+  ytAdsHidden: number
+  webAdsBlocked: number
+  trackersBlocked: number
+  cookiesBlocked: number
+}
+
+/** Lifetime counter keys (everything in Stats except the nested `today`). */
+export type LifetimeStatKey = Exclude<keyof Stats, 'today'>
+
+export const EMPTY_TODAY: TodayStats = {
+  date: '',
+  adSkips: 0,
+  sponsorSkips: 0,
+  ytAdsHidden: 0,
+  webAdsBlocked: 0,
+  trackersBlocked: 0,
+  cookiesBlocked: 0,
 }
 
 /** Cloud LLM usage tracking (built-in on-device AI is free/untracked). */
@@ -187,6 +223,7 @@ export const DEFAULT_STATS: Stats = {
   allTimeWebAdsBlocked: 0,
   allTimeTrackersBlocked: 0,
   allTimeCookiesBlocked: 0,
+  today: EMPTY_TODAY,
 }
 
 /** How an ad was neutralized — kept for future metrics/debugging. */
@@ -270,16 +307,24 @@ export type Message =
       quiet?: boolean
     }
   | { type: 'skipSensei:sponsorSkipped'; videoId: string }
-  // Live per-tab hidden-ad tally: `count` is the page total (badge snapshot),
-  // `added` is how many are new since the last message (fed to lifetime stats).
-  | { type: 'skipSensei:cosmeticHideCount'; count: number; added: number }
+  // Live per-tab hidden-ad tally, topmost slots only (nested fragments of one
+  // slot count once). `count`/`added` are the page total and its delta;
+  // `filled`/`filledAdded` are the subset whose slot held a loaded creative —
+  // an ad the network layer missed, safe to count as blocked without
+  // double-counting a DNR block (a blocked request leaves an empty shell).
+  | {
+      type: 'skipSensei:cosmeticHideCount'
+      count: number
+      added: number
+      filled: number
+      filledAdded: number
+    }
   // Content-side operational telemetry → forwarded to reportEvent.
   | {
       type: 'skipSensei:event'
       kind: string
       fields?: Record<string, string>
     }
-  | { type: 'skipSensei:getSessionStats' }
   | { type: 'skipSensei:getAnalysis'; videoId: string } // → VideoAnalysis | null
   | {
       type: 'skipSensei:analyzeVideo'
@@ -298,7 +343,7 @@ export type Message =
   | { type: 'skipSensei:checkBuiltinAI' } // → { availability: string }
   | { type: 'skipSensei:getBlockerState' } // → BlockerState
   | { type: 'skipSensei:getRulesetInfo' } // → RulesetInfo (counts + live loaded)
-  | { type: 'skipSensei:resetStats' } // → { ok: true }; zeroes lifetime+session stats
+  | { type: 'skipSensei:resetStats' } // → { ok: true }; zeroes lifetime+today stats
   // → string[] of domain-specific cosmetic selectors for the sender's hostname
   | { type: 'skipSensei:getCosmeticFilters'; hostname: string }
   | { type: 'skipSensei:adblockWall'; hostname: string } // site is showing an ad-blocker wall
@@ -318,15 +363,6 @@ export type Message =
   | { type: 'skipSensei:reviewPopup'; html: string; desc?: string } // → boolean (hide this overlay?)
   | { type: 'skipSensei:logActivity'; feature: string; action: string } // content-script action → activity log
   | { type: 'skipSensei:findConsentReject'; html: string } // → string | null (reject-button selector)
-
-export interface SessionStats {
-  sessionAdSkips: number
-  sessionSponsorSkips: number
-  sessionYtAdsHidden: number
-  sessionWebAdsBlocked: number
-  sessionTrackersBlocked: number
-  sessionCookiesBlocked: number
-}
 
 // ---------------------------------------------------------------------------
 // Messages: popup → content script

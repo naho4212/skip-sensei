@@ -19,9 +19,7 @@ import { BLOCK_CATEGORY_LABELS } from '../../src/types'
 import type {
   BlockBreakdown,
   HiddenElement,
-  Message,
   PageStatus,
-  SessionStats,
   Settings,
   Stats,
   TabMessage,
@@ -39,6 +37,7 @@ const TOP_FRAME = { frameId: 0 }
 const masterToggle = $<HTMLInputElement>('master-toggle')
 const adToggle = $<HTMLInputElement>('ad-engine-toggle')
 const sponsorToggle = $<HTMLInputElement>('sponsor-engine-toggle')
+const aggressiveToggle = $<HTMLInputElement>('aggressive-toggle')
 const blockAdsToggle = $<HTMLInputElement>('block-ads-toggle')
 const aiEnhancementsToggle = $<HTMLInputElement>('ai-enhancements-toggle')
 const blockerNoteEl = $('blocker-note')
@@ -52,12 +51,25 @@ function renderSettings(settings: Settings) {
   masterToggle.checked = settings.masterEnabled
   adToggle.checked = settings.adEngineEnabled
   sponsorToggle.checked = settings.sponsorEngineEnabled
+  aggressiveToggle.checked = settings.aggressivePruning
   blockAdsToggle.checked = settings.blockAllAds
   aiEnhancementsToggle.checked = settings.aiEnhancements
+  for (const pill of document.querySelectorAll<HTMLButtonElement>('.pill')) {
+    const key = pill.dataset.key as keyof Settings
+    pill.classList.toggle('on', Boolean(settings[key]))
+  }
   document.body.classList.toggle('disabled', !settings.masterEnabled)
   $('brand-status').textContent = settings.masterEnabled
     ? 'Zero interruptions.'
     : 'Paused'
+}
+
+/** "This site" / "Controls" views — plain show/hide, reset on every open. */
+function selectTab(tab: 'site' | 'controls') {
+  $('view-site').hidden = tab !== 'site'
+  $('view-controls').hidden = tab !== 'controls'
+  $('tab-site').classList.toggle('on', tab === 'site')
+  $('tab-controls').classList.toggle('on', tab === 'controls')
 }
 
 /** Compact large counts so four stat cards fit (48,392 → 48.4K). */
@@ -178,7 +190,7 @@ async function renderBlockerState() {
   }
 }
 
-function renderStats(stats: Stats, session: SessionStats | null) {
+function renderStats(stats: Stats) {
   // YouTube card is one "interruptions handled on YouTube" figure: video
   // ad-skips + sponsor-skips + hidden display ads. They're tracked separately
   // (the "This video" section shows sponsor segments on their own).
@@ -188,16 +200,13 @@ function renderStats(stats: Stats, session: SessionStats | null) {
   $('alltime-web-blocks').textContent = formatCount(stats.allTimeWebAdsBlocked)
   $('alltime-trackers').textContent = formatCount(stats.allTimeTrackersBlocked)
   $('alltime-cookies').textContent = formatCount(stats.allTimeCookiesBlocked)
-  if (session) {
-    $('session-youtube').textContent = String(
-      session.sessionAdSkips +
-        session.sessionSponsorSkips +
-        session.sessionYtAdsHidden,
-    )
-    $('session-web-blocks').textContent = String(session.sessionWebAdsBlocked)
-    $('session-trackers').textContent = String(session.sessionTrackersBlocked)
-    $('session-cookies').textContent = String(session.sessionCookiesBlocked)
-  }
+  const today = stats.today
+  $('today-youtube').textContent = String(
+    today.adSkips + today.sponsorSkips + today.ytAdsHidden,
+  )
+  $('today-web-blocks').textContent = String(today.webAdsBlocked)
+  $('today-trackers').textContent = String(today.trackersBlocked)
+  $('today-cookies').textContent = String(today.cookiesBlocked)
 }
 
 function formatTime(seconds: number): string {
@@ -486,15 +495,6 @@ function hiddenItemRow(tabId: number, item: HiddenElement): HTMLLIElement {
 
   li.append(info, actions)
   return li
-}
-
-async function fetchSessionStats(): Promise<SessionStats | null> {
-  const message: Message = { type: 'skipSensei:getSessionStats' }
-  try {
-    return await chrome.runtime.sendMessage(message)
-  } catch {
-    return null
-  }
 }
 
 /** Collapsed on every popup open, like the hidden-ads review — the segment
@@ -836,14 +836,35 @@ async function main() {
     )
   })
   renderSettings(await getSettings())
-  renderStats(await getStats(), await fetchSessionStats())
-  onStatsChanged((stats) => {
-    void fetchSessionStats().then((session) => renderStats(stats, session))
-  })
+  renderStats(await getStats())
+  onStatsChanged(renderStats)
+
+  $('tab-site').addEventListener('click', () => selectTab('site'))
+  $('tab-controls').addEventListener('click', () => selectTab('controls'))
+
+  // Granular web-blocking pills: each maps 1:1 to a settings key. The DNR
+  // side works without the broad grant (the blockAds toggle owns that ask).
+  for (const pill of document.querySelectorAll<HTMLButtonElement>('.pill')) {
+    pill.addEventListener('click', async () => {
+      const key = pill.dataset.key as
+        | 'blockTrackers'
+        | 'blockCookieNotices'
+        | 'blockPopups'
+        | 'blockSocial'
+        | 'blockUrlTracking'
+      const settings = await getSettings()
+      renderSettings(await updateSettings({ [key]: !settings[key] }))
+      setTimeout(() => {
+        void renderBlockerState()
+        void renderSiteSection()
+      }, 300)
+    })
+  }
 
   wireToggle(masterToggle, 'masterEnabled')
   wireToggle(adToggle, 'adEngineEnabled')
   wireToggle(sponsorToggle, 'sponsorEngineEnabled')
+  wireToggle(aggressiveToggle, 'aggressivePruning')
   wireToggle(aiEnhancementsToggle, 'aiEnhancements')
   blockAdsToggle.addEventListener('change', async () => {
     // Cosmetic hiding on the broad web needs the optional all-sites permission

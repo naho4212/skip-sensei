@@ -20,7 +20,6 @@ import {
   type KeyedProvider,
   type LlmProvider,
   type Message,
-  type SessionStats,
   type Settings,
 } from '../../src/types'
 
@@ -272,32 +271,19 @@ const fmtBytes = (n: number) =>
 
 async function renderAnalytics() {
   const stats = await getStats()
-  let session: SessionStats | null = null
-  try {
-    session = await chrome.runtime.sendMessage({
-      type: 'skipSensei:getSessionStats',
-    })
-  } catch {
-    session = null
-  }
   const yt =
     stats.allTimeAdSkips + stats.allTimeSponsorSkips + stats.allTimeYtAdsHidden
   $('stat-youtube').textContent = fmt(yt)
   $('stat-webads').textContent = fmt(stats.allTimeWebAdsBlocked)
   $('stat-trackers').textContent = fmt(stats.allTimeTrackersBlocked)
   $('stat-cookies').textContent = fmt(stats.allTimeCookiesBlocked)
-  if (session) {
-    $('stat-youtube-session').textContent = String(
-      session.sessionAdSkips +
-        session.sessionSponsorSkips +
-        session.sessionYtAdsHidden,
-    )
-    $('stat-webads-session').textContent = String(session.sessionWebAdsBlocked)
-    $('stat-trackers-session').textContent = String(
-      session.sessionTrackersBlocked,
-    )
-    $('stat-cookies-session').textContent = String(session.sessionCookiesBlocked)
-  }
+  const today = stats.today
+  $('stat-youtube-today').textContent = String(
+    today.adSkips + today.sponsorSkips + today.ytAdsHidden,
+  )
+  $('stat-webads-today').textContent = String(today.webAdsBlocked)
+  $('stat-trackers-today').textContent = String(today.trackersBlocked)
+  $('stat-cookies-today').textContent = String(today.cookiesBlocked)
   $('stat-breakdown').textContent =
     `YouTube total breaks down into ${fmt(stats.allTimeAdSkips)} video ads skipped, ` +
     `${fmt(stats.allTimeSponsorSkips)} sponsor segments, and ` +

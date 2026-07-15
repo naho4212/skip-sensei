@@ -511,14 +511,61 @@ async function apply() {
 }
 
 // ---------------------------------------------------------------------------
-// Live cosmetic-hide counter. Counts UNIQUE elements matching our hide
-// selectors, monotonically (a WeakSet dedupes, so a re-tally never
-// double-counts and a removed element doesn't decrement). Reported to the SW,
-// which adds it to the DNR network count for the badge / "blocked here".
+// Live cosmetic-hide counter. Counts UNIQUE TOPMOST elements matching our hide
+// selectors — an element whose ancestor also matches is a fragment of the same
+// ad slot, not another ad (filter rules routinely match a whole wrapper chain;
+// counting every node once inflated one Fox News slot into "82 ads"). Counts
+// are monotonic (a WeakSet dedupes, so a re-tally never double-counts and a
+// removed element doesn't decrement).
+//
+// Each slot is also classified FILLED or empty. Filled = it held a loaded
+// creative (completed <img>, playing <video>, committed ad iframe, or a filled
+// AdSense slot) — an ad that got past the network layer, which cosmetic hiding
+// alone stopped. Empty = a shell: either DNR blocked the creative's request
+// (that ad is already counted as a network block) or the slot never held
+// anything. Only filled hides count as ads in the badge and lifetime stats —
+// that's what lets network + cosmetic sum WITHOUT double-counting, since one
+// ad cannot both load (filled) and be network-blocked. Slots counted while
+// still empty are re-checked on later passes: a creative that finishes loading
+// after our first look upgrades its slot to filled.
 // ---------------------------------------------------------------------------
 const countedHides = new WeakSet<Element>()
+/** Slots counted as empty so far — re-checked each pass for a late-loading
+ *  creative until they leave the DOM. */
+let pendingEmptyHides: Array<WeakRef<Element>> = []
+
+// Frame-presence registry. This script runs in every http(s) frame
+// (allFrames), so a frame that COMMITTED a real document announces itself to
+// every ancestor the moment it starts; a DNR-blocked navigation never commits
+// and stays silent. That yes/no is the iframe "creative actually loaded"
+// signal — resource timing can't provide it (verified live: blocked subframe
+// navigations still get an entry with a real responseEnd), and everything
+// inside a cross-origin ad frame is opaque to us. Identity via event.source
+// (unforgeable) matched against iframe.contentWindow. Every frame keeps its
+// own registry of announced DESCENDANTS, so subframe callers (reload hints)
+// see their nested ad frames too.
+const announcedFrames = new WeakSet<MessageEventSource>()
+window.addEventListener('message', (ev) => {
+  if (
+    (ev.data as { type?: string } | null)?.type === 'skipSensei:framePresent' &&
+    ev.source
+  )
+    announcedFrames.add(ev.source)
+})
+if (window !== window.top) {
+  try {
+    for (let w = window.parent; ; w = w.parent) {
+      w.postMessage({ type: 'skipSensei:framePresent' }, '*')
+      if (w === w.parent) break // reached the top
+    }
+  } catch {
+    // cross-origin ancestor access can throw in exotic sandboxing — skip
+  }
+}
 let cosmeticHideCount = 0
+let cosmeticFilledCount = 0
 let cosmeticReportedCount = 0
+let cosmeticReportedFilled = 0
 let cosmeticReportTimer: ReturnType<typeof setTimeout> | null = null
 let cosmeticObserver: MutationObserver | null = null
 let cosmeticTallyScheduled = false
@@ -527,19 +574,63 @@ function reportCosmeticCount() {
   if (cosmeticReportTimer) return // coalesce bursts into one message
   cosmeticReportTimer = setTimeout(() => {
     cosmeticReportTimer = null
-    // `added` is the delta since the last message. Computing it here (from this
-    // frame's own monotonic count) keeps lifetime stats correct across SPA
+    // Deltas since the last message. Computing them here (from this frame's
+    // own monotonic counts) keeps lifetime stats correct across SPA
     // navigation without the SW having to reason about page loads.
     const added = cosmeticHideCount - cosmeticReportedCount
+    const filledAdded = cosmeticFilledCount - cosmeticReportedFilled
     cosmeticReportedCount = cosmeticHideCount
+    cosmeticReportedFilled = cosmeticFilledCount
     chrome.runtime
       .sendMessage({
         type: 'skipSensei:cosmeticHideCount',
         count: cosmeticHideCount,
         added,
+        filled: cosmeticFilledCount,
+        filledAdded,
       })
       .catch(() => {})
   }, 300)
+}
+
+/** True if some ancestor is part of an already/currently counted match — then
+ *  `el` is an inner fragment of that slot, not a distinct ad. */
+function hasCountedAncestor(el: Element, matched: Set<Element>): boolean {
+  for (let p = el.parentElement; p; p = p.parentElement) {
+    if (matched.has(p) || countedHides.has(p)) return true
+  }
+  return false
+}
+
+/** A media element whose creative actually arrived over the network. The
+ *  checks are per-kind because "loaded" leaves different evidence:
+ *  - <img>: complete with real intrinsic size (a DNR-blocked src stays 0×0;
+ *    >1 also skips 1×1 tracking pixels).
+ *  - <video>: has metadata (readyState ≥ 1).
+ *  - <iframe>: its frame announced itself (see announcedFrames) — only a
+ *    committed document runs our all-frames script, and a DNR-blocked
+ *    navigation never commits one.
+ */
+function isLoadedCreative(m: Element): boolean {
+  if (m instanceof HTMLImageElement)
+    return m.complete && m.naturalWidth > 1 && m.naturalHeight > 1
+  if (m instanceof HTMLVideoElement) return m.readyState >= 1
+  if (m instanceof HTMLIFrameElement) {
+    const w = m.contentWindow
+    return !!w && announcedFrames.has(w)
+  }
+  return false
+}
+
+/** Whether a hidden slot held a loaded ad creative (vs an empty shell). */
+function isFilledAdSlot(el: Element): boolean {
+  if (el.matches('ins.adsbygoogle[data-ad-status="filled"]')) return true
+  if (el.querySelector('ins.adsbygoogle[data-ad-status="filled"]')) return true
+  if (isLoadedCreative(el)) return true
+  for (const m of el.querySelectorAll('img, iframe, video')) {
+    if (isLoadedCreative(m)) return true
+  }
+  return false
 }
 
 function tallyCosmeticHides() {
@@ -550,15 +641,29 @@ function tallyCosmeticHides() {
   } catch {
     return // a selector Chrome won't parse — skip this pass
   }
-  let added = 0
+  const matched = new Set<Element>(els)
+  let changed = false
   for (const el of els) {
-    if (!countedHides.has(el)) {
-      countedHides.add(el)
-      cosmeticHideCount++
-      added++
-    }
+    if (countedHides.has(el)) continue
+    if (hasCountedAncestor(el, matched)) continue
+    countedHides.add(el)
+    cosmeticHideCount++
+    if (isFilledAdSlot(el)) cosmeticFilledCount++
+    else pendingEmptyHides.push(new WeakRef(el))
+    changed = true
   }
-  if (added > 0) reportCosmeticCount()
+  // Upgrade pass: a slot counted before its creative finished loading moves to
+  // the filled bucket once the content shows up. Slots gone from the DOM stop
+  // being checked — they can never fill.
+  pendingEmptyHides = pendingEmptyHides.filter((ref) => {
+    const el = ref.deref()
+    if (!el || !el.isConnected) return false
+    if (!isFilledAdSlot(el)) return true
+    cosmeticFilledCount++
+    changed = true
+    return false
+  })
+  if (changed) reportCosmeticCount()
 }
 
 function startCosmeticTally() {
@@ -792,7 +897,11 @@ const AD_IFRAME_HINTS = [
 function pageHasLoadedAds(): boolean {
   for (const frame of document.querySelectorAll<HTMLIFrameElement>('iframe[src]')) {
     const src = frame.src.toLowerCase()
-    if (AD_IFRAME_HINTS.some((h) => src.includes(h))) return true
+    if (!AD_IFRAME_HINTS.some((h) => src.includes(h))) continue
+    // Only frames that committed a document count — a DNR-blocked ad iframe
+    // keeps its src attribute but never loaded, and a reload won't change it.
+    const w = frame.contentWindow
+    if (w && announcedFrames.has(w)) return true
   }
   return !!document.querySelector('ins.adsbygoogle[data-ad-status="filled"]')
 }

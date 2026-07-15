@@ -45,47 +45,32 @@ import {
   ANALYSIS_VERSION,
   type BlockBreakdown,
   type Message,
-  type SessionStats,
   type TranscriptLine,
   type VideoAnalysis,
 } from './types'
 
 /**
  * Service worker: LLM analysis orchestration, per-videoId segment caching,
- * session counters.
+ * lifetime + daily counters.
  */
 
-const SESSION_STATS_KEY = 'skipSensei.sessionStats'
-
-const EMPTY_SESSION: SessionStats = {
-  sessionAdSkips: 0,
-  sessionSponsorSkips: 0,
-  sessionYtAdsHidden: 0,
-  sessionWebAdsBlocked: 0,
-  sessionTrackersBlocked: 0,
-  sessionCookiesBlocked: 0,
-}
-
-async function getSessionStats(): Promise<SessionStats> {
-  const result = await chrome.storage.session.get(SESSION_STATS_KEY)
-  return { ...EMPTY_SESSION, ...(result[SESSION_STATS_KEY] ?? {}) }
-}
-
-async function recordSkip(kind: 'ad' | 'sponsor', amount = 1) {
-  await incrementStat(
-    kind === 'ad' ? 'allTimeAdSkips' : 'allTimeSponsorSkips',
-    amount,
-  )
-  const session = await getSessionStats()
-  if (kind === 'ad') session.sessionAdSkips += amount
-  else session.sessionSponsorSkips += amount
-  await chrome.storage.session.set({ [SESSION_STATS_KEY]: session })
-}
-
-// Stat writes are serialized through this chain so concurrent polls (e.g. two
-// tabs finishing at once) can't lose an increment via interleaved
-// read-modify-write on the shared stats / session keys.
+// Stat writes are serialized through this chain so concurrent recorders (e.g.
+// two tabs finishing at once) can't lose an increment via interleaved
+// read-modify-write on the shared stats key. incrementStat also bumps the
+// matching "today" counter, so daily stats need no separate bookkeeping here.
 let statChain: Promise<void> = Promise.resolve()
+
+function recordSkip(kind: 'ad' | 'sponsor', amount = 1): Promise<void> {
+  statChain = statChain
+    .then(async () => {
+      await incrementStat(
+        kind === 'ad' ? 'allTimeAdSkips' : 'allTimeSponsorSkips',
+        amount,
+      )
+    })
+    .catch(() => {})
+  return statChain
+}
 
 function recordBlockCounts(c: {
   ads: number
@@ -97,11 +82,6 @@ function recordBlockCounts(c: {
       if (c.ads) await incrementStat('allTimeWebAdsBlocked', c.ads)
       if (c.trackers) await incrementStat('allTimeTrackersBlocked', c.trackers)
       if (c.cookies) await incrementStat('allTimeCookiesBlocked', c.cookies)
-      const session = await getSessionStats()
-      session.sessionWebAdsBlocked += c.ads
-      session.sessionTrackersBlocked += c.trackers
-      session.sessionCookiesBlocked += c.cookies
-      await chrome.storage.session.set({ [SESSION_STATS_KEY]: session })
     })
     .catch(() => {})
 }
@@ -114,22 +94,14 @@ function recordYtAdsHidden(amount: number) {
   statChain = statChain
     .then(async () => {
       await incrementStat('allTimeYtAdsHidden', amount)
-      const session = await getSessionStats()
-      session.sessionYtAdsHidden += amount
-      await chrome.storage.session.set({ [SESSION_STATS_KEY]: session })
     })
     .catch(() => {})
 }
 
-/** Zero the lifetime AND session counters. Chained through statChain so a
+/** Zero the lifetime AND today counters. Chained through statChain so a
  *  concurrent in-flight increment can't resurrect a count after the reset. */
 function resetAllStats(): Promise<void> {
-  statChain = statChain
-    .then(async () => {
-      await resetStats()
-      await chrome.storage.session.set({ [SESSION_STATS_KEY]: EMPTY_SESSION })
-    })
-    .catch(() => {})
+  statChain = statChain.then(() => resetStats()).catch(() => {})
   return statChain
 }
 
@@ -462,9 +434,6 @@ chrome.runtime.onMessage.addListener(
           message.videoId,
         )
         return false
-      case 'skipSensei:getSessionStats':
-        void getSessionStats().then(sendResponse)
-        return true
       case 'skipSensei:getAnalysis':
         void usableCachedAnalysis(message.videoId).then(sendResponse)
         return true
@@ -534,12 +503,12 @@ chrome.runtime.onMessage.addListener(
         }
         return false
       case 'skipSensei:getTabBlocked':
-        // "Blocked here" = DNR network blocks + cosmetic hides. The network
-        // side is a live recount on popup open (a user gesture → generally
-        // quota-exempt), so it reflects ads that loaded after the page
-        // finished; it also refreshes the stored network count. The cosmetic
-        // side is the content script's live tally. Falls back to the last
-        // stored network count if the live query is throttled.
+        // "Blocked here" = DNR network blocks + filled cosmetic hides. The
+        // network side is a live recount on popup open (a user gesture →
+        // generally quota-exempt), so it reflects ads that loaded after the
+        // page finished; it also refreshes the stored network count. The
+        // cosmetic side is the content script's live tally. Falls back to the
+        // last stored network count if the live query is throttled.
         void getTabBlockCounts(message.tabId).then((counts) => {
           if (counts) setTabBlocked(message.tabId, counts)
           sendResponse(tabBreakdown(message.tabId))
@@ -547,13 +516,24 @@ chrome.runtime.onMessage.addListener(
         return true
       case 'skipSensei:cosmeticHideCount':
         if (sender.tab?.id !== undefined) {
-          setTabCosmetic(sender.tab.id, message.count)
-          // On YouTube, hidden display ads have no network-block counterpart,
-          // so fold the newly hidden ones into the YouTube card (elsewhere the
-          // hides stay per-page only, to avoid double-counting DNR blocks).
-          if (sender.tab.url?.includes('youtube.com')) {
-            recordYtAdsHidden(message.added)
-          }
+          // On YouTube every hidden slot is a served ad with no network-block
+          // counterpart (YouTube is DNR-exempt), so the full topmost count is
+          // both the badge number and the YouTube card increment. Elsewhere
+          // only FILLED hides count as ads — an empty shell means the network
+          // layer already blocked (and counted) the ad, or there was nothing
+          // in the slot to begin with.
+          const onYouTube = Boolean(sender.tab.url?.includes('youtube.com'))
+          setTabCosmetic(
+            sender.tab.id,
+            onYouTube ? message.count : message.filled,
+          )
+          if (onYouTube) recordYtAdsHidden(message.added)
+          else if (message.filledAdded > 0)
+            recordBlockCounts({
+              ads: message.filledAdded,
+              trackers: 0,
+              cookies: 0,
+            })
         }
         return false
       case 'skipSensei:findSelector':
@@ -596,8 +576,9 @@ chrome.runtime.onMessage.addListener(
 )
 
 // Per-tab icon badge. The count is the sum of two sources: DNR network blocks
-// (getMatchedRules, event-cadence) and cosmetic element hides (reported live by
-// the content script). A "↻" takes priority when the page needs a reload.
+// (getMatchedRules, event-cadence) and ad-counting cosmetic hides (filled
+// slots; on YouTube all slots — reported live by the content script). A "↻"
+// takes priority when the page needs a reload.
 const emptyBreakdown = (): BlockBreakdown => ({
   ads: 0,
   trackers: 0,
@@ -613,7 +594,9 @@ const sumBreakdown = (b: BlockBreakdown): number =>
 interface TabBadge {
   /** DNR network blocks by type — set by the block counter. */
   network: BlockBreakdown
-  /** Ad elements hidden by the content script — reported live per page. */
+  /** Ad-counting cosmetic hides from the content script's live tally: filled
+   *  slots only (all slots on YouTube) — the hides that ARE ads the network
+   *  layer didn't already block and count. */
   cosmetic: number
   needsReload: boolean
 }

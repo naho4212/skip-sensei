@@ -1,10 +1,13 @@
 import {
   DEFAULT_SETTINGS,
   DEFAULT_STATS,
+  EMPTY_TODAY,
   type ApiUsage,
+  type LifetimeStatKey,
   type LlmProvider,
   type Settings,
   type Stats,
+  type TodayStats,
   type VideoAnalysis,
 } from './types'
 
@@ -192,17 +195,45 @@ export function onSettingsChanged(callback: (settings: Settings) => void) {
   })
 }
 
+/** Local date "YYYY-MM-DD" — the key for the daily counters. Local, not UTC:
+ *  "today" should roll over at the user's midnight. */
+function localDayKey(): string {
+  const d = new Date()
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
+/** Each lifetime counter's daily twin — incrementStat bumps both. */
+const TODAY_TWIN: Record<LifetimeStatKey, Exclude<keyof TodayStats, 'date'>> = {
+  allTimeAdSkips: 'adSkips',
+  allTimeSponsorSkips: 'sponsorSkips',
+  allTimeYtAdsHidden: 'ytAdsHidden',
+  allTimeWebAdsBlocked: 'webAdsBlocked',
+  allTimeTrackersBlocked: 'trackersBlocked',
+  allTimeCookiesBlocked: 'cookiesBlocked',
+}
+
+/** A fresh copy of `today`, zeroed if the stored date isn't today. Always a
+ *  clone — never hand out a reference into DEFAULT_STATS/EMPTY_TODAY. */
+function normalizeToday(today: TodayStats | undefined): TodayStats {
+  const day = localDayKey()
+  if (today && today.date === day) return { ...today }
+  return { ...EMPTY_TODAY, date: day }
+}
+
 export async function getStats(): Promise<Stats> {
   const result = await chrome.storage.local.get(STATS_KEY)
-  return { ...DEFAULT_STATS, ...(result[STATS_KEY] ?? {}) }
+  const stored = result[STATS_KEY] ?? {}
+  return { ...DEFAULT_STATS, ...stored, today: normalizeToday(stored.today) }
 }
 
 export async function incrementStat(
-  key: keyof Stats,
+  key: LifetimeStatKey,
   amount = 1,
 ): Promise<Stats> {
-  const next = { ...(await getStats()) }
+  const next = { ...(await getStats()) } // getStats already cloned+rolled today
   next[key] += amount
+  next.today[TODAY_TWIN[key]] += amount
   await chrome.storage.local.set({ [STATS_KEY]: next })
   return next
 }
@@ -215,10 +246,11 @@ export function onStatsChanged(callback: (stats: Stats) => void) {
   })
 }
 
-/** Reset the lifetime stats to zero (the popup's all-time counters). Session
- *  stats live in storage.session and are cleared separately by the SW. */
+/** Reset lifetime AND today counters to zero (the popup's reset-stats). */
 export async function resetStats(): Promise<void> {
-  await chrome.storage.local.set({ [STATS_KEY]: DEFAULT_STATS })
+  await chrome.storage.local.set({
+    [STATS_KEY]: { ...DEFAULT_STATS, today: normalizeToday(undefined) },
+  })
 }
 
 // ---------------------------------------------------------------------------
