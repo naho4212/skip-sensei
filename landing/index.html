@@ -276,6 +276,8 @@
         padding: 15px 16px; border-bottom: 1px solid var(--hair-2);
       }
       .mock-head .lockup .wm { font-size: 14px; }
+      .mock-brand { display: flex; flex-direction: column; line-height: 1.25; text-align: left; }
+      .mock-tag { font-size: 11px; color: var(--text-3); }
       .mock-tgl { width: 34px; height: 20px; border-radius: 999px; background: var(--accent); position: relative; }
       .mock-tgl::after { content: ""; position: absolute; top: 2px; right: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; }
       .mock-tgl.off { background: rgba(255,255,255,0.18); }
@@ -385,7 +387,10 @@
           <div class="mock-head">
             <div class="lockup">
               <svg viewBox="0 0 24 17" style="width:22px;height:15px;fill:var(--accent)"><path d="M0 1.5l6 7-6 7v-14zm7.5 0l6 7-6 7v-14zm8.5 0h2.4v14H16v-14z" /></svg>
-              <span class="wm"><span class="ad">AD</span> SENSEI</span>
+              <div class="mock-brand">
+                <span class="wm"><span class="ad">AD</span> SENSEI</span>
+                <span class="mock-tag">Zero interruptions.</span>
+              </div>
             </div>
             <span class="mock-tgl" aria-hidden="true"></span>
           </div>
