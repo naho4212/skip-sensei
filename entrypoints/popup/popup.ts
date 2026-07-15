@@ -497,30 +497,53 @@ async function fetchSessionStats(): Promise<SessionStats | null> {
   }
 }
 
-function sponsorStatusText(status: PageStatus): string {
-  const plural = (n: number) => (n === 1 ? 'segment' : 'segments')
+/** Collapsed on every popup open, like the hidden-ads review — the segment
+ * list is an occasional look, not a glanceable stat. */
+let sponsorSegmentsExpanded = false
+
+/** Short title for the sponsor detail row (+ whether there's a list to
+ * expand). The old full-sentence status made the row the wordiest thing in
+ * the popup; the count says the same thing in the hidden-ads style. */
+function sponsorTitle(status: PageStatus): {
+  title: string
+  expandable: boolean
+} {
   switch (status.sponsorStatus) {
     case 'ready':
       return status.segmentCount > 0
-        ? `Transcript analyzed — ${status.segmentCount} sponsor ${plural(status.segmentCount)} found.`
-        : 'Transcript analyzed — no sponsor segments found.'
+        ? {
+            title: `Sponsor segments (${status.segmentCount})`,
+            expandable: true,
+          }
+        : { title: 'No sponsor segments found', expandable: false }
     case 'analyzing': {
       const elapsed = status.analyzingSince
         ? ` · ${formatTime((Date.now() - status.analyzingSince) / 1000)}`
         : ''
-      return `Analyzing transcript${status.sponsorReason ? ` (${status.sponsorReason})` : ''}…${elapsed}`
+      return { title: `Analyzing transcript…${elapsed}`, expandable: false }
     }
     case 'no-transcript':
-      return 'No transcript available — can’t scan for sponsor segments.'
+      return { title: 'No transcript to scan', expandable: false }
     case 'unavailable':
-      return status.sponsorReason
-        ? `No sponsor scan — ${status.sponsorReason}.`
-        : 'No sponsor scan for this video.'
+      return { title: 'No sponsor scan for this video', expandable: false }
     case 'error':
-      return `Sponsor analysis failed${status.sponsorReason ? `: ${status.sponsorReason}` : ''}`
+      return { title: 'Sponsor analysis failed', expandable: false }
     case 'off':
-      return 'Sponsor skipping is off.'
+      return { title: 'Sponsor skipping is off', expandable: false }
   }
+}
+
+/** Apply title + expand state to the sponsor detail row. */
+function setSponsorRow(title: string, expandable: boolean) {
+  videoStatusEl.textContent = title
+  if (!expandable) sponsorSegmentsExpanded = false
+  const chevron = $('sponsor-chevron')
+  chevron.hidden = !expandable
+  chevron.textContent = sponsorSegmentsExpanded ? '▾' : '▸'
+  const toggle = $<HTMLButtonElement>('sponsor-toggle')
+  toggle.disabled = !expandable
+  toggle.setAttribute('aria-expanded', String(sponsorSegmentsExpanded))
+  segmentListEl.hidden = !sponsorSegmentsExpanded
 }
 
 /**
@@ -555,7 +578,7 @@ async function renderVideoStatus() {
     }
     adDetail.hidden = true
     sponsorDetail.hidden = false
-    videoStatusEl.textContent = 'YouTube video embedded on this page.'
+    setSponsorRow('Embedded YouTube video', false)
     segmentListEl.replaceChildren()
     renderProgress(null)
     return
@@ -578,7 +601,8 @@ async function renderVideoStatus() {
       ? 'Watching this video for ads.'
       : 'Ad skipping is off.'
     sponsorDetail.hidden = false
-    videoStatusEl.textContent = sponsorStatusText(status)
+    const { title, expandable } = sponsorTitle(status)
+    setSponsorRow(title, expandable)
     renderProgress(status)
     renderSegments(status)
   } catch {
@@ -907,6 +931,10 @@ async function main() {
   void renderHiddenReview()
 
   setHiddenCollapsed(true) // always start collapsed on open
+  $('sponsor-toggle').addEventListener('click', () => {
+    sponsorSegmentsExpanded = !sponsorSegmentsExpanded
+    void renderVideoStatus()
+  })
   $('hidden-toggle').addEventListener('click', () =>
     setHiddenCollapsed(!$('hidden-body').hidden),
   )

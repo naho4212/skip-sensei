@@ -711,6 +711,14 @@ body.disabled main > *:not(.site-hero) {
 .hidden-toggle:hover .section-title {
   color: var(--text);
 }
+/* Sponsor row reuses the toggle pattern; when there's nothing to expand the
+ * button is disabled and should read as a plain status line. */
+.hidden-toggle:disabled {
+  cursor: default;
+}
+.hidden-toggle:disabled .section-title {
+  color: var(--text-2);
+}
 .hidden-chevron {
   font-size: 9px;
   color: var(--text-3);

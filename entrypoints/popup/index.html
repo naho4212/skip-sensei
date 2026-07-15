@@ -238,14 +238,24 @@
           </span>
         </label>
 
-        <!-- Contextual sponsor status for the current video: analysis state,
-             progress, and the segment list, folded under its own toggle. -->
+        <!-- Contextual sponsor status for the current video. Same collapsed
+             pattern as "Hidden ads here": a short title with the count, the
+             segment list only on expand. Progress bar stays outside the
+             collapse so analysis is always visible. -->
         <div class="ctl-detail" id="sponsor-detail" hidden>
-          <span id="video-status"></span>
+          <button
+            type="button"
+            class="hidden-toggle"
+            id="sponsor-toggle"
+            aria-expanded="false"
+          >
+            <span class="hidden-chevron" id="sponsor-chevron" hidden>▸</span>
+            <span class="section-title" id="video-status"></span>
+          </button>
           <div class="progress" id="analysis-progress" hidden>
             <div class="progress-bar" id="analysis-bar"></div>
           </div>
-          <ul class="segments" id="segment-list"></ul>
+          <ul class="segments" id="segment-list" hidden></ul>
         </div>
 
         <label class="ctl-row">
