@@ -351,6 +351,9 @@
   font-size: 14px;
   color: var(--text-2);
 }
+.ai-note p + p {
+  margin-top: 8px;
+}
 
 .ai-note a {
   color: var(--link);
