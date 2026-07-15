@@ -6,6 +6,7 @@ import {
   clearRejectedGapfill,
   getConfirmedGapfill,
   getGapfillSelectors,
+  getListAuditVerdicts,
   getRejectedGapfill,
   getSettings,
   getVetoedGapfill,
@@ -13,6 +14,7 @@ import {
   recordActivity,
   removeVetoedGapfill,
   setGapfillSelectors,
+  setListAuditVerdicts,
   setVetoedGapfill,
 } from '../storage'
 import { initConsent } from './consent'
@@ -32,8 +34,55 @@ import { initPopupReviewer } from './popup-reviewer'
 
 const STYLE_ID = 'skip-sensei-cosmetic'
 
+/**
+ * Common ad-wrapper class/id conventions (verified on real sites). These are
+ * NAME GUESSES, not hard ad markers, so they get a per-page safety guard
+ * (see refreshHeuristicGuard): any match that looks like the site's own UI
+ * drops the selector for the page.
+ *
+ * Lowercase "ad-…" tokens MUST be anchored to a class-name START
+ * ([class^=…] for the first class, [class*=" …"] for later ones) — plain
+ * substring matching hid LinkedIn's whole message thread (msg-thre*ad--*
+ * pillar, msg-thre*ad-container*) and its search box (search-global-
+ * typeahe*ad--*…); "download-container" is the same trap. CamelCase
+ * variants keep substring matching: attribute values match case-
+ * sensitively, and a mid-name capital-A "Ad" ("topAdContainer") is an ad
+ * token by convention while "ThreadContainer" can't match it.
+ */
+const HEURISTIC_SELECTORS = [
+  '.advertisement',
+  '[class^="ad-container"]',
+  '[class*=" ad-container"]',
+  '[class*="AdContainer"]',
+  '[class^="ad-wrapper"]',
+  '[class*=" ad-wrapper"]',
+  '[class*="AdWrapper"]',
+  '[class^="ad-slot"]',
+  '[class*=" ad-slot"]',
+  '[class*="AdSlot"]',
+  '[class^="ad-unit"]',
+  '[class*=" ad-unit"]',
+  '[class^="ad-banner"]',
+  '[class*=" ad-banner"]',
+  '[class*="AdBanner"]',
+  '[class^="ad-placeholder"]',
+  '[class*=" ad-placeholder"]',
+  '[class^="ad-leaderboard"]',
+  '[class*=" ad-leaderboard"]',
+  '[class*="StickyHeroAd"]',
+  '[class^="ad-stickyhero"]',
+  '[class*=" ad-stickyhero"]',
+  '[class^="ad--"]',
+  '[class*=" ad--"]',
+  '[class*="-advertisement"]',
+  '[class*="advertisement-"]',
+  '[id^="banner-ad"]',
+  '[class^="banner-ad"]',
+  '[class*=" banner-ad"]',
+]
+
 const SELECTORS = [
-  // Google / programmatic ad slots
+  // Google / programmatic ad slots — hard markers, never guarded.
   'ins.adsbygoogle',
   '.adsbygoogle',
   '[id^="div-gpt-ad"]',
@@ -46,26 +95,7 @@ const SELECTORS = [
   'iframe[src*="amazon-adsystem"]',
   'iframe[id*="google_ads"]',
   'iframe[title="Advertisement" i]',
-  // Common ad-wrapper class/id conventions (verified on real sites)
-  '.advertisement',
-  '[class*="ad-container"]',
-  '[class*="AdContainer"]',
-  '[class*="ad-wrapper"]',
-  '[class*="AdWrapper"]',
-  '[class*="ad-slot"]',
-  '[class*="AdSlot"]',
-  '[class*="ad-unit"]',
-  '[class*="ad-banner"]',
-  '[class*="AdBanner"]',
-  '[class*="ad-placeholder"]',
-  '[class*="ad-leaderboard"]',
-  '[class*="StickyHeroAd"]',
-  '[class*="ad-stickyhero"]',
-  '[class*="ad--"]',
-  '[class*="-advertisement"]',
-  '[class*="advertisement-"]',
-  '[id*="banner-ad"]',
-  '[class*="banner-ad"]',
+  ...HEURISTIC_SELECTORS,
   // Data-attribute and ARIA ad markers
   '[data-ad-slot]',
   '[data-adunit]',
@@ -435,6 +465,64 @@ function requestListSelectors(onReady: () => void): void {
     })
 }
 
+/**
+ * Per-page safety guard for the HEURISTIC selectors: they're naming-
+ * convention guesses, so give their matches the same "is this actually the
+ * site's own UI?" test the gap-filler applies to AI proposals. Sticky per
+ * page — once a selector hits UI here it stays dropped until navigation.
+ * (CSS hides every match of a selector, so one UI hit voids the whole
+ * selector for the page rather than risk hiding a search box or thread.)
+ */
+const guardDroppedSelectors = new Set<string>()
+
+function elementLooksLikeUi(el: Element): boolean {
+  if (
+    el.matches(
+      'a, button, nav, header, main, input, select, textarea, form, label, fieldset',
+    )
+  )
+    return true
+  if (
+    el.closest(
+      'form, nav, header, [role="navigation"], [role="banner"], [role="menu"], [role="menubar"]',
+    )
+  )
+    return true
+  if (el.querySelector('input:not([type="hidden"]), select, textarea'))
+    return true
+  if (el.querySelectorAll('a[href], button').length >= 3) return true
+  return false
+}
+
+/** Returns true when the dropped set grew (styles need a re-apply). */
+function refreshHeuristicGuard(): boolean {
+  if (!document.body) return false
+  const dropped: string[] = []
+  for (const sel of HEURISTIC_SELECTORS) {
+    if (guardDroppedSelectors.has(sel)) continue
+    let els: Element[]
+    try {
+      els = Array.from(document.querySelectorAll(sel))
+    } catch {
+      continue
+    }
+    if (!els.some(elementLooksLikeUi)) continue
+    guardDroppedSelectors.add(sel)
+    dropped.push(sel)
+  }
+  if (dropped.length === 0) return false
+  log('heuristic ad selector(s) match site UI — dropped on this page:', dropped)
+  // Recurring guard hits on a domain = a selector to fix or a site to curate.
+  void chrome.runtime
+    .sendMessage({
+      type: 'skipSensei:event',
+      kind: 'heuristic_guard',
+      fields: { domain: bareDomain(), dropped: dropped.slice(0, 5).join(' , ') },
+    })
+    .catch(() => {})
+  return true
+}
+
 async function apply() {
   const settings = await getSettings()
   const allowed = settings.masterEnabled && !isAllowlisted(settings.allowlist)
@@ -454,6 +542,14 @@ async function apply() {
 
   // Per-site "not an ad" selectors the user un-hid stay un-hidden.
   const rejected = new Set(await getRejectedGapfill(bareDomain()))
+  // Selectors the AI list-hide audit judged NOT ads on this domain (site UI /
+  // user content) stay un-hidden too; 👍 in the popup flips them back.
+  const audited = genericOn ? await getListAuditVerdicts(bareDomain()) : {}
+  activeAuditUi = Object.keys(audited).filter((s) => audited[s] === 'ui')
+  const auditUi = new Set(activeAuditUi)
+  // Heuristic selectors that currently match the site's own UI (needs the
+  // real DOM — a no-op at document_start, checked again from onPageReady).
+  refreshHeuristicGuard()
   const siteHits = genericOn
     ? FIRST_PARTY_AD_SITES.filter((site) => site.hosts.test(location.hostname))
     : []
@@ -470,7 +566,9 @@ async function apply() {
       .filter((site) => site.mode !== 'placeholder')
       .flatMap((site) => site.selectors),
     ...(ytOn ? YOUTUBE_SELECTORS : []),
-  ].filter((s) => !rejected.has(s))
+  ].filter(
+    (s) => !rejected.has(s) && !guardDroppedSelectors.has(s) && !auditUi.has(s),
+  )
   const placeholderSelectors = siteHits
     .filter((site) => site.mode === 'placeholder')
     .flatMap((site) => site.selectors)
@@ -816,6 +914,9 @@ function isSafeGapfillSelector(sel: string): boolean {
 let activeGapfill: string[] = []
 /** AI proposals the safety guard refused to apply (for the popup review). */
 let activeVetoed: string[] = []
+/** List/heuristic selectors the AI audit un-hid on this domain — judged the
+ * site's own UI or user content, not ads (for the popup review; 👍 re-hides). */
+let activeAuditUi: string[] = []
 
 /** Apply this domain's AI-discovered ad selectors (from prior visits). */
 async function applyGapfill() {
@@ -1046,6 +1147,9 @@ function scheduleCollapsePass() {
   collapsePassScheduled = true
   setTimeout(() => {
     collapsePassScheduled = false
+    // SPA re-renders can mount UI into a heuristic selector's reach long
+    // after load — re-check the guard on the same debounced pulse.
+    if (refreshHeuristicGuard()) void apply()
     void collapseEmptyAdSlots()
   }, 1500)
 }
@@ -1213,6 +1317,13 @@ function describeHiddenElements() {
       source: 'ai' as const,
       vetoed: true,
     })),
+    // List rules the AI audit un-hid (judged site UI / user content, not
+    // ads) — reviewable; 👍 re-hides them on this site.
+    ...activeAuditUi.map((selector) => ({
+      selector,
+      source: 'list' as const,
+      vetoed: true,
+    })),
   ]
   const out = []
   for (const { selector, source, vetoed } of sources) {
@@ -1303,6 +1414,12 @@ async function confirmHiddenSelector(selector: string) {
     await addGapfillSelectors(domain, [selector])
     await removeVetoedGapfill(domain, selector)
     await applyGapfill() // hides it immediately (confirmed skips the guard)
+  }
+  // A list rule the AI audit un-hid: the user overrides — flip the verdict
+  // back to 'ad' and the rule hides it here again.
+  if (activeAuditUi.includes(selector)) {
+    await setListAuditVerdicts(domain, { [selector]: 'ad' })
+    await apply()
   }
   reportGapfillFeedback(selector, 'ad')
 }
@@ -1733,6 +1850,100 @@ async function runGapfill() {
   await applyGapfill()
 }
 
+// ---------------------------------------------------------------------------
+// AI list-hide audit: the inverse safety net. The gap-filler asks "is this
+// unblocked thing an ad?"; this asks "is this BLOCKED thing actually an ad?"
+// Filter lists and heuristic selectors hide by name, sight unseen — when a
+// hidden element carries real text, have the AI read the content and rescue
+// clear false positives (site UI, user content). Fail direction is "stays
+// hidden": lists are usually right, so only a CERTAIN not-ad verdict un-hides,
+// per domain, reviewable in the popup (👍 re-hides). Verdicts are cached per
+// domain+selector so a page costs at most one LLM call, once.
+// ---------------------------------------------------------------------------
+
+const AUDIT_TEXT_MIN = 30
+let auditRan = false
+
+async function auditListHides() {
+  if (window !== window.top) return
+  if (auditRan) return
+  // Curated hosts' selectors are hand-verified (Google's sponsored results
+  // are text-heavy by design — exactly what an AI audit would second-guess).
+  if (isYouTube() || isUserContentHost() || isCuratedHost()) return
+  if (!(await blockingActive())) return
+  const settings = await getSettings()
+  if (!settings.aiEnhancements) return
+  const domain = bareDomain()
+  const verdicts = await getListAuditVerdicts(domain)
+  const auditable = new Set([...HEURISTIC_SELECTORS, ...(listSelectors ?? [])])
+  const suspects: Array<{ selector: string; el: HTMLElement }> = []
+  for (const selector of activeSelectors) {
+    if (suspects.length >= 8) break
+    if (!auditable.has(selector)) continue
+    if (verdicts[selector]) continue
+    let els: Element[]
+    try {
+      els = Array.from(document.querySelectorAll(selector))
+    } catch {
+      continue
+    }
+    // textContent, not innerText — display:none elements have no innerText.
+    const el = els.find(
+      (e): e is HTMLElement =>
+        e instanceof HTMLElement &&
+        (e.textContent ?? '').trim().length >= AUDIT_TEXT_MIN,
+    )
+    if (el) suspects.push({ selector, el })
+  }
+  if (suspects.length === 0) return
+  auditRan = true
+  const notAds: number[] | null = await chrome.runtime
+    .sendMessage({
+      type: 'skipSensei:auditHiddenElements',
+      candidates: suspects.map((s, index) => ({
+        index,
+        html: s.el.outerHTML.slice(0, 700),
+        text: (s.el.textContent ?? '').trim().replace(/\s+/g, ' ').slice(0, 200),
+      })),
+      page: { host: location.hostname, title: document.title.slice(0, 80) },
+    })
+    .catch(() => null)
+  if (notAds === null) {
+    auditRan = false // transient failure — a later pass may retry
+    return
+  }
+  const cleared = new Set(notAds)
+  const updates: Record<string, 'ad' | 'ui'> = {}
+  suspects.forEach((s, i) => {
+    updates[s.selector] = cleared.has(i) ? 'ui' : 'ad'
+  })
+  await setListAuditVerdicts(domain, updates)
+  const uiSelectors = suspects
+    .filter((_, i) => cleared.has(i))
+    .map((s) => s.selector)
+  if (uiSelectors.length > 0) {
+    await apply() // re-inject styles without the rescued selectors
+    log('AI audit un-hid', uiSelectors.length, 'list-hidden element(s):', uiSelectors)
+    void recordActivity(
+      'AI enhancements',
+      `un-hid ${uiSelectors.length} element(s) a filter rule wrongly hid — your content or the site's UI, not ads`,
+      domain,
+    )
+  }
+  // Recurring 'ui' verdicts on a rule = a list bug worth fixing at the source.
+  void chrome.runtime
+    .sendMessage({
+      type: 'skipSensei:event',
+      kind: 'list_audit',
+      fields: {
+        domain,
+        audited: String(suspects.length),
+        unhidden: uiSelectors.slice(0, 5).join(' , '),
+      },
+    })
+    .catch(() => {})
+}
+
 /**
  * On-demand gap-filler for the popup "Scan for ads" button — ignores the
  * once-per-domain guard so the user can test the AI on any page and review
@@ -1747,6 +1958,7 @@ async function scanForAds() {
     !isUserContentHost()
   ) {
     await requestAndProcessProposals()
+    await auditListHides()
   }
   await applyGapfill()
   return describeHiddenElements()
@@ -1837,6 +2049,9 @@ function onPageReady() {
   setTimeout(() => void apply(), 2000)
   // Give ads time to load, then scan once for anything the lists missed.
   setTimeout(() => void runGapfill(), 3500)
+  // …and once the page settled, have the AI read what the lists are HIDING
+  // and rescue clear false positives (hidden search boxes, threads, content).
+  setTimeout(() => void auditListHides(), 5000)
   void scheduleSlotCollapse() // reclaim blank space where blocked ads were
   initConsent() // AI cookie-consent auto-reject
 }

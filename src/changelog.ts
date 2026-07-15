@@ -15,6 +15,15 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.2.18',
+    date: '2026-07-15',
+    items: [
+      'Fixed LinkedIn messages and search disappearing: generic ad selectors matched by substring, so "thread" and "typeahead" looked like "ad" — they now match whole name tokens only',
+      'New safety guard: pattern-based ad selectors are dropped on any page where they touch real UI (search boxes, forms, menus, threads)',
+      'The AI now audits what the filter lists hide: hidden elements that carry real text get read by the AI, and clear false positives (your content, site UI) are un-hidden automatically — reviewable in the popup, 👍 re-hides',
+    ],
+  },
+  {
     version: '0.2.17',
     date: '2026-07-15',
     items: [

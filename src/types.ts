@@ -358,6 +358,11 @@ export type Message =
       candidates: Array<{ index: number; html: string; text: string }>
       page: { host: string; title: string }
     } // → number[] (indexes the AI confirmed as ads; fail-closed empty)
+  | {
+      type: 'skipSensei:auditHiddenElements'
+      candidates: Array<{ index: number; html: string; text: string }>
+      page: { host: string; title: string }
+    } // → number[] (indexes the AI is CERTAIN are not ads; fail-closed empty = everything stays hidden)
   | { type: 'skipSensei:reviewPopup'; html: string; desc?: string } // → boolean (hide this overlay?)
   | { type: 'skipSensei:logActivity'; feature: string; action: string } // content-script action → activity log
   | { type: 'skipSensei:findConsentReject'; html: string } // → string | null (reject-button selector)

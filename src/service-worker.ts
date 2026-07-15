@@ -1,5 +1,6 @@
 import {
   analyzeTranscript,
+  auditHiddenElements,
   builtinAvailability,
   verifyAdCandidates,
   findConsentReject,
@@ -375,6 +376,22 @@ async function verifyCandidates(
   }
 }
 
+/** AI audit of list-driven hides: which of these hidden elements are CLEARLY
+ * not ads? Fail-closed to [] — on any failure everything stays hidden. */
+async function auditHidden(
+  candidates: Array<{ index: number; html: string; text?: string }>,
+  page?: { host: string; title: string },
+): Promise<number[]> {
+  const settings = await getSettings()
+  if (!settings.aiEnhancements) return []
+  const controller = new AbortController()
+  try {
+    return await auditHiddenElements(candidates, page, settings, controller.signal)
+  } catch {
+    return []
+  }
+}
+
 function abandonAnalysis(videoId: string) {
   const entry = inflight.get(videoId)
   if (!entry) return
@@ -540,6 +557,9 @@ chrome.runtime.onMessage.addListener(
         return true
       case 'skipSensei:verifyAdCandidates':
         void verifyCandidates(message.candidates, message.page).then(sendResponse)
+        return true
+      case 'skipSensei:auditHiddenElements':
+        void auditHidden(message.candidates, message.page).then(sendResponse)
         return true
       case 'skipSensei:reviewPopup':
         void reviewPopupMsg(message.html, senderHost(sender), message.desc).then(

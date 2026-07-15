@@ -336,6 +336,55 @@ export async function verifyAdCandidates(
   }
 }
 
+const LIST_AUDIT_SYSTEM_PROMPT = `You audit elements an ad blocker's filter lists are currently HIDING on a page. Most are genuine ads — your job is to catch the rare false positive: an element that is clearly NOT an advertisement, such as the site's own UI (search boxes, navigation, message threads, media players, forms) or user content (emails, chat messages, comments, articles, documents). Each numbered element comes with its visible text and an HTML snippet; the page host and title are given. Note that class names can be misleading — words like "thread" or "typeahead" contain "ad" by coincidence — so judge by what the element's content actually IS. Sponsored/promoted content, banners, ad iframes, and anything promotional must STAY hidden — never list those. Return ONLY JSON: {"notAds":[<element numbers you are CERTAIN are not ads>]}. When unsure about an element, do NOT include it. If everything looks like an ad, return {"notAds":[]}. No prose, no markdown.`
+
+/**
+ * AI audit of list-driven hides (the inverse of verifyAdCandidates): the
+ * content script sends elements the filter lists are hiding that carry real
+ * text, and the AI rescues clear false positives. Fail direction is "stays
+ * hidden" — the lists are usually right, so on any failure or doubt nothing
+ * gets un-hidden.
+ */
+export async function auditHiddenElements(
+  candidates: Array<{ index: number; html: string; text?: string }>,
+  page: { host: string; title: string } | undefined,
+  settings: Settings,
+  signal: AbortSignal,
+): Promise<number[]> {
+  const body = candidates
+    .map((c) => {
+      const text = (c.text ?? '').slice(0, 200)
+      return `#${c.index}:\ntext: ${text || '(no visible text)'}\nhtml: ${c.html.slice(0, 600)}`
+    })
+    .join('\n\n')
+  const header = page
+    ? `Page: ${page.host} — ${page.title.slice(0, 80)}\n`
+    : ''
+  const raw = await completeSmart(
+    LIST_AUDIT_SYSTEM_PROMPT,
+    `${header}Hidden elements:\n${body}`.slice(0, 9000),
+    settings,
+    signal,
+  )
+  const cleaned = raw
+    .trim()
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/```\s*$/, '')
+  const first = cleaned.indexOf('{')
+  const last = cleaned.lastIndexOf('}')
+  if (first === -1 || last <= first) return []
+  try {
+    const parsed = JSON.parse(cleaned.slice(first, last + 1))
+    if (!Array.isArray(parsed.notAds)) return []
+    const known = new Set(candidates.map((c) => c.index))
+    return parsed.notAds
+      .map((n: unknown) => Number(n))
+      .filter((n: number) => Number.isInteger(n) && known.has(n))
+  } catch {
+    return []
+  }
+}
+
 const POPUP_SYSTEM_PROMPT = `You decide whether an on-page overlay/popup should be hidden. HIDE only intrusive annoyances: newsletter/email-signup walls, promotional/discount popups, "subscribe" interstitials, app-install nags, survey/feedback popups, and popup/overlay ADS. KEEP (do not hide) anything functional or that the user may need: login/sign-in dialogs, authentication (OAuth), cookie/consent choices, age verification, payment/checkout, error or confirmation dialogs, and the site's actual content. When unsure, KEEP. Respond with ONLY JSON: {"hide": true|false, "summary": "<neutral 3-8 word description of what the popup is, e.g. 'Newsletter signup asking for email', 'Cookie consent banner', 'Login dialog', '20% discount promo'>"}. No prose.`
 
 /** Decide whether an overlay is an intrusive annoyance (hide) or functional (keep). */

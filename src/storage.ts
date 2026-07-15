@@ -536,6 +536,46 @@ export async function addConfirmedGapfill(domain: string, selector: string) {
 }
 
 // ---------------------------------------------------------------------------
+// AI list-hide audit verdicts. The AI reads the CONTENT of elements the
+// filter lists / generic selectors are hiding and rescues false positives:
+// 'ui' = the AI is certain the element is NOT an ad (site UI or user
+// content) — the selector is un-hidden on this domain; 'ad' = confirmed ad,
+// stays hidden and is never re-audited. Popup 👍 flips 'ui' → 'ad'.
+// ---------------------------------------------------------------------------
+
+const LIST_AUDIT_KEY = 'skipSensei.listAuditVerdicts'
+
+export type ListAuditVerdict = 'ad' | 'ui'
+
+export async function getListAuditVerdicts(
+  domain: string,
+): Promise<Record<string, ListAuditVerdict>> {
+  const result = await chrome.storage.local.get(LIST_AUDIT_KEY)
+  const all: Record<string, Record<string, ListAuditVerdict>> =
+    result[LIST_AUDIT_KEY] ?? {}
+  return all[domain] ?? {}
+}
+
+export async function setListAuditVerdicts(
+  domain: string,
+  verdicts: Record<string, ListAuditVerdict>,
+) {
+  const result = await chrome.storage.local.get(LIST_AUDIT_KEY)
+  const all: Record<string, Record<string, ListAuditVerdict>> =
+    result[LIST_AUDIT_KEY] ?? {}
+  const merged = { ...(all[domain] ?? {}), ...verdicts }
+  // Cap per-domain entries (drop oldest keys — insertion order).
+  const keys = Object.keys(merged)
+  for (const k of keys.slice(0, Math.max(0, keys.length - 40))) delete merged[k]
+  all[domain] = merged
+  const domains = Object.keys(all)
+  if (domains.length > 300) {
+    for (const d of domains.slice(0, domains.length - 300)) delete all[d]
+  }
+  await chrome.storage.local.set({ [LIST_AUDIT_KEY]: all })
+}
+
+// ---------------------------------------------------------------------------
 // Cloud LLM usage tracking — monthly tokens/requests + daily request count.
 // ---------------------------------------------------------------------------
 
