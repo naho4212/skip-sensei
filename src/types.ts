@@ -330,6 +330,7 @@ export type Message =
       durationSeconds: number
     } // → VideoAnalysis
   | { type: 'skipSensei:abandonAnalysis'; videoId: string }
+  | { type: 'skipSensei:clearVideoAnalysis'; videoId: string } // → true; drop one video's cached analysis so it re-runs
   | { type: 'skipSensei:fetchSponsorBlock'; videoId: string } // → SponsorSegment[]
   | {
       type: 'skipSensei:reportCorrection'
@@ -374,6 +375,7 @@ export type Message =
 export type TabMessage =
   | { type: 'skipSensei:getPageStatus' }
   | { type: 'skipSensei:hasYouTubeEmbed' } // → boolean (page embeds a YT video)
+  | { type: 'skipSensei:reanalyzeSponsors' } // re-run this video's sponsor analysis, bypassing the cache
   | {
       type: 'skipSensei:analysisProgress'
       videoId: string

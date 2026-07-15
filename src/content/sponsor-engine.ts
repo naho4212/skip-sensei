@@ -95,6 +95,25 @@ export class SponsorEngine {
     this.send({ type: 'skipSensei:abandonAnalysis', videoId: this.videoId })
   }
 
+  /** User asked to re-run analysis (popup ↻): drop the cached verdict and run
+   * the AI pass again. The deterministic base (chapters + SponsorBlock, already
+   * fetched) is kept so those skips stay armed while the AI re-runs. No-op
+   * while a pass is already in flight. */
+  async reanalyze() {
+    if (this.stopped || !this.video || this.status === 'analyzing') return
+    await this.send({
+      type: 'skipSensei:clearVideoAnalysis',
+      videoId: this.videoId,
+    })
+    if (this.stopped) return
+    this.segments = [...this.externalSegments]
+    this.analyzingSince = Date.now()
+    this.progressDone = undefined
+    this.progressTotal = undefined
+    this.setStatus('analyzing')
+    await this.analyze(this.video)
+  }
+
   private async run() {
     const video = await this.waitForVideo()
     if (this.stopped) return

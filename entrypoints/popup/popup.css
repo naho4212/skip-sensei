@@ -863,6 +863,43 @@ body.disabled main > *:not(.site-hero) {
   cursor: pointer;
 }
 
+/* Small ↻ button on the sponsor row — re-run this video's transcript
+ * analysis. Subtle by default (it's a secondary action next to the status). */
+.reanalyze-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--divider);
+  border-radius: 7px;
+  background: none;
+  color: var(--text-2);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.reanalyze-btn:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--text);
+}
+.reanalyze-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+/* Spin while a re-analysis is in flight. */
+.reanalyze-btn.spinning {
+  animation: reanalyze-spin 0.8s linear infinite;
+}
+@keyframes reanalyze-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* Count of items behind a collapsible section row — replaces the old
  * "(2)" baked into the uppercase title. */
 .count-badge {

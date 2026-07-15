@@ -378,6 +378,18 @@ export async function setCachedAnalysis(analysis: VideoAnalysis) {
   })
 }
 
+/** Drop one video's cached analysis (+ its index entry) so a re-analyze
+ * actually re-fetches the transcript and re-runs the AI instead of returning
+ * the previous verdict. */
+export async function deleteCachedAnalysis(videoId: string) {
+  await chrome.storage.local.remove(CACHE_PREFIX + videoId)
+  const indexResult = await chrome.storage.local.get(CACHE_INDEX_KEY)
+  const index: string[] = indexResult[CACHE_INDEX_KEY] ?? []
+  const next = index.filter((id) => id !== videoId)
+  if (next.length !== index.length)
+    await chrome.storage.local.set({ [CACHE_INDEX_KEY]: next })
+}
+
 // ---------------------------------------------------------------------------
 // Self-healed selectors (Phase 8) — AI-discovered selectors that repair the
 // hardcoded ones when YouTube changes its DOM. Keyed by target (e.g. skipButton).

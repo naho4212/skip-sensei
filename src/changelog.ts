@@ -15,6 +15,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.2.22',
+    date: '2026-07-15',
+    items: [
+      'Added a re-analyze button (↻) to the sponsor section in the popup — retry a failed analysis or re-run the AI on a video to look for segments it missed, without reloading the page',
+    ],
+  },
+  {
     version: '0.2.21',
     date: '2026-07-15',
     items: [

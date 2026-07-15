@@ -594,6 +594,7 @@ async function renderVideoStatus() {
     adDetail.hidden = true
     sponsorDetail.hidden = false
     setSponsorRow('Embedded YouTube video', false)
+    $('sponsor-reanalyze').hidden = true
     segmentListEl.replaceChildren()
     renderProgress(null)
     return
@@ -618,6 +619,16 @@ async function renderVideoStatus() {
     sponsorDetail.hidden = false
     const { title, expandable, count } = sponsorTitle(status)
     setSponsorRow(title, expandable, count ?? 0)
+    // Re-analyze (↻) is offered once a pass has settled to a result the user
+    // might want to redo — segments found, none found, or a failure — and
+    // spins (disabled) while a pass is running. Hidden where a retry can't
+    // change the outcome (no transcript, live/too-short, feature off).
+    const reBtn = $<HTMLButtonElement>('sponsor-reanalyze')
+    const s = status.sponsorStatus
+    const offerReanalyze = s === 'ready' || s === 'error' || s === 'analyzing'
+    reBtn.hidden = !offerReanalyze
+    reBtn.disabled = s === 'analyzing'
+    reBtn.classList.toggle('spinning', s === 'analyzing')
     renderProgress(status)
     renderSegments(status)
   } catch {
@@ -969,6 +980,23 @@ async function main() {
   setHiddenCollapsed(true) // always start collapsed on open
   $('sponsor-toggle').addEventListener('click', () => {
     sponsorSegmentsExpanded = !sponsorSegmentsExpanded
+    void renderVideoStatus()
+  })
+  const reanalyzeBtn = $<HTMLButtonElement>('sponsor-reanalyze')
+  reanalyzeBtn.addEventListener('click', async () => {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+    if (!tab?.id) return
+    reanalyzeBtn.disabled = true
+    reanalyzeBtn.classList.add('spinning') // immediate feedback; poll takes over
+    try {
+      await chrome.tabs.sendMessage(
+        tab.id,
+        { type: 'skipSensei:reanalyzeSponsors' },
+        TOP_FRAME,
+      )
+    } catch {
+      /* content script not ready — the 1s poll will restore the real state */
+    }
     void renderVideoStatus()
   })
   $('hidden-toggle').addEventListener('click', () =>

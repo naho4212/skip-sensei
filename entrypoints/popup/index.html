@@ -171,16 +171,28 @@
              segment list only on expand. Progress bar stays outside the
              collapse so analysis is always visible. -->
         <div class="ctl-detail" id="sponsor-detail" hidden>
-          <button
-            type="button"
-            class="hidden-toggle"
-            id="sponsor-toggle"
-            aria-expanded="false"
-          >
-            <span class="hidden-chevron" id="sponsor-chevron" hidden>▸</span>
-            <span class="section-title" id="video-status"></span>
-            <span class="count-badge" id="sponsor-count" hidden></span>
-          </button>
+          <div class="hidden-head">
+            <button
+              type="button"
+              class="hidden-toggle"
+              id="sponsor-toggle"
+              aria-expanded="false"
+            >
+              <span class="hidden-chevron" id="sponsor-chevron" hidden>▸</span>
+              <span class="section-title" id="video-status"></span>
+              <span class="count-badge" id="sponsor-count" hidden></span>
+            </button>
+            <button
+              type="button"
+              class="reanalyze-btn"
+              id="sponsor-reanalyze"
+              title="Re-analyze this video's transcript"
+              aria-label="Re-analyze transcript"
+              hidden
+            >
+              ↻
+            </button>
+          </div>
           <div class="progress" id="analysis-progress" hidden>
             <div class="progress-bar" id="analysis-bar"></div>
           </div>

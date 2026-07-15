@@ -33,6 +33,7 @@ import { fetchSponsorBlockSegments } from './sponsorblock'
 import { initErrorReporting, reportError, reportEvent } from './error-reporting'
 import {
   clearYtBackoff,
+  deleteCachedAnalysis,
   getCachedAnalysis,
   getSettings,
   incrementStat,
@@ -475,6 +476,9 @@ chrome.runtime.onMessage.addListener(
       case 'skipSensei:abandonAnalysis':
         abandonAnalysis(message.videoId)
         return false
+      case 'skipSensei:clearVideoAnalysis':
+        void deleteCachedAnalysis(message.videoId).then(() => sendResponse(true))
+        return true
       case 'skipSensei:reportCorrection':
         void recordCorrection(message.videoId, message.start, message.end)
         void recordActivity(

@@ -125,6 +125,8 @@ async function main() {
       } else if (message?.type === 'skipSensei:analysisProgress') {
         log(`analyzing chunk ${message.done}/${message.total}`)
         sponsorEngine?.noteProgress(message.videoId, message.done, message.total)
+      } else if (message?.type === 'skipSensei:reanalyzeSponsors') {
+        void sponsorEngine?.reanalyze()
       }
     },
   )
