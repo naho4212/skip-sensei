@@ -13,9 +13,11 @@ build variant is the lower-risk path.
 
 ## Single-purpose description
 
-> Ad Sensei removes advertising interruptions from web browsing: it blocks ads
-> and trackers on websites and skips ads and sponsor segments on YouTube, so
-> pages load cleaner and videos play without interruptions.
+> Ad Sensei is an ad blocker. It blocks third-party ads and trackers across the
+> web using filter lists, and hides the first-party ads that sites serve from
+> their own domains — on Pinterest, Amazon, Reddit, and others, and on YouTube,
+> where it also removes in-stream video ads and creator sponsor segments. The
+> result: pages load cleaner and videos play without interruptions.
 
 Keep the listing framed on this one purpose. Do not enumerate every sub-feature
 as if they were separate products.
@@ -109,11 +111,24 @@ with the telemetry endpoint host in `src/error-reporting.ts`)
 
 ## Known review-risk notes (read before submitting the full app)
 
-1. **YouTube ad circumvention with active evasion** (aggressive mode cloaks
-   `Function.prototype.toString` and spoofs `/youtubei/v1/player`; the
-   anti-adblock scriptlet layer defeats detection). Highest rejection/takedown
-   risk. Off-by-default / permission-gated, but visible to reviewers. Strongest
-   mitigation: ship a store build that excludes these two layers.
+1. **YouTube player-response manipulation** (aggressive mode, in
+   `public/prune-main.js`): scrubs the ad keys out of the `/youtubei/v1/player`
+   response, and injects params into the outbound player request to suppress
+   server-side ad insertion (yAEB-style). This is the genuine outlier — it aims
+   at "no ads served," not "ad skipped," and hooks deep into YouTube's playback
+   path, which is what server-side enforcement probes. General-purpose store
+   blockers (uBOL, ABP) do NOT ship this; only dedicated YouTube extensions do.
+   Highest rejection/takedown risk of anything in the build. Off-by-default /
+   permission-gated. Strongest mitigation: ship a store build that excludes the
+   prune-main response/request rewriting.
+
+   NOT a distinguishing risk: the `Function.prototype.toString` cloaking and the
+   anti-adblock `set-constant` scriptlets (`public/scriptlets-main.js`) are a
+   documented subset of uBlock Origin's scriptlet library — the same `safeSelf`
+   toString-cloak pattern ships in uBlock Origin Lite on the Web Store today. It
+   reads as evasion out of context, but it's standard, store-approved technique;
+   don't let its presence drive the store-safe-variant decision. The decision is
+   about the prune-main YouTube rewriting above.
 2. **Obfuscation is banned** — do NOT minify-to-conceal or obfuscate to hide the
    above; that is a separate, account-level violation. Compliance = not shipping
    the code, not hiding it.

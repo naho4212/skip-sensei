@@ -967,8 +967,8 @@ export class AdEngine {
       await updateSettings({ aggressivePruning: false })
       await setYtBackoff(this.wallsSeen)
       await recordActivity(
-        'Aggressive ad blocking',
-        'YouTube flagged the session — aggressive mode auto-disabled (reactive skipping still on)',
+        'First-party ad blocking',
+        'YouTube flagged the session — first-party ad blocking auto-disabled (reactive skipping still on)',
         'youtube.com',
       )
       // Detection signal: how often aggressive pruning gets caught in the

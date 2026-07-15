@@ -7,12 +7,13 @@ import { getSettings, onSettingsChanged } from './storage'
  *
  * Why runtime registration instead of a static manifest content script:
  *  - It must run in the PAGE world at document_start (to trap
- *    ytInitialPlayerResponse before YouTube's inline scripts). CRXJS wraps
- *    every manifest content script in an ASYNC module loader, which lands
- *    too late for the initial page load.
+ *    ytInitialPlayerResponse before YouTube's inline scripts). A statically
+ *    declared content script lands too late / can't reach the MAIN world
+ *    synchronously at the initial page load; registering prune-main.js
+ *    directly via chrome.scripting with world:'MAIN' does.
  *  - Registration doubles as the on/off gate — the script is simply absent
- *    when aggressive mode is off, so there's no page-world runtime cost and
- *    nothing to detect when the user hasn't opted in.
+ *    when first-party ad blocking is off, so there's no page-world runtime
+ *    cost and nothing to detect when the user hasn't opted in.
  */
 
 const SCRIPT_ID = 'skip-sensei-aggressive-pruner'

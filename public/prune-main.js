@@ -1,15 +1,17 @@
 /**
- * Aggressive-mode pruner — runs in the PAGE (MAIN) world at document_start,
- * registered directly in the manifest with "world": "MAIN" so it executes
- * SYNCHRONOUSLY before YouTube's first inline script sets
- * ytInitialPlayerResponse. (A content script injected from the isolated
- * world can't do this: the CRXJS module loader imports asynchronously and
- * lands too late for the initial page load.)
+ * First-party YouTube ad pruner — runs in the PAGE (MAIN) world at
+ * document_start with "world": "MAIN" so it executes SYNCHRONOUSLY before
+ * YouTube's first inline script sets ytInitialPlayerResponse. A content script
+ * injected from the isolated world can't do this — it lands too late for the
+ * initial page load — so it must run in the MAIN world at document_start.
  *
- * It strips ad slots out of YouTube player responses (uBO "json-prune"), so
- * most ads never start. It's only injected when aggressive mode is on: the
- * service worker registers/unregisters it at runtime via chrome.scripting,
- * so registration itself is the gate — no in-script flag check needed.
+ * It strips ad slots out of YouTube player responses (uBO "json-prune") and
+ * removes ad segments from HLS/DASH/VAST manifests, so most ads never start.
+ * It only removes ad data from responses YouTube already sent; it never
+ * manipulates outbound requests. It's registered at runtime by the service
+ * worker via chrome.scripting (see src/prune-register.ts), and only while the
+ * first-party ad-blocking setting is on — so registration itself is the gate,
+ * no in-script flag check needed, and the script is simply absent when off.
  *
  * This file is intentionally plain ES5-ish JS with no imports: it's copied
  * verbatim from public/ and injected as-is into the page.
@@ -163,90 +165,6 @@
       return prune(originalParse.apply(this, arguments))
     }, originalParse)
   } catch (e) {}
-
-  // ---------------------------------------------------------------------------
-  // 4) Outbound player-request context spoof.
-  //    YouTube asks for ad-bearing player responses via POST to
-  //    /youtubei/v1/player. We intercept the OUTBOUND request body (fetch +
-  //    XHR) and set context.client.clientScreen = "CHANNEL", which nudges
-  //    YouTube toward an ad-free response variant. (We use CHANNEL, not EMBED:
-  //    EMBED enforces per-video embed permissions and would break playback of
-  //    embedding-disabled videos; CHANNEL is a WEB sub-context with no such
-  //    restriction.) Only player requests are
-  //    touched; everything else passes through byte-for-byte. If anything
-  //    fails to parse we forward the ORIGINAL body untouched — we never drop
-  //    or corrupt a request.
-  // ---------------------------------------------------------------------------
-  var PLAYER_PATH = '/youtubei/v1/player'
-
-  function isPlayerUrl(url) {
-    try {
-      return typeof url === 'string' && url.indexOf(PLAYER_PATH) !== -1
-    } catch (e) {
-      return false
-    }
-  }
-
-  function spoofPlayerBody(body) {
-    // Only string bodies are handled; anything else is returned as-is.
-    if (typeof body !== 'string' || !body) return body
-    try {
-      var data = originalParse(body)
-      if (!data || typeof data !== 'object') return body
-      if (!data.context || typeof data.context !== 'object') data.context = {}
-      if (!data.context.client || typeof data.context.client !== 'object') {
-        data.context.client = {}
-      }
-      data.context.client.clientScreen = 'CHANNEL'
-      return JSON.stringify(data)
-    } catch (e) {
-      // Parse/serialize failure — forward the original body unchanged.
-      return body
-    }
-  }
-
-  // 4a) fetch()
-  try {
-    var originalFetch = window.fetch
-    if (typeof originalFetch === 'function') {
-      window.fetch = cloak(function (input, init) {
-        try {
-          var url = ''
-          if (typeof input === 'string') url = input
-          else if (input && typeof input.url === 'string') url = input.url
-
-          if (isPlayerUrl(url) && init && typeof init.body === 'string') {
-            var spoofed = spoofPlayerBody(init.body)
-            if (spoofed !== init.body) {
-              // Shallow-clone init so we don't mutate the caller's object.
-              var newInit = {}
-              for (var k in init) {
-                if (Object.prototype.hasOwnProperty.call(init, k)) newInit[k] = init[k]
-              }
-              newInit.body = spoofed
-              return originalFetch.call(this, input, newInit)
-            }
-          }
-        } catch (e) {}
-        return originalFetch.apply(this, arguments)
-      }, originalFetch)
-    }
-  } catch (e) {}
-
-  // 4b) XMLHttpRequest — track the URL on open(), spoof the body on send().
-  try {
-    var originalOpen = XMLHttpRequest.prototype.open
-    XMLHttpRequest.prototype.open = cloak(function (method, url) {
-      try {
-        this.__ssUrl = url
-      } catch (e) {}
-      return originalOpen.apply(this, arguments)
-    }, originalOpen)
-  } catch (e) {}
-
-  // The send() wrapper (both body spoof AND responseText shadow) lives in a
-  // single override at the end of this file so cloaking stays clean — see the
-  // "XHR send" block below.
 
   // ---------------------------------------------------------------------------
   // 5) HLS ad-segment pruning (m3u-prune) &
@@ -416,31 +334,20 @@
     }, originalText)
   } catch (e) {}
 
-  // XHR send — a single override handling BOTH (4) the outbound player-request
-  // body spoof and (5+6) shadowing the per-instance responseText getter so a
-  // completed HLS/XML response reads back pruned. Kept as one wrapper so the
-  // cloak() mapping points straight at the true native send (no intermediate
-  // wrapper leaks its JS source through toString). The native responseText
-  // getter is reached via the prototype descriptor; if it throws (e.g. a
-  // responseType mismatch) that error propagates naturally.
+  // XHR send — override that shadows the per-instance responseText getter so a
+  // completed HLS/XML response reads back pruned (5+6). Kept as one wrapper so
+  // the cloak() mapping points straight at the true native send (no
+  // intermediate wrapper leaks its JS source through toString). The native
+  // responseText getter is reached via the prototype descriptor; if it throws
+  // (e.g. a responseType mismatch) that error propagates naturally.
   try {
     var nativeXHRSend = XMLHttpRequest.prototype.send
     var xhrTextDesc = Object.getOwnPropertyDescriptor(XMLHttpRequest.prototype, 'responseText')
     var nativeResponseTextGet =
       xhrTextDesc && typeof xhrTextDesc.get === 'function' ? xhrTextDesc.get : null
 
-    XMLHttpRequest.prototype.send = cloak(function (body) {
-      var sendBody = body
-      var spoofedBody = false
+    XMLHttpRequest.prototype.send = cloak(function () {
       try {
-        // (4) Outbound player-request context spoof.
-        if (isPlayerUrl(this.__ssUrl) && typeof body === 'string') {
-          var spoofed = spoofPlayerBody(body)
-          if (spoofed !== body) {
-            sendBody = spoofed
-            spoofedBody = true
-          }
-        }
         // (5+6) Shadow responseText so completed HLS/XML bodies read pruned.
         if (nativeResponseTextGet && !this.__ssTextShadowed) {
           this.__ssTextShadowed = true
@@ -459,7 +366,6 @@
           })
         }
       } catch (e) {}
-      if (spoofedBody) return nativeXHRSend.call(this, sendBody)
       return nativeXHRSend.apply(this, arguments)
     }, nativeXHRSend)
   } catch (e) {}
