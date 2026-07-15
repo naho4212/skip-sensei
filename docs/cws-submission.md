@@ -107,7 +107,7 @@ in the privacy policy.
 - Data is NOT used or transferred for advertising or creditworthiness.
 - Data use is limited to providing the user-facing features.
 
-**Privacy policy URL:** https://landing-beta-three-23.vercel.app/privacy.html
+**Privacy policy URL:** https://www.singlefinmedia.com/ad-sensei/privacy.html
 (replace with the custom domain once one is attached — it must stay in sync
 with the telemetry endpoint host in `src/error-reporting.ts`)
 
