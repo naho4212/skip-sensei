@@ -29,8 +29,8 @@ function getVideoId(): string | null {
   return new URLSearchParams(location.search).get('v')
 }
 
-function reportAdSkip(method: AdSkipMethod) {
-  const message: Message = { type: 'skipSensei:adSkipped', method }
+function reportAdSkip(method: AdSkipMethod, count = 1, quiet = false) {
+  const message: Message = { type: 'skipSensei:adSkipped', method, count, quiet }
   // Service worker may be asleep mid-restart; a dropped count isn't worth a
   // crash. The try/catch matters too: after an extension reload orphans this
   // script, sendMessage throws SYNCHRONOUSLY — tear everything down then.

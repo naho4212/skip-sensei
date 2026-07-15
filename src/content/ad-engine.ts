@@ -89,12 +89,13 @@ const WALLS_BEFORE_BREAKER = 1
  * the user sees a calm "Skipping ad…" panel instead of the 16x flicker,
  * click churn, and pod transitions. Removed the moment the ad is gone.
  *
- * DISABLED for now: with skips landing near-instantly the cover mostly hides
- * what the engine is doing, and we want the ad visible while tuning skip
- * behavior. Flip to re-enable — everything else (mute, skip, cleanup) is
- * unchanged, and removeCloak() still runs so stale covers get cleared.
+ * Re-enabled (Jul 14) now that the skip-latency work has shipped and been
+ * verified — the user sees the branded panel instead of the raw engine
+ * churn. Flip OFF while tuning skip behavior, when the ad must stay visible;
+ * everything else (mute, skip, cleanup) is unchanged either way, and
+ * removeCloak() still runs so stale covers get cleared.
  */
-const CLOAK_ENABLED = false
+const CLOAK_ENABLED = true
 const CLOAK_ID = 'skip-sensei-ad-cloak'
 const CLOAK_STYLE_ID = 'skip-sensei-ad-cloak-style'
 /**
@@ -261,8 +262,21 @@ export class AdEngine {
   /** Wall-clock when the current ad started showing (for the heal timer). */
   private adShowingSince: number | null = null
   private healInFlight = false
+  /** Actions taken during the current ad break (a pod of consecutive ads
+   * shares one ad-showing state), reported as ONE entry when it clears. */
+  private breakMethods: AdSkipMethod[] = []
+  /** Ad footage neutralized this break: completed pod ads + the current one
+   * (the <video> duration is the ad's while ad-showing). */
+  private breakAdSeconds = 0
+  private curAdDuration = 0
 
-  constructor(private onSkip: (method: AdSkipMethod) => void) {}
+  constructor(
+    private onSkip: (
+      method: AdSkipMethod,
+      count?: number,
+      quiet?: boolean,
+    ) => void,
+  ) {}
 
   start() {
     void this.loadHealedSelectors()
@@ -368,19 +382,12 @@ export class AdEngine {
 
     const adShowing = this.adIsShowing()
     if (!adShowing) {
-      // Ad just ended → record how long it took to clear (read the method
-      // BEFORE endFastForward resets the flags). Ignore sub-0.3s flickers.
+      // Ad break just ended → report it as ONE aggregated entry (read the
+      // tallies BEFORE endFastForward resets the flags). Ignore sub-0.3s
+      // flickers.
       if (this.adShowingSince !== null) {
         const seconds = (Date.now() - this.adShowingSince) / 1000
-        if (seconds >= 0.3) {
-          const method =
-            this.skipClickedAt !== null
-              ? 'skip button'
-              : this.fastForwarding
-                ? 'fast-forward'
-                : 'skipped'
-          this.reportAdTiming(seconds, method)
-        }
+        if (seconds >= 0.3) this.reportBreakCleared(seconds)
       }
       this.endFastForward()
       this.removeCloak()
@@ -390,6 +397,9 @@ export class AdEngine {
       this.ffLastTime = -1
       this.ffLastSeekAt = 0
       this.stuckRecoveries = 0
+      this.breakMethods = []
+      this.breakAdSeconds = 0
+      this.curAdDuration = 0
       return
     }
 
@@ -471,22 +481,81 @@ export class AdEngine {
     })
   }
 
+  /** In-break actions are tallied and reported once when the break clears
+   * (see reportBreakCleared) instead of producing a log line each. */
+  private tallySkip(method: AdSkipMethod) {
+    this.breakMethods.push(method)
+  }
+
+  /** Track how much ad footage this break holds: while ad-showing, the
+   * <video> duration is the current ad's; a >1s change means the pod moved
+   * to its next ad, so bank the finished one. Bounds guard against sampling
+   * the main video during the ad→content swap. */
+  private noteAdDuration(duration: number) {
+    if (!Number.isFinite(duration) || duration < 0.5 || duration > 600) return
+    if (this.curAdDuration !== 0 && Math.abs(duration - this.curAdDuration) > 1)
+      this.breakAdSeconds += this.curAdDuration
+    this.curAdDuration = duration
+  }
+
   /**
-   * How long an ad took to clear, for testing/monitoring. Logged to the
-   * activity page (visible locally) and sent as an anonymous 'ad_skip_timing'
-   * diagnostics event (aggregatable), gated on the telemetry setting.
+   * ONE activity line, ONE counter bump, and ONE timing event per ad break.
+   * A pod of consecutive ads shares a single ad-showing state, so reporting
+   * each action as it happened (plus a separate timing line whose method was
+   * just the LAST action) rendered one break as three log rows with a
+   * duration that looked wrong next to them. Logged to the activity page
+   * (visible locally) and sent as an anonymous 'ad_skip_timing' diagnostics
+   * event (aggregatable), gated on the telemetry setting.
    */
-  private reportAdTiming(seconds: number, method: string) {
+  private reportBreakCleared(seconds: number) {
     const secs = seconds.toFixed(1)
-    void recordActivity(
-      'Skip YouTube ads',
-      `skipped an ad in ${secs}s (${method})`,
-      'youtube.com',
-    )
+    const ads = this.breakMethods.length
+    const clicks = this.breakMethods.filter((m) => m === 'skip-button').length
+    const ffs = this.breakMethods.filter((m) => m === 'fast-forward').length
+    const recoveries = ads - clicks - ffs
+    const adFootage = Math.round(this.breakAdSeconds + this.curAdDuration)
+    const footage = adFootage > 0 ? `${adFootage}s of ads` : null
+    const label =
+      clicks > 0
+        ? 'skip button'
+        : ffs > 0
+          ? 'fast-forward'
+          : recoveries > 0
+            ? 'stuck recovery'
+            : 'skipped'
+    let desc: string
+    if (ads === 0) {
+      // Cleared without an engine action (e.g. a short bumper ran out).
+      desc = `an ad ended on its own after ${secs}s`
+    } else if (ads === 1) {
+      desc = footage
+        ? `skipped ${footage} in ${secs}s (${label})`
+        : `skipped an ad in ${secs}s (${label})`
+    } else {
+      const parts = [
+        clicks > 0 ? `${clicks} skip button` : '',
+        ffs > 0 ? `${ffs} fast-forwarded` : '',
+        recoveries > 0 ? `${recoveries} stuck recovery` : '',
+      ].filter(Boolean)
+      desc = `skipped ${ads} ads${footage ? ` (${footage})` : ''} in ${secs}s (${parts.join(', ')})`
+    }
+    void recordActivity('Skip YouTube ads', desc, 'youtube.com')
+    if (ads > 0) {
+      const primary: AdSkipMethod =
+        clicks > 0 ? 'skip-button' : ffs > 0 ? 'fast-forward' : 'stuck-recovery'
+      // quiet: the aggregated line above IS the activity entry; the message
+      // only carries the per-ad counter bump.
+      this.onSkip(primary, ads, true)
+    }
     void this.send({
       type: 'skipSensei:event',
       kind: 'ad_skip_timing',
-      fields: { seconds: secs, method },
+      fields: {
+        seconds: secs,
+        method: label,
+        ads: String(ads),
+        adSeconds: String(adFootage),
+      },
     })
   }
 
@@ -621,7 +690,7 @@ export class AdEngine {
     }
     if (this.skipClickedAt === null) {
       this.skipClickedAt = now
-      this.onSkip('skip-button')
+      this.tallySkip('skip-button')
     }
     return true
   }
@@ -665,6 +734,7 @@ export class AdEngine {
     const video = document.querySelector<HTMLVideoElement>(VIDEO)
     if (!video || !Number.isFinite(video.duration) || video.duration <= 0)
       return
+    this.noteAdDuration(video.duration)
 
     // Stuck-ad watchdog. Two known wedge states: the ad reaches 'ended' but
     // YouTube never transitions away (parked), or a seek stalls playback
@@ -689,7 +759,7 @@ export class AdEngine {
       video.playbackRate = 1
       video.currentTime = Math.max(0, video.duration - 1)
       void video.play().catch(() => {})
-      this.onSkip('stuck-recovery')
+      this.tallySkip('stuck-recovery')
       return
     }
 
@@ -727,7 +797,7 @@ export class AdEngine {
       // A clicked ad is already counted (and timing-attributed) as
       // 'skip-button'; firing here too would double-count it now that the
       // click and the seek fallback run in the same tick.
-      if (this.skipClickedAt === null) this.onSkip('fast-forward')
+      if (this.skipClickedAt === null) this.tallySkip('fast-forward')
     }
   }
 

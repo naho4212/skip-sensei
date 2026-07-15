@@ -1,8 +1,8 @@
 /**
  * User-facing "what's new" entries, newest first. The popup shows every entry
  * strictly newer than the version the user last acknowledged (see
- * getLastSeenVersion), so on each release: bump the version in
- * manifest.config.ts AND add an entry here with the user-visible changes.
+ * getLastSeenVersion), so on each release: bump the version in package.json
+ * (scripts/bump-version.mjs) AND add an entry here with the changes.
  *
  * Keep items short and benefit-oriented — this is release notes for a viewer,
  * not a commit log. Omit purely internal changes.
@@ -14,6 +14,14 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '0.2.14',
+    date: '2026-07-14',
+    items: [
+      'The Ad Sensei skip overlay is back — a calm branded panel covers the player while an ad is being skipped, instead of the fast-forward flicker',
+      'One activity entry per ad break: consecutive ads are combined into a single line showing how much ad time was skipped and how fast',
+    ],
+  },
   {
     version: '0.2.13',
     date: '2026-07-14',

@@ -436,6 +436,8 @@ chrome.runtime.onMessage.addListener(
       case 'skipSensei:adSkipped': {
         const count = message.count && message.count > 0 ? message.count : 1
         void recordSkip('ad', count)
+        // quiet = the ad engine already wrote its aggregated per-break line.
+        if (message.quiet) return false
         const base =
           AD_SKIP_DESCRIPTIONS[message.method] ?? 'neutralized an ad'
         // Aggressive mode reports a video's whole ad-break count at once.

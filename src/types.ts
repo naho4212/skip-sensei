@@ -261,7 +261,14 @@ export interface VideoAnalysis {
 export type Message =
   // count: how many ad breaks this event represents (aggressive-mode pruning
   // reports the number of slots removed for a video); defaults to 1.
-  | { type: 'skipSensei:adSkipped'; method: AdSkipMethod; count?: number }
+  | {
+      type: 'skipSensei:adSkipped'
+      method: AdSkipMethod
+      count?: number
+      /** Counter-only: the content script already wrote an aggregated
+       * per-break activity line, so the SW must not add its own. */
+      quiet?: boolean
+    }
   | { type: 'skipSensei:sponsorSkipped'; videoId: string }
   // Live per-tab hidden-ad tally: `count` is the page total (badge snapshot),
   // `added` is how many are new since the last message (fed to lifetime stats).
