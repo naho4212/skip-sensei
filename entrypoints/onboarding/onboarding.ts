@@ -18,23 +18,31 @@ document.getElementById('open-options')?.addEventListener('click', () => {
 const LEVELS: Record<'low' | 'medium' | 'high', Partial<Settings>> = {
   low: {
     blockAllAds: false,
+    blockTrackers: false,
     blockCookieNotices: false,
     blockPopups: false,
     blockSocial: false,
+    blockUrlTracking: false,
     aggressivePruning: false,
   },
   medium: {
     blockAllAds: true,
+    // EasyPrivacy-style tracker blocking is uBO's default posture — safe tier.
+    blockTrackers: true,
     blockCookieNotices: true,
     blockPopups: true,
     blockSocial: false,
+    blockUrlTracking: false,
     aggressivePruning: false,
   },
   high: {
     blockAllAds: true,
+    blockTrackers: true,
     blockCookieNotices: true,
     blockPopups: true,
     blockSocial: true,
+    // Param stripping can break links some sites use functionally — Max only.
+    blockUrlTracking: true,
     aggressivePruning: true,
   },
 }
