@@ -90,6 +90,53 @@
   font-size: 14px;
 }
 
+/* One-click web-blocking activation inside card 3 */
+.enable-btn {
+  margin-top: 12px;
+  height: 38px;
+  padding: 0 20px;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  border: none;
+  border-radius: 19px;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+  transition: filter 0.15s;
+}
+.enable-btn:hover {
+  filter: brightness(1.08);
+}
+.enable-btn.enabled {
+  background: rgba(124, 58, 237, 0.16);
+  color: var(--accent-bright);
+  cursor: default;
+}
+.enable-hint {
+  margin-top: 8px !important;
+  font-size: 12.5px !important;
+  color: var(--text-3) !important;
+}
+
+.aggressive-toggle {
+  font-size: 13.5px;
+  color: var(--text-2);
+}
+.beta-tag {
+  font-style: normal;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent-bright);
+  border: 1px solid rgba(124, 58, 237, 0.45);
+  border-radius: 4px;
+  padding: 1px 5px;
+  margin-left: 6px;
+  vertical-align: 1px;
+}
+
 /* AI note — an accent-tinted callout, visually distinct from the steps */
 .ai-note {
   border: 1px solid rgba(124, 58, 237, 0.35);

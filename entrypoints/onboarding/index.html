@@ -21,6 +21,15 @@
             Automatically skips YouTube's ads — clicks “Skip” the instant it
             appears and fast-forwards the rest. On by default.
           </p>
+          <!-- Aggressive pruning is opt-in (needs no extra permission): strip
+               ad slots out of player responses so most ads never start. -->
+          <label class="telemetry-toggle aggressive-toggle">
+            <input type="checkbox" id="aggressive-optin" />
+            <span
+              >Stronger blocking: remove ads before they can load
+              <em class="beta-tag">beta</em></span
+            >
+          </label>
         </li>
         <li class="card">
           <h2>Skip sponsor segments</h2>
@@ -34,8 +43,15 @@
           <h2>Block ads across the web</h2>
           <p>
             Optional filter-list ad (and tracker) blocking on every site, with a
-            per-site pause. <strong>Off by default</strong> — turn it on from the
-            toolbar popup.
+            per-site pause. <strong>Off by default.</strong>
+          </p>
+          <button type="button" id="enable-web-blocking" class="enable-btn">
+            Turn on ad blocking everywhere
+          </button>
+          <p class="enable-hint" id="enable-hint">
+            Chrome will ask to allow access to all sites — that's what lets Ad
+            Sensei block and hide ads on every page. You can pause any site, or
+            turn it off, from the toolbar popup.
           </p>
         </li>
       </ol>

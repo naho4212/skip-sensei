@@ -21,6 +21,7 @@ export const CHANGELOG: ChangelogEntry[] = [
       'The Ad Sensei skip overlay is back — a calm branded panel covers the player while an ad is being skipped, instead of the fast-forward flicker',
       'One activity entry per ad break: consecutive ads are combined into a single line showing how much ad time was skipped and how fast',
       'Cleaner popup: per-video status now sits under its own toggle, the hidden-ads review lives under Block all ads, and site reset joined the menu',
+      'The welcome page can now activate everything in one click: turn on web-wide ad blocking (with the permission prompt explained) and opt into stronger YouTube blocking right there',
     ],
   },
   {
