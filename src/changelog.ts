@@ -15,6 +15,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.2.20',
+    date: '2026-07-15',
+    items: [
+      'More honest YouTube ad count: blocked-ad tallies no longer double-count a video\'s ad breaks (the two internal ad-schedule formats were being added together), so the number now reflects real ad breaks prevented',
+      'Activity log now labels first-party blocking as "Block YouTube\'s first-party ads" instead of "(aggressive)", matching the setting name',
+    ],
+  },
+  {
     version: '0.2.19',
     date: '2026-07-15',
     items: [

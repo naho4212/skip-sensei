@@ -1,6 +1,6 @@
 {
   "name": "skip-sensei",
-  "version": "0.2.19",
+  "version": "0.2.20",
   "private": true,
   "description": "Skip YouTube ads and AI-detected creator sponsor segments, and block ads & trackers across the web.",
   "type": "module",

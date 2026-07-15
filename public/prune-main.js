@@ -59,18 +59,26 @@
   // Strip the ad keys from one object; return how many real ad SLOTS (breaks)
   // were removed (array length, so a placement list counts each break).
   function stripKeys(target) {
-    var removed = 0
+    // adPlacements and adSlots are two representations of the SAME ad breaks
+    // (legacy list + newer slot format). Count the LARGER, never the sum —
+    // summing double-counts (a 6-break movie has adPlacements:6 + adSlots:2,
+    // which would read as "8 ads"). Non-slot ad keys are stripped but never
+    // tallied.
+    var maxSlots = 0
     for (var i = 0; i < AD_KEYS.length; i++) {
       var key = AD_KEYS[i]
       if (key in target) {
         var val = target[key]
         try {
           delete target[key]
-          if (AD_SLOT_KEYS[key]) removed += Array.isArray(val) ? val.length : 1
+          if (AD_SLOT_KEYS[key]) {
+            var n = Array.isArray(val) ? val.length : 1
+            if (n > maxSlots) maxSlots = n
+          }
         } catch (e) {}
       }
     }
-    return removed
+    return maxSlots
   }
 
   function prune(obj) {

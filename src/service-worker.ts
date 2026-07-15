@@ -415,7 +415,7 @@ const AD_SKIP_DESCRIPTIONS: Record<string, string> = {
   'skip-button': 'clicked the Skip button on an ad',
   'fast-forward': 'fast-forwarded an unskippable ad',
   'stuck-recovery': 'recovered a stuck ad player',
-  pruned: 'blocked ads before they could load (aggressive)',
+  pruned: 'blocked an ad before it could load',
   'overlay-removed': 'removed an overlay ad',
   'pause-overlay-dismissed': 'dismissed a pause-screen ad',
 }
@@ -428,13 +428,22 @@ chrome.runtime.onMessage.addListener(
         void recordSkip('ad', count)
         // quiet = the ad engine already wrote its aggregated per-break line.
         if (message.quiet) return false
-        const base =
-          AD_SKIP_DESCRIPTIONS[message.method] ?? 'neutralized an ad'
-        // Aggressive mode reports a video's whole ad-break count at once.
-        const desc =
-          message.method === 'pruned' && count > 1
-            ? `blocked ${count} ads before they could load (aggressive)`
-            : base
+        // The first-party layer (json-prune) blocks ads before they load — a
+        // distinct feature/tier from reactive skipping, and logged as such so
+        // the activity log mirrors the reframed setting names.
+        if (message.method === 'pruned') {
+          const desc =
+            count > 1
+              ? `blocked ${count} ads before they could load`
+              : 'blocked an ad before it could load'
+          void recordActivity(
+            "Block YouTube's first-party ads",
+            desc,
+            senderHost(sender),
+          )
+          return false
+        }
+        const desc = AD_SKIP_DESCRIPTIONS[message.method] ?? 'neutralized an ad'
         void recordActivity('Skip YouTube ads', desc, senderHost(sender))
         return false
       }
