@@ -10,6 +10,13 @@ import { defineConfig } from 'wxt'
 export default defineConfig({
   // No auto-imports: this codebase uses explicit imports throughout.
   imports: false,
+  // Don't auto-launch a throwaway browser in dev — the workflow here is a
+  // persistent load-unpacked install (point it at .output/chrome-mv3-dev
+  // while developing), which the dev server hot-reloads in place, same as
+  // the old vite/crxjs flow.
+  webExt: {
+    disabled: true,
+  },
   manifest: {
     name: 'Ad Sensei',
     description:

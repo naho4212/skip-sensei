@@ -80,8 +80,8 @@ retry, then graceful degradation to ad-skipping only.
 
 ```sh
 npm install
-npm run build      # typecheck + production build to dist/
-npm run dev        # vite dev server with HMR (crxjs)
+npm run build      # typecheck + production build to .output/chrome-mv3/
+npm run dev        # WXT dev server with HMR (load .output/chrome-mv3-dev/)
 npm run rulesets   # rebuild DNR filter rulesets from @adguard/dnr-rulesets
 npm run package    # build + zip for distribution
 ```
@@ -90,7 +90,7 @@ npm run package    # build + zip for distribution
 
 1. `npm run build`
 2. Open `chrome://extensions`, enable **Developer mode**
-3. **Load unpacked** → select the `dist/` directory
+3. **Load unpacked** → select the `.output/chrome-mv3/` directory
 4. Open any YouTube video
 
 ## Architecture
@@ -118,7 +118,8 @@ src/
     prune-loader.ts   isolated-world reporter for the aggressive pruner
     toast.ts          in-player "Skipped sponsor / Unskip" toast
   service-worker.ts   LLM orchestration, caching, counters, message routing
-  popup/ options/ onboarding/ log/   extension pages
+entrypoints/          WXT entrypoints: thin wrappers over src/ (background,
+                      content scripts) + the popup/ options/ onboarding/ pages
 public/prune-main.js  MAIN-world json-prune (aggressive mode)
 scripts/              ruleset build, zip packaging, version bump
 .github/workflows/    monthly filter-list refresh → rebuild → (CWS publish)
