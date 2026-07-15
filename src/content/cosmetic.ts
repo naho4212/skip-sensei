@@ -1862,11 +1862,53 @@ async function runGapfill() {
 // ---------------------------------------------------------------------------
 
 const AUDIT_TEXT_MIN = 30
-let auditRan = false
+/** LLM calls per page — one main pass plus one late pass for content that
+ * rendered after the first audit (lazy sections, SPA navigations). */
+let auditCallsLeft = 2
+
+/**
+ * "Empty" can lie: a hidden search box or compose field has no TEXT but is
+ * full of CONTROLS, and a wrongly hidden lazy section may stay empty
+ * PRECISELY because we hid it. A genuinely blocked ad slot has neither —
+ * the creative never arrived, so there's nothing interactive inside. These
+ * structural markers qualify a text-less hidden element for the AI audit.
+ */
+function hasUiStructure(el: HTMLElement): boolean {
+  if (
+    el.querySelector(
+      'input:not([type="hidden"]), select, textarea, [contenteditable="true"], [role="search"], [role="textbox"], [role="combobox"]',
+    )
+  )
+    return true
+  return el.querySelectorAll('a[href], button').length >= 3
+}
+
+/** What the AI "reads" for a candidate: visible text, or — when the element
+ * is text-empty — its accessibility strings (labels, placeholders, alts),
+ * which is how a hidden search box still says what it is. */
+function auditText(el: HTMLElement): string {
+  const text = (el.textContent ?? '').trim().replace(/\s+/g, ' ')
+  if (text.length >= AUDIT_TEXT_MIN) return text.slice(0, 200)
+  const labels: string[] = []
+  if (el.getAttribute('aria-label')) labels.push(el.getAttribute('aria-label')!)
+  for (const c of el.querySelectorAll(
+    '[aria-label], [placeholder], img[alt], [title]',
+  )) {
+    const v =
+      c.getAttribute('aria-label') ??
+      c.getAttribute('placeholder') ??
+      c.getAttribute('alt') ??
+      c.getAttribute('title')
+    if (v) labels.push(v)
+    if (labels.length >= 6) break
+  }
+  const combined = [text, ...labels].filter(Boolean).join(' · ')
+  return combined.slice(0, 200)
+}
 
 async function auditListHides() {
   if (window !== window.top) return
-  if (auditRan) return
+  if (auditCallsLeft <= 0) return
   // Curated hosts' selectors are hand-verified (Google's sponsored results
   // are text-heavy by design — exactly what an AI audit would second-guess).
   if (isYouTube() || isUserContentHost() || isCuratedHost()) return
@@ -1888,28 +1930,31 @@ async function auditListHides() {
       continue
     }
     // textContent, not innerText — display:none elements have no innerText.
+    // A text-less element still qualifies when it carries UI structure: a
+    // blocked ad slot is an inert husk, a hidden search box is not.
     const el = els.find(
       (e): e is HTMLElement =>
         e instanceof HTMLElement &&
-        (e.textContent ?? '').trim().length >= AUDIT_TEXT_MIN,
+        ((e.textContent ?? '').trim().length >= AUDIT_TEXT_MIN ||
+          hasUiStructure(e)),
     )
     if (el) suspects.push({ selector, el })
   }
   if (suspects.length === 0) return
-  auditRan = true
+  auditCallsLeft--
   const notAds: number[] | null = await chrome.runtime
     .sendMessage({
       type: 'skipSensei:auditHiddenElements',
       candidates: suspects.map((s, index) => ({
         index,
         html: s.el.outerHTML.slice(0, 700),
-        text: (s.el.textContent ?? '').trim().replace(/\s+/g, ' ').slice(0, 200),
+        text: auditText(s.el),
       })),
       page: { host: location.hostname, title: document.title.slice(0, 80) },
     })
     .catch(() => null)
   if (notAds === null) {
-    auditRan = false // transient failure — a later pass may retry
+    auditCallsLeft++ // transient failure — a later pass may retry
     return
   }
   const cleared = new Set(notAds)
@@ -2051,7 +2096,11 @@ function onPageReady() {
   setTimeout(() => void runGapfill(), 3500)
   // …and once the page settled, have the AI read what the lists are HIDING
   // and rescue clear false positives (hidden search boxes, threads, content).
+  // A late second pass catches elements that were still empty at the first
+  // one (lazy sections, SPA renders) — per-selector verdicts are cached, so
+  // it only fires when something NEW qualifies.
   setTimeout(() => void auditListHides(), 5000)
+  setTimeout(() => void auditListHides(), 20000)
   void scheduleSlotCollapse() // reclaim blank space where blocked ads were
   initConsent() // AI cookie-consent auto-reject
 }
