@@ -1,6 +1,6 @@
-// Package dist/ into the landing page's download zip, versioned by the
-// extension version: landing/ad-sensei-v<version>.zip. Also rewrites the
-// landing CTA links to point at the new filename and removes stale zips.
+// Package .output/chrome-mv3/ into the landing page's download zip, versioned
+// by the extension version: landing/ad-sensei-v<version>.zip. Also rewrites
+// the landing CTA links to point at the new filename and removes stale zips.
 //
 // Run via `npm run package` (which builds first).
 
@@ -9,7 +9,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 const root = path.resolve(import.meta.dirname, '..')
-const dist = path.join(root, 'dist')
+const dist = path.join(root, '.output', 'chrome-mv3')
 const landing = path.join(root, 'landing')
 
 const manifest = JSON.parse(

@@ -1,5 +1,5 @@
-import { changesSince } from '../changelog'
-import { clearCookiesFor } from '../cookies'
+import { changesSince } from '../../src/changelog'
+import { clearCookiesFor } from '../../src/cookies'
 import {
   clearAdblockWall,
   clearYtBackoff,
@@ -12,8 +12,8 @@ import {
   setLastSeenVersion,
   setSiteAllowlisted,
   updateSettings,
-} from '../storage'
-import { BLOCK_CATEGORY_LABELS } from '../types'
+} from '../../src/storage'
+import { BLOCK_CATEGORY_LABELS } from '../../src/types'
 import type {
   BlockBreakdown,
   HiddenElement,
@@ -23,7 +23,7 @@ import type {
   Settings,
   Stats,
   TabMessage,
-} from '../types'
+} from '../../src/types'
 
 const $ = <T extends HTMLElement>(id: string) =>
   document.getElementById(id) as T

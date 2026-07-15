@@ -14,7 +14,7 @@ import {
   resetSettingsToDefaults,
   setSiteAllowlisted,
   updateSettings,
-} from '../storage'
+} from '../../src/storage'
 import {
   FREE_TIER_DAILY_LIMIT,
   type KeyedProvider,
@@ -22,7 +22,7 @@ import {
   type Message,
   type SessionStats,
   type Settings,
-} from '../types'
+} from '../../src/types'
 
 const $ = <T extends HTMLElement>(id: string) =>
   document.getElementById(id) as T

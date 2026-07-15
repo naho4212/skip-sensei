@@ -1,4 +1,4 @@
-import { getSettings, updateSettings } from '../storage'
+import { getSettings, updateSettings } from '../../src/storage'
 
 document.getElementById('open-options')?.addEventListener('click', () => {
   void chrome.runtime.openOptionsPage()

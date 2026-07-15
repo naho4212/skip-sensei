@@ -695,7 +695,7 @@ chrome.runtime.onInstalled.addListener(async (details) => {
   // First install → open the welcome page.
   if (details.reason === 'install') {
     chrome.tabs
-      .create({ url: chrome.runtime.getURL('src/onboarding/index.html') })
+      .create({ url: chrome.runtime.getURL('onboarding.html') })
       .catch(() => {})
   }
   // After install/update, existing YouTube tabs run stale (or no) content
