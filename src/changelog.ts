@@ -20,6 +20,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     items: [
       'The Ad Sensei skip overlay is back — a calm branded panel covers the player while an ad is being skipped, instead of the fast-forward flicker',
       'One activity entry per ad break: consecutive ads are combined into a single line showing how much ad time was skipped and how fast',
+      'Cleaner popup: per-video status now sits under its own toggle, the hidden-ads review lives under Block all ads, and site reset joined the menu',
     ],
   },
   {

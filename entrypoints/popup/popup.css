@@ -465,8 +465,24 @@ body.disabled main > *:not(.site-hero) {
   text-decoration: none;
 }
 .ctl-row + .ctl-row,
+.ctl-detail + .ctl-row,
 .controls .link-row {
   border-top: 1px solid var(--divider);
+}
+
+/* Contextual detail folded under a toggle row: indented past the row icon
+ * (14px row padding + 34px icon + 12px gap), reads as part of that row. */
+.ctl-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: -5px;
+  padding: 0 14px 11px 60px;
+  font-size: 12px;
+  color: var(--text-2);
+}
+.ctl-detail #reload-tab {
+  align-self: flex-start;
 }
 .ctl-row:hover {
   background: var(--hover);
@@ -569,25 +585,6 @@ body.disabled main > *:not(.site-hero) {
   color: var(--text-2);
 }
 
-/* ── Current video ──────────────────────────────────────────────────── */
-.current {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 12px 14px;
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  background: var(--panel);
-}
-.status {
-  margin: 0;
-  font-size: 12px;
-  color: var(--text-2);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
 #reload-tab {
   font-family: inherit;
   font-size: 12px;
@@ -683,11 +680,10 @@ body.disabled main > *:not(.site-hero) {
 }
 
 /* ── AI hidden-elements review ──────────────────────────────────────── */
+/* Nested under the Block-all-ads toggle: inherits .ctl-detail's indent and
+ * transparent background instead of the old standalone-card chrome. */
 .hidden-review {
-  padding: 10px 14px;
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  background: var(--panel);
+  gap: 0;
 }
 .hidden-head {
   display: flex;
@@ -859,28 +855,16 @@ footer {
   opacity: 0.5;
 }
 
-/* Manual "reset this site" — subtle full-width action above the footer. */
-.reset-site {
-  display: block;
-  width: calc(100% - 32px);
-  margin: 10px 16px 0;
-  padding: 8px 12px;
-  font-family: inherit;
-  font-size: 12px;
-  color: var(--text-2);
-  background: var(--panel-2);
-  border: 1px solid var(--divider);
-  border-radius: 8px;
-  cursor: pointer;
-  transition:
-    color 0.15s,
-    border-color 0.15s;
+/* "Reset this site" is a link-row inside the card; strip button chrome. */
+button.ctl-row {
+  width: 100%;
+  background: none;
+  border: none;
+  border-top: 1px solid var(--divider);
+  font: inherit;
+  text-align: left;
 }
-.reset-site:hover {
-  color: var(--text);
-  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
-}
-.reset-site:disabled {
+button.ctl-row:disabled {
   opacity: 0.6;
   cursor: default;
 }

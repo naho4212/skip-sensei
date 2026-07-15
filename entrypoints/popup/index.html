@@ -188,6 +188,12 @@
           </span>
         </label>
 
+        <!-- Contextual per-video status for the ad engine (watch pages only) -->
+        <div class="ctl-detail" id="ad-detail" hidden>
+          <span id="ad-status"></span>
+          <button id="reload-tab" hidden>Reload page</button>
+        </div>
+
         <label class="ctl-row">
           <span class="ctl-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -212,6 +218,16 @@
           </span>
         </label>
 
+        <!-- Contextual sponsor status for the current video: analysis state,
+             progress, and the segment list, folded under its own toggle. -->
+        <div class="ctl-detail" id="sponsor-detail" hidden>
+          <span id="video-status"></span>
+          <div class="progress" id="analysis-progress" hidden>
+            <div class="progress-bar" id="analysis-bar"></div>
+          </div>
+          <ul class="segments" id="segment-list"></ul>
+        </div>
+
         <label class="ctl-row">
           <span class="ctl-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -235,6 +251,40 @@
             <span class="slider"></span>
           </span>
         </label>
+
+        <!-- AI hidden-ads review for this page, folded under Block all ads -->
+        <div class="ctl-detail hidden-review" id="hidden-review" hidden>
+          <div class="hidden-head">
+            <button
+              type="button"
+              class="hidden-toggle"
+              id="hidden-toggle"
+              aria-expanded="false"
+            >
+              <span class="hidden-chevron" id="hidden-chevron">▸</span>
+              <span class="section-title" id="hidden-title">Hidden ads here</span>
+            </button>
+            <button type="button" id="scan-ads-btn" class="mini-btn">
+              Scan for ads
+            </button>
+          </div>
+          <div id="hidden-body" hidden>
+            <p class="hidden-hint">
+              What the extension hid on this page. “👎 Not ad” shows it again and
+              stops hiding it on this site.
+            </p>
+            <ul class="hidden-list" id="hidden-list"></ul>
+            <p class="hidden-empty" id="hidden-empty" hidden>
+              Nothing hidden here. Tap “Scan for ads” to check this page with AI.
+            </p>
+            <p class="hidden-reset" id="hidden-reset" hidden>
+              <span id="hidden-reset-text"></span>
+              <button type="button" id="hidden-reset-btn" class="mini-btn">
+                Undo
+              </button>
+            </p>
+          </div>
+        </div>
 
         <label class="ctl-row">
           <span class="ctl-icon" aria-hidden="true">
@@ -275,62 +325,26 @@
           </span>
           <span class="chevron" aria-hidden="true">›</span>
         </a>
-      </section>
 
-      <!-- Current YouTube video (shown only on YouTube or pages that embed a
-           YouTube video; hidden by default so it never flashes elsewhere) -->
-      <section class="current" id="video-section" hidden>
-        <div class="section-title">This video</div>
-        <p class="status">
-          <span id="video-status"></span>
-          <button id="reload-tab" hidden>Reload page</button>
-        </p>
-        <div class="progress" id="analysis-progress" hidden>
-          <div class="progress-bar" id="analysis-bar"></div>
-        </div>
-        <ul class="segments" id="segment-list"></ul>
+        <!-- Manual site reset: clear the current site's cookies and reload.
+             Handy when a site is misbehaving or gating content — clears its
+             login/consent state for a fresh start. Hidden on non-web tabs. -->
+        <button type="button" id="reset-site-btn" class="ctl-row link-row" hidden>
+          <span class="ctl-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 12a9 9 0 1 0 2.6-6.4" />
+              <polyline points="3 3 3 8 8 8" />
+            </svg>
+          </span>
+          <span class="ctl-text">
+            <span class="ctl-title">Reset this site</span>
+            <span class="ctl-sub" id="reset-site-label"
+              >Clear cookies &amp; reload the page</span
+            >
+          </span>
+          <span class="chevron" aria-hidden="true">↻</span>
+        </button>
       </section>
-
-      <!-- AI hidden-ads review -->
-      <section class="hidden-review" id="hidden-review" hidden>
-        <div class="hidden-head">
-          <button
-            type="button"
-            class="hidden-toggle"
-            id="hidden-toggle"
-            aria-expanded="false"
-          >
-            <span class="hidden-chevron" id="hidden-chevron">▸</span>
-            <span class="section-title" id="hidden-title">Hidden ads here</span>
-          </button>
-          <button type="button" id="scan-ads-btn" class="mini-btn">
-            Scan for ads
-          </button>
-        </div>
-        <div id="hidden-body" hidden>
-          <p class="hidden-hint">
-            What the extension hid on this page. “👎 Not ad” shows it again and
-            stops hiding it on this site.
-          </p>
-          <ul class="hidden-list" id="hidden-list"></ul>
-          <p class="hidden-empty" id="hidden-empty" hidden>
-            Nothing hidden here. Tap “Scan for ads” to check this page with AI.
-          </p>
-          <p class="hidden-reset" id="hidden-reset" hidden>
-            <span id="hidden-reset-text"></span>
-            <button type="button" id="hidden-reset-btn" class="mini-btn">
-              Undo
-            </button>
-          </p>
-        </div>
-      </section>
-
-      <!-- Manual site reset: clear the current site's cookies and reload. Handy
-           when a site is misbehaving or gating content — clears its login/consent
-           state for a fresh start. Hidden on non-web tabs. -->
-      <button type="button" id="reset-site-btn" class="reset-site" hidden>
-        ↻ Clear cookies &amp; reload this site
-      </button>
 
       <footer>
         <button type="button" id="share-btn" class="footer-link">

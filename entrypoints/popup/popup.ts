@@ -42,6 +42,7 @@ const aiEnhancementsToggle = $<HTMLInputElement>('ai-enhancements-toggle')
 const blockerNoteEl = $('blocker-note')
 const pauseSiteToggle = $<HTMLInputElement>('pause-site-toggle')
 const videoStatusEl = $('video-status')
+const adStatusEl = $('ad-status')
 const segmentListEl = $<HTMLUListElement>('segment-list')
 const reloadTabEl = $<HTMLButtonElement>('reload-tab')
 
@@ -520,32 +521,43 @@ function sponsorStatusText(status: PageStatus): string {
   }
 }
 
+/**
+ * Per-video status folded under each engine's own toggle row: the ad
+ * engine's line under "Skip YouTube ads", the sponsor analysis (plus
+ * progress + segments) under "Skip sponsor segments". Off a watch page both
+ * stay hidden — the toggles alone say everything there is to say.
+ */
 async function renderVideoStatus() {
   reloadTabEl.hidden = true
-  const section = $('video-section')
+  const adDetail = $('ad-detail')
+  const sponsorDetail = $('sponsor-detail')
+  const hideBoth = () => {
+    adDetail.hidden = true
+    sponsorDetail.hidden = true
+  }
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
   if (!tab?.id) {
-    section.hidden = true
+    hideBoth()
     return
   }
   // On YouTube proper we have the full page status; on any other site the
-  // section only makes sense when the page actually embeds a YouTube video, so
+  // detail only makes sense when the page actually embeds a YouTube video, so
   // ask the content script before showing it. Anything else stays hidden.
   if (!tab.url?.includes('youtube.com')) {
     const hasEmbed = await chrome.tabs
       .sendMessage(tab.id, { type: 'skipSensei:hasYouTubeEmbed' }, TOP_FRAME)
       .catch(() => false)
     if (!hasEmbed) {
-      section.hidden = true
+      hideBoth()
       return
     }
-    section.hidden = false
+    adDetail.hidden = true
+    sponsorDetail.hidden = false
     videoStatusEl.textContent = 'YouTube video embedded on this page.'
     segmentListEl.replaceChildren()
     renderProgress(null)
     return
   }
-  section.hidden = false
   const message: TabMessage = { type: 'skipSensei:getPageStatus' }
   try {
     const status: PageStatus = await chrome.tabs.sendMessage(
@@ -554,20 +566,25 @@ async function renderVideoStatus() {
       TOP_FRAME,
     )
     if (!status.isWatchPage) {
-      videoStatusEl.textContent = 'Not watching a video.'
+      hideBoth()
       segmentListEl.replaceChildren()
       renderProgress(null)
       return
     }
-    const adText = status.adEngineActive
-      ? 'Watching for ads.'
+    adDetail.hidden = false
+    adStatusEl.textContent = status.adEngineActive
+      ? 'Watching this video for ads.'
       : 'Ad skipping is off.'
-    videoStatusEl.textContent = `${adText} ${sponsorStatusText(status)}`
+    sponsorDetail.hidden = false
+    videoStatusEl.textContent = sponsorStatusText(status)
     renderProgress(status)
     renderSegments(status)
   } catch {
-    videoStatusEl.textContent = 'Reload the YouTube tab to activate.'
+    // Content script unreachable (installed/updated after this tab loaded).
+    adDetail.hidden = false
+    adStatusEl.textContent = 'Reload the YouTube tab to activate.'
     reloadTabEl.hidden = false
+    sponsorDetail.hidden = true
     segmentListEl.replaceChildren()
     renderProgress(null)
   }
@@ -700,12 +717,16 @@ async function renderAdblockWall() {
 // base install doesn't hold — so request just that origin on demand (this runs
 // from a click, a valid user gesture). Then clear cookies the page would send,
 // drop the wall record, and reload.
-async function clearSiteCookiesAndReload(btn: HTMLButtonElement) {
-  const original = btn.textContent
+async function clearSiteCookiesAndReload(
+  btn: HTMLButtonElement,
+  // Structured rows keep their markup and swap only this label element.
+  label: HTMLElement = btn,
+) {
+  const original = label.textContent
   const active = await activeTabHost()
   if (!active) return
   btn.disabled = true
-  btn.textContent = 'Clearing…'
+  label.textContent = 'Clearing…'
   try {
     const origin = new URL(active.url).origin
     const granted = await chrome.permissions.request({
@@ -714,7 +735,7 @@ async function clearSiteCookiesAndReload(btn: HTMLButtonElement) {
     })
     if (!granted) {
       btn.disabled = false
-      btn.textContent = original
+      label.textContent = original
       return
     }
     await clearCookiesFor({ url: active.url })
@@ -724,7 +745,7 @@ async function clearSiteCookiesAndReload(btn: HTMLButtonElement) {
     window.close()
   } catch {
     btn.disabled = false
-    btn.textContent = original
+    label.textContent = original
   }
 }
 
@@ -753,7 +774,10 @@ async function main() {
     resetSiteBtn.hidden = !active
   })
   resetSiteBtn.addEventListener('click', (e) => {
-    void clearSiteCookiesAndReload(e.currentTarget as HTMLButtonElement)
+    void clearSiteCookiesAndReload(
+      e.currentTarget as HTMLButtonElement,
+      $('reset-site-label'),
+    )
   })
   renderSettings(await getSettings())
   renderStats(await getStats(), await fetchSessionStats())
