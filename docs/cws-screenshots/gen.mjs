@@ -234,9 +234,103 @@ ${brand}
       <div><div style="font-size:20px;font-weight:800;margin-bottom:6px;letter-spacing:-.01em">${t}</div>
         <div style="color:var(--dim);font-size:16px;line-height:1.46">${d}</div></div></div>`).join('')}
 </div>
-<div class="footer">
+<div class="footer" style="margin-top:28px">
   <span class="pill"><span class="dot"></span>Runs on Chrome’s built-in on-device model — nothing you watch is sent anywhere</span>
   ${skipGlyph(24)}
+</div>`)
+
+// ============ 7 — THE POPUP (real UI) ============
+// A faithful still of the actual popup's "This site" view — same structure
+// and dark-theme values as entrypoints/popup (matches the landing-page mock).
+slides.push(`
+<style>
+  .pm{width:344px;border-radius:18px;overflow:hidden;text-align:left;background:#111113;
+    border:1px solid rgba(255,255,255,.14);box-shadow:0 40px 100px rgba(0,0,0,.6),0 0 60px rgba(124,58,237,.25),0 0 0 1px rgba(124,58,237,.15);
+    font-size:14px;line-height:1.4;font-weight:400;letter-spacing:normal}
+  .pm,.pm *{font-family:var(--sans)}
+  .pm-head{display:flex;align-items:center;justify-content:space-between;padding:12px 16px 10px}
+  .pm-brandrow{display:flex;align-items:center;gap:11px}
+  .pm-glyph{width:22px;height:16px;fill:#7c3aed;flex:none}
+  .pm-brand{display:flex;flex-direction:column;line-height:1.25}
+  .pm-wm{font-weight:900;font-size:14px;letter-spacing:-.01em;color:#f1f1f3}
+  .pm-wm span{color:#8b5cf6}
+  .pm-status{font-size:11px;color:#6a6b76}
+  .pm-actions{display:flex;align-items:center;gap:12px;color:#6a6b76}
+  .pm-tgl{width:34px;height:20px;border-radius:999px;background:#7c3aed;position:relative;flex:none}
+  .pm-tgl::after{content:"";position:absolute;top:2px;right:2px;width:16px;height:16px;border-radius:50%;background:#fff}
+  .pm-seg{display:flex;gap:2px;margin:0 12px 8px;padding:3px;background:#191a1d;border:1px solid rgba(255,255,255,.09);border-radius:11px}
+  .pm-seg span{flex:1;text-align:center;padding:6px;border-radius:8px;font-size:12.5px;font-weight:500;color:#6a6b76}
+  .pm-seg .on{background:rgba(124,58,237,.22);color:#f1f1f3}
+  .pm-pad{padding:4px 12px 14px}
+  .pm-sitehero{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;
+    border:1px solid rgba(255,255,255,.09);border-radius:14px;background:#191a1d}
+  .pm-siteinfo{display:flex;flex-direction:column;gap:3px}
+  .pm-sitestatus{font-size:10.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:#8b5cf6;display:flex;align-items:center;gap:6px}
+  .pm-sitestatus::before{content:"";width:7px;height:7px;border-radius:50%;background:#8b5cf6;box-shadow:0 0 8px rgba(139,92,246,.45)}
+  .pm-host{font-size:17px;font-weight:600;letter-spacing:-.01em;color:#f1f1f3}
+  .pm-pageblocked{font-size:11.5px;color:#9a9ba6}
+  .pm-power{display:flex;align-items:center;justify-content:center;flex:none;width:46px;height:46px;border-radius:50%;
+    border:2px solid #8b5cf6;color:#8b5cf6;background:rgba(124,58,237,.1);box-shadow:0 0 14px rgba(139,92,246,.45)}
+  .pm-power svg{width:21px;height:21px}
+  .pm-detail{display:flex;align-items:center;gap:8px;margin-top:8px;padding:12px 14px;border:1px solid rgba(255,255,255,.09);
+    border-radius:14px;background:#191a1d;font-size:12.5px;color:#f1f1f3}
+  .pm-chev,.pm-re{color:#6a6b76;font-size:11px}
+  .pm-re{margin-left:auto;font-size:13px}
+  .pm-eyebrow{margin:14px 2px 6px;font-size:9.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:#6a6b76}
+  .pm-statrow{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+  .pm-stat{display:flex;flex-direction:column;align-items:center;gap:2px;padding:9px 3px 7px;
+    border:1px solid rgba(255,255,255,.09);border-radius:12px;background:#191a1d;text-align:center}
+  .pm-stat b{font-size:15.5px;font-weight:700;color:#f1f1f3;letter-spacing:-.02em}
+  .pm-stat span{font-size:10px;color:#9a9ba6}
+  .pm-stat i{font-style:normal;font-size:9.5px;color:#6a6b76}
+  .pm-foot{display:flex;justify-content:center;gap:8px;padding:10px;border-top:1px solid rgba(255,255,255,.09);font-size:12px;color:#6a6b76}
+</style>
+<div class="glow" style="width:560px;height:560px;right:40px;top:120px;background:radial-gradient(circle,rgba(124,58,237,.4),transparent 62%)"></div>
+${brand}
+<div style="display:flex;align-items:center;gap:80px;margin-top:34px;flex:1">
+  <div style="max-width:480px">
+    <div class="eyebrow">The popup</div>
+    <h2 style="font-size:58px;margin-top:14px">The whole app,<br><span class="grad">one click away</span></h2>
+    <p class="sub" style="font-size:21px;margin-top:20px">
+      A master switch, a pause button per site, and live counts of everything
+      blocked — nothing to configure unless you want to.</p>
+    <div style="display:flex;flex-direction:column;gap:18px;margin-top:36px">
+      ${['Pause blocking on any site with one tap', 'Live counts — this page, today, all-time', 'Every engine has its own switch'].map(t => `
+        <div class="chk"><span class="ic">${check()}</span>
+          <div style="font-size:20px;font-weight:700;padding-top:3px">${t}</div></div>`).join('')}
+    </div>
+  </div>
+  <div style="transform:scale(1.34);transform-origin:center">
+    <div class="pm">
+      <div class="pm-head">
+        <div class="pm-brandrow">
+          <svg class="pm-glyph" viewBox="0 0 24 17"><path d="M0 1.5l6 7-6 7v-14zm7.5 0l6 7-6 7v-14zm8.5 0h2.4v14H16v-14z"/></svg>
+          <div class="pm-brand"><span class="pm-wm"><span>AD</span> SENSEI</span><span class="pm-status">Protection active</span></div>
+        </div>
+        <div class="pm-actions"><span>↻</span><span class="pm-tgl"></span></div>
+      </div>
+      <div class="pm-seg"><span class="on">This site</span><span>Controls</span></div>
+      <div class="pm-pad">
+        <div class="pm-sitehero">
+          <div class="pm-siteinfo">
+            <span class="pm-sitestatus">Blocking active</span>
+            <span class="pm-host">youtube.com</span>
+            <span class="pm-pageblocked">23 blocked on this page</span>
+          </div>
+          <span class="pm-power"><svg viewBox="0 0 24 24"><path d="M12 3v9" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M7.4 6.4a7 7 0 1 0 9.2 0" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></span>
+        </div>
+        <div class="pm-detail"><span class="pm-chev">▸</span><span>2 sponsor segments skipped</span><span class="pm-re">↻</span></div>
+        <div class="pm-eyebrow">Blocked everywhere</div>
+        <div class="pm-statrow">
+          <div class="pm-stat"><b>1,284</b><span>YouTube</span><i>7 today</i></div>
+          <div class="pm-stat"><b>18,930</b><span>Web ads</span><i>166 today</i></div>
+          <div class="pm-stat"><b>4,102</b><span>Trackers</span><i>38 today</i></div>
+          <div class="pm-stat"><b>912</b><span>Cookies</span><i>12 today</i></div>
+        </div>
+      </div>
+      <div class="pm-foot">↗ Share <span>·</span> ☕ Buy me a coffee</div>
+    </div>
+  </div>
 </div>`)
 
 slides.forEach((body, i) => {

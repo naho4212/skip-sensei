@@ -14,12 +14,17 @@ headless Chrome at 2× then downscaled for crisp text.
 | `4-alt-sponsor-timeline.png` | 1280×800 | Screenshot — AI sponsor-segment skip (timeline) |
 | `5-ai.png` | 1280×800 | Screenshot — "AI where filter lists can't reach" |
 | `6-private.png` | 1280×800 | Screenshot — "Powerful. Private. Free." |
+| `7-popup.png` | 1280×800 | Screenshot — the real popup UI ("This site" view) |
 | `promo-tile-440x280.png` | 440×280 | Small promo tile (search/category results) |
 
 Screenshots are 1280×800 (CWS's preferred size). **A CWS listing accepts at
-most 5 screenshots**, so pick 5 of the six 1280×800 tiles at upload time — the
-sponsor timeline (`4-`) and the AI grid (`5-`) overlap, so they're the natural
-either/or.
+most 5 screenshots.** The recommended set, in upload order (staged in
+`~/Desktop/cws-screenshots/submit/`): `1-hero`, `3-youtube`,
+`4-alt-sponsor-timeline`, `7-popup`, `6-private`. That drops `2-three-layers`
+(its story is covered by the hero chips + popup stat cards) and `5-ai` (the
+sponsor timeline covers the AI moat; the two overlap). The popup tile mirrors
+the real `entrypoints/popup` "This site" view — keep it in sync if the popup UI
+changes materially.
 
 ## Regenerating
 
