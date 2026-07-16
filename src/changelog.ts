@@ -15,6 +15,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.2.25',
+    date: '2026-07-16',
+    items: [
+      'Fixed the YouTube “playback blocked” recovery panel not showing: when YouTube hard-blocks a flagged session, the in-player “Clear YouTube cookies & reload” panel now actually appears (it was being built but hidden by YouTube’s own player styling).',
+    ],
+  },
+  {
     version: '0.2.24',
     date: '2026-07-16',
     items: [
