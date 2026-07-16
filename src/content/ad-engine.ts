@@ -175,6 +175,11 @@ const HARD_BLOCK_CSS = `
   position: absolute;
   inset: 0;
   z-index: 10000;
+  /* The panel is appended into #movie_player, which YouTube sets to
+   * visibility:hidden during the enforcement error — and visibility inherits,
+   * so without this the panel is fully built and stacked but never rendered.
+   * A descendant can override an ancestor's hidden with visibility:visible. */
+  visibility: visible !important;
   display: flex;
   flex-direction: column;
   align-items: center;
