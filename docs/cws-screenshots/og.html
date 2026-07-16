@@ -1,0 +1,65 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --purple:#7c3aed; --purple-2:#a78bfa; --purple-3:#6d28d9;
+  --ink:#f7f5fc; --dim:#b3adc6; --faint:#7d7796;
+  --card:rgba(255,255,255,.045); --line:rgba(255,255,255,.10);
+  --sans:'Roboto',system-ui,-apple-system,'Helvetica Neue',Arial,sans-serif;
+  --mono:'Roboto Mono',ui-monospace,monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:1200px;height:630px;overflow:hidden}
+body{
+  font-family:var(--sans); color:var(--ink);
+  background:
+    radial-gradient(1000px 560px at 80% -10%, rgba(124,58,237,.44), transparent 60%),
+    radial-gradient(800px 620px at 6% 110%, rgba(109,40,217,.32), transparent 62%),
+    linear-gradient(160deg,#100e17 0%,#0a0810 60%,#08060d 100%);
+  position:relative;
+}
+body::before{
+  content:""; position:absolute; inset:0;
+  background-image:radial-gradient(rgba(255,255,255,.05) 1px, transparent 1px);
+  background-size:34px 34px; mask:radial-gradient(900px 500px at 60% 40%,#000,transparent 85%);
+  pointer-events:none;
+}
+.wrap{position:relative; width:100%; height:100%; padding:60px 76px; display:flex; flex-direction:column}
+.brand{display:flex; align-items:center; gap:14px}
+.brand .mark{width:46px;height:46px;border-radius:13px;background:linear-gradient(150deg,var(--purple),var(--purple-3));
+  display:grid;place-items:center;box-shadow:0 8px 26px rgba(124,58,237,.5), inset 0 1px 0 rgba(255,255,255,.25)}
+.brand .name{font-weight:900;font-size:27px;letter-spacing:-.01em}
+.brand .name b{color:var(--purple-2)}
+.grad{background:linear-gradient(92deg,var(--purple-2),#c4b5fd); -webkit-background-clip:text; background-clip:text; color:transparent}
+.pill{display:inline-flex;align-items:center;gap:10px;padding:11px 18px;border:1px solid var(--line);
+  border-radius:999px;background:var(--card);font-family:var(--mono);font-size:15px;color:var(--ink)}
+.pill .dot{width:9px;height:9px;border-radius:50%;background:var(--purple-2);box-shadow:0 0 12px var(--purple-2)}
+.footer{margin-top:auto; display:flex; align-items:center; justify-content:space-between}
+</style></head><body><div class="wrap">
+  <div style="position:absolute;right:-90px;top:-60px;opacity:.15">
+    <svg width="470" height="470" viewBox="0 0 100 100"><circle cx="50" cy="50" r="42" fill="none" stroke="url(#g)" stroke-width="5" stroke-linecap="round" pathLength="100" stroke-dasharray="86 100" transform="rotate(18 50 50)"/>
+    <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7c3aed"/><stop offset="1" stop-color="#a78bfa"/></linearGradient></defs></svg>
+  </div>
+  <div class="brand">
+    <div class="mark"><svg width="21" height="14" viewBox="0 0 92 60" fill="#fff"><polygon points="0,0 34,30 0,60"/><polygon points="38,0 72,30 38,60"/><rect x="80" y="0" width="12" height="60" rx="5"/></svg></div>
+    <div class="name">Ad<b>Sensei</b></div>
+  </div>
+  <div style="margin:auto 0; max-width:940px">
+    <div style="font-family:var(--mono);font-size:16px;letter-spacing:.32em;text-transform:uppercase;color:var(--purple-2);font-weight:500;margin-bottom:20px">AI-powered ad blocker</div>
+    <h1 style="font-weight:900;letter-spacing:-.022em;line-height:1.02;font-size:84px">Ads, skipped<br><span class="grad">instantly.</span></h1>
+    <p style="color:var(--dim);font-size:25px;margin-top:24px;max-width:780px;line-height:1.5">
+      YouTube ads, creator sponsor reads, and ads &amp; trackers across the web —
+      handled automatically, free and private.</p>
+  </div>
+  <div class="footer">
+    <div style="display:flex;gap:13px">
+      <span class="pill"><span class="dot"></span>YouTube ads</span>
+      <span class="pill" style="background:rgba(124,58,237,.24);border-color:rgba(167,139,250,.6);box-shadow:0 0 24px rgba(124,58,237,.35)">
+        <svg width="15" height="15" viewBox="0 0 24 24"><path d="M12 3l1.7 5.1L19 10l-5.3 1.9L12 17l-1.7-5.1L5 10l5.3-1.9L12 3z" fill="#c4b5fd"/></svg>AI sponsor-skip</span>
+      <span class="pill"><span class="dot"></span>Web-wide blocking</span>
+    </div>
+    <svg width="37" height="24" viewBox="0 0 92 60" fill="#c4b5fd"><polygon points="0,0 34,30 0,60"/><polygon points="38,0 72,30 38,60"/><rect x="80" y="0" width="12" height="60" rx="5"/></svg>
+  </div>
+</div></body></html>
