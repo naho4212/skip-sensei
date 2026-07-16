@@ -15,6 +15,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.2.24',
+    date: '2026-07-16',
+    items: [
+      'Ad-hiding rules now refresh automatically between updates: when a site changes how it serves ads, Ad Sensei can pick up the fix without waiting for a new version. Only rule data is downloaded (never code), and it\'s off in Local-only mode — toggle it under Settings › AI & privacy',
+    ],
+  },
+  {
     version: '0.2.22',
     date: '2026-07-15',
     items: [
