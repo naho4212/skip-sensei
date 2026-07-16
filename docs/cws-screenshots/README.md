@@ -9,22 +9,17 @@ headless Chrome at 2× then downscaled for crisp text.
 | File | Size | Use |
 |---|---|---|
 | `1-hero.png` | 1280×800 | Screenshot — "Skip the ad. Every ad." (AI-forward hero) |
-| `2-three-layers.png` | 1280×800 | Screenshot — "One ad blocker, three layers" |
-| `3-youtube.png` | 1280×800 | Screenshot — instant YouTube ad skipping |
-| `4-alt-sponsor-timeline.png` | 1280×800 | Screenshot — AI sponsor-segment skip (timeline) |
-| `5-ai.png` | 1280×800 | Screenshot — "AI where filter lists can't reach" |
-| `6-private.png` | 1280×800 | Screenshot — "Powerful. Private. Free." |
-| `7-popup.png` | 1280×800 | Screenshot — the real popup UI ("This site" view) |
+| `2-youtube-sponsor.png` | 1280×800 | Screenshot — YouTube ads + AI sponsor-skip (player + timeline) |
+| `3-web-blocking.png` | 1280×800 | Screenshot — "Block ads on every site" (lists + AI gap-filler) |
+| `4-ai-private.png` | 1280×800 | Screenshot — "Smart. Private. Free." (AI + privacy) |
+| `5-popup.png` | 1280×800 | Screenshot — the real popup UI ("This site" view) |
 | `promo-tile-440x280.png` | 440×280 | Small promo tile (search/category results) |
 
-Screenshots are 1280×800 (CWS's preferred size). **A CWS listing accepts at
-most 5 screenshots.** The recommended set, in upload order (staged in
-`~/Desktop/cws-screenshots/submit/`): `1-hero`, `3-youtube`,
-`4-alt-sponsor-timeline`, `7-popup`, `6-private`. That drops `2-three-layers`
-(its story is covered by the hero chips + popup stat cards) and `5-ai` (the
-sponsor timeline covers the AI moat; the two overlap). The popup tile mirrors
-the real `entrypoints/popup` "This site" view — keep it in sync if the popup UI
-changes materially.
+Screenshots are 1280×800 (CWS's preferred size), exactly five — CWS's maximum —
+uploaded in file order, and every tile carries the AI thread where it's real.
+A ready-to-upload copy is staged in `~/Desktop/cws-screenshots/submit/`.
+The popup tile mirrors the real `entrypoints/popup` "This site" view — keep it
+in sync if the popup UI changes materially.
 
 ## Regenerating
 
