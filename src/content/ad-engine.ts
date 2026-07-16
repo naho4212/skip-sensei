@@ -175,10 +175,9 @@ const HARD_BLOCK_CSS = `
   position: absolute;
   inset: 0;
   z-index: 10000;
-  /* The panel is appended into #movie_player, which YouTube sets to
-   * visibility:hidden during the enforcement error — and visibility inherits,
-   * so without this the panel is fully built and stacked but never rendered.
-   * A descendant can override an ancestor's hidden with visibility:visible. */
+  /* Only matters on the fallback host (#movie_player), which YouTube sets to
+   * visibility:hidden during the enforcement error — visibility inherits, but
+   * a descendant can override an ancestor's hidden with visibility:visible. */
   visibility: visible !important;
   display: flex;
   flex-direction: column;
@@ -258,6 +257,9 @@ export class AdEngine {
   private breakerTripped = false
   /** True once the final "playback blocked" stage was seen on this page. */
   private hardBlockSeen = false
+  /** True after the user dismisses the recovery panel — check() runs every
+   * second and would otherwise rebuild it immediately. */
+  private hardBlockPanelDismissed = false
   /** AI-healed skip-button selectors (kept apart from the trusted hardcoded
    * list: healed matches must additionally pass looksLikeSkipControl). */
   private healedSkipSelectors: string[] = []
@@ -837,8 +839,9 @@ export class AdEngine {
     // exists. Removing the message here just leaves a dead black player (and
     // is how earlier builds "handled" it). Leave the DOM alone and offer the
     // real remedy in place: clearing youtube.com cookies lifts the flag.
-    if (message.closest(PLAYABILITY_ERROR_SCREEN)) {
-      this.handleHardBlock()
+    const errorScreen = message.closest<HTMLElement>(PLAYABILITY_ERROR_SCREEN)
+    if (errorScreen) {
+      this.handleHardBlock(errorScreen)
       return
     }
 
@@ -864,7 +867,7 @@ export class AdEngine {
    * (same breaker as the modal wall), flag the popup notice, and offer the
    * one real fix — clearing youtube.com cookies — right on the dead player.
    */
-  private handleHardBlock() {
+  private handleHardBlock(errorScreen?: HTMLElement) {
     if (!this.hardBlockSeen) {
       this.hardBlockSeen = true
       this.wallsSeen++
@@ -884,14 +887,22 @@ export class AdEngine {
       })
       log('YouTube hard playback block detected — showing recovery panel')
     }
-    this.showHardBlockPanel()
+    this.showHardBlockPanel(errorScreen)
   }
 
-  private showHardBlockPanel() {
+  private showHardBlockPanel(errorScreen?: HTMLElement) {
+    if (this.hardBlockPanelDismissed) return
     if (document.getElementById(HARD_BLOCK_ID)) return
+    // YouTube paints this enforcement stage in an overlay OUTSIDE the player
+    // subtree that stacks above it, so a panel inside #movie_player renders
+    // but is fully occluded. Host the panel on the error screen itself; the
+    // player is only a fallback for a wall with no error screen to sit on.
     const host =
-      this.player ?? document.querySelector<HTMLElement>(PLAYER)
+      errorScreen ?? this.player ?? document.querySelector<HTMLElement>(PLAYER)
     if (!host) return
+    if (getComputedStyle(host).position === 'static') {
+      host.style.position = 'relative'
+    }
 
     if (!document.getElementById(HARD_BLOCK_STYLE_ID)) {
       const style = document.createElement('style')
@@ -938,7 +949,10 @@ export class AdEngine {
     const dismiss = document.createElement('button')
     dismiss.className = 'hb-dismiss'
     dismiss.textContent = "Dismiss and show YouTube's message"
-    dismiss.addEventListener('click', () => panel.remove())
+    dismiss.addEventListener('click', () => {
+      this.hardBlockPanelDismissed = true
+      panel.remove()
+    })
 
     const brand = document.createElement('div')
     brand.className = 'hb-brand'

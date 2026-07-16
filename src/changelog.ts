@@ -15,6 +15,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.2.26',
+    date: '2026-07-16',
+    items: [
+      'YouTube “playback blocked” recovery panel, take two: v0.2.25 made the panel render, but YouTube draws its enforcement message in a layer above the player, covering it. The panel now sits on that layer itself, so “Clear YouTube cookies & reload” is genuinely clickable — and dismissing it now sticks instead of the panel reappearing a second later.',
+    ],
+  },
+  {
     version: '0.2.25',
     date: '2026-07-16',
     items: [
