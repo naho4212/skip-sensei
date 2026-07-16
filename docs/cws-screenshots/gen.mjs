@@ -1,0 +1,245 @@
+import { writeFileSync } from 'node:fs'
+
+const OUT = process.argv[2]
+
+const HEAD = `<!doctype html><html lang="en"><head><meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --purple:#7c3aed; --purple-2:#a78bfa; --purple-3:#6d28d9;
+  --ink:#f7f5fc; --dim:#b3adc6; --faint:#7d7796;
+  --card:rgba(255,255,255,.045); --line:rgba(255,255,255,.10);
+  --sans:'Roboto',system-ui,-apple-system,'Helvetica Neue',Arial,sans-serif;
+  --mono:'Roboto Mono',ui-monospace,monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:1280px;height:800px;overflow:hidden}
+body{
+  font-family:var(--sans); color:var(--ink);
+  background:
+    radial-gradient(1100px 620px at 78% -8%, rgba(124,58,237,.42), transparent 60%),
+    radial-gradient(900px 700px at 8% 108%, rgba(109,40,217,.30), transparent 62%),
+    linear-gradient(160deg,#100e17 0%,#0a0810 60%,#08060d 100%);
+  position:relative;
+}
+/* subtle dot grid */
+body::before{
+  content:""; position:absolute; inset:0;
+  background-image:radial-gradient(rgba(255,255,255,.05) 1px, transparent 1px);
+  background-size:34px 34px; mask:radial-gradient(1000px 600px at 60% 40%,#000,transparent 85%);
+  pointer-events:none;
+}
+.wrap{position:relative; width:100%; height:100%; padding:70px 84px; display:flex; flex-direction:column}
+.eyebrow{font-family:var(--mono); font-size:16px; letter-spacing:.32em; text-transform:uppercase; color:var(--purple-2); font-weight:500}
+h1{font-weight:900; letter-spacing:-.022em; line-height:1.02}
+h2{font-weight:900; letter-spacing:-.02em; line-height:1.04}
+.sub{color:var(--dim); font-weight:400; line-height:1.5}
+.grad{background:linear-gradient(92deg,var(--purple-2),#c4b5fd); -webkit-background-clip:text; background-clip:text; color:transparent}
+/* brand lockup */
+.brand{display:flex; align-items:center; gap:14px}
+.brand .mark{width:44px;height:44px;border-radius:12px;background:linear-gradient(150deg,var(--purple),var(--purple-3));
+  display:grid;place-items:center;box-shadow:0 8px 26px rgba(124,58,237,.5), inset 0 1px 0 rgba(255,255,255,.25)}
+.brand .name{font-weight:900;font-size:26px;letter-spacing:-.01em}
+.brand .name b{color:var(--purple-2)}
+.footer{margin-top:auto; display:flex; align-items:center; justify-content:space-between}
+.pill{display:inline-flex;align-items:center;gap:10px;padding:11px 18px;border:1px solid var(--line);
+  border-radius:999px;background:var(--card);font-family:var(--mono);font-size:15px;color:var(--ink)}
+.pill .dot{width:9px;height:9px;border-radius:50%;background:var(--purple-2);box-shadow:0 0 12px var(--purple-2)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:30px 28px}
+.chk{display:flex;align-items:flex-start;gap:16px}
+.chk .ic{flex:none;width:30px;height:30px;border-radius:9px;background:rgba(124,58,237,.16);border:1px solid rgba(167,139,250,.35);
+  display:grid;place-items:center;margin-top:2px}
+.glow{position:absolute;border-radius:50%;filter:blur(2px);pointer-events:none}
+</style></head><body><div class="wrap">`
+
+const FOOT = `</div></body></html>`
+
+// --- reusable svg bits ---
+const skipGlyph = (h = 34, c = '#c4b5fd') => `<svg width="${(h / 60) * 92}" height="${h}" viewBox="0 0 92 60" fill="none">
+  <polygon points="0,0 34,30 0,60" fill="${c}"/><polygon points="38,0 72,30 38,60" fill="${c}"/>
+  <rect x="80" y="0" width="12" height="60" rx="5" fill="${c}"/></svg>`
+const enso = (s = 520, op = .16) => `<svg width="${s}" height="${s}" viewBox="0 0 100 100" style="opacity:${op}">
+  <circle cx="50" cy="50" r="42" fill="none" stroke="url(#g)" stroke-width="5" stroke-linecap="round"
+    pathLength="100" stroke-dasharray="86 100" transform="rotate(18 50 50)"/>
+  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#7c3aed"/><stop offset="1" stop-color="#a78bfa"/></linearGradient></defs></svg>`
+const check = (c = '#c4b5fd') => `<svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="${c}" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+const brand = `<div class="brand"><div class="mark">${skipGlyph(20, '#fff')}</div><div class="name">Ad<b>Sensei</b></div></div>`
+
+// icons for the three-layers slide
+const icoGlobe = `<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#c4b5fd" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.5 2.5 15 0 18M12 3c-2.5 2.5-2.5 15 0 18"/></svg>`
+const icoShield = `<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#c4b5fd" stroke-width="1.7"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z"/><path d="M9 12l2 2 4-4" stroke-width="1.9"/></svg>`
+const icoPlay = `<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#c4b5fd" stroke-width="1.7"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M10 9l5 3-5 3V9z" fill="#c4b5fd" stroke="none"/></svg>`
+
+const slides = []
+
+// ============ 1 — HERO ============
+slides.push(`
+<div class="glow" style="width:640px;height:640px;left:320px;top:70px;background:radial-gradient(circle,rgba(124,58,237,.5),transparent 60%)"></div>
+<div style="position:absolute;right:-60px;top:120px">${enso(560, .14)}</div>
+${brand}
+<div style="margin:auto 0; max-width:920px">
+  <div class="eyebrow" style="margin-bottom:22px">AI-powered ad blocker · YouTube &amp; the web</div>
+  <h1 style="font-size:96px">Skip the ad.<br><span class="grad">Every&nbsp;ad.</span></h1>
+  <p class="sub" style="font-size:26px;margin-top:26px;max-width:800px">
+    YouTube video ads, creator sponsor reads, and ads &amp; trackers across the web —
+    skipped automatically, with AI to catch the ones filter lists can’t.</p>
+</div>
+<div class="footer">
+  <div style="display:flex;gap:14px">
+    <span class="pill"><span class="dot"></span>YouTube ads</span>
+    <span class="pill" style="background:rgba(124,58,237,.24);border-color:rgba(167,139,250,.6);box-shadow:0 0 24px rgba(124,58,237,.35)">
+      <span style="display:grid;place-items:center;width:16px;height:16px">
+        <svg width="15" height="15" viewBox="0 0 24 24"><path d="M12 3l1.7 5.1L19 10l-5.3 1.9L12 17l-1.7-5.1L5 10l5.3-1.9L12 3z" fill="#c4b5fd"/></svg></span>AI sponsor-skip</span>
+    <span class="pill"><span class="dot"></span>Web-wide blocking</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:14px;color:var(--faint);font-family:var(--mono);font-size:15px">
+    On-device AI · Private · Free ${skipGlyph(26)}</div>
+</div>`)
+
+// ============ 2 — YOUTUBE ============
+slides.push(`
+${brand}
+<div class="eyebrow" style="margin-top:48px">On YouTube</div>
+<h2 style="font-size:60px;margin-top:16px;max-width:900px">Ads skipped the instant<br>they appear</h2>
+<div style="display:flex;gap:44px;align-items:center;margin-top:44px">
+  <!-- mock player -->
+  <div style="position:relative;flex:none;width:620px;height:349px;border-radius:20px;
+     background:linear-gradient(160deg,#1c1830,#120f1e);border:1px solid var(--line);overflow:hidden;
+     box-shadow:0 30px 80px rgba(0,0,0,.5)">
+    <div style="position:absolute;inset:0;display:grid;place-items:center;opacity:.5">
+      <svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="#6b6482" stroke-width="1.2"><circle cx="12" cy="12" r="10"/><path d="M10 8l6 4-6 4V8z" fill="#6b6482" stroke="none"/></svg></div>
+    <!-- skipped toast -->
+    <div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+       display:flex;align-items:center;gap:16px;padding:20px 30px;border-radius:16px;
+       background:rgba(124,58,237,.20);border:1px solid rgba(167,139,250,.55);backdrop-filter:blur(6px);
+       box-shadow:0 16px 50px rgba(124,58,237,.4)">
+      ${skipGlyph(30)}<span style="font-weight:900;font-size:26px">Ad skipped</span></div>
+    <!-- progress bar with crossed ad ticks -->
+    <div style="position:absolute;left:22px;right:22px;bottom:22px;height:6px;border-radius:3px;background:rgba(255,255,255,.14)">
+      <div style="position:absolute;left:0;top:0;bottom:0;width:38%;border-radius:3px;background:linear-gradient(90deg,#a78bfa,#7c3aed)"></div>
+      <div style="position:absolute;left:38%;top:-3px;width:12px;height:12px;border-radius:50%;background:#ef4444;box-shadow:0 0 0 3px rgba(239,68,68,.25)"></div>
+      <div style="position:absolute;left:70%;top:-3px;width:12px;height:12px;border-radius:50%;background:#4b465e"></div>
+    </div>
+  </div>
+  <!-- checklist -->
+  <div style="display:flex;flex-direction:column;gap:22px">
+    ${['Pre-roll ads', 'Mid-roll breaks', 'Post-roll &amp; overlays', 'Anti-ad-blocker walls'].map(t => `
+      <div class="chk"><span class="ic">${check()}</span>
+        <div style="font-size:23px;font-weight:700;padding-top:2px">${t}</div></div>`).join('')}
+    <div style="color:var(--dim);font-size:18px;max-width:340px;margin-top:4px;line-height:1.5">
+      Clicks “Skip” the moment it renders — no ad flash, no waiting.</div>
+  </div>
+</div>`)
+
+// ============ 3 — SPONSOR / AI ============
+slides.push(`
+${brand}
+<div class="eyebrow" style="margin-top:48px">The AI moat</div>
+<h2 style="font-size:60px;margin-top:16px;max-width:960px">It skips creator<br>sponsor reads, too</h2>
+<p class="sub" style="font-size:23px;margin-top:22px;max-width:820px">
+  Transcript-based AI finds the paid segments crowdsourced filter lists can’t see —
+  precision-first, so it never cuts real content.</p>
+<!-- timeline -->
+<div style="margin-top:52px;max-width:1010px">
+  <div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:14px;color:var(--faint);margin-bottom:12px">
+    <span>0:00</span><span style="color:var(--purple-2)">SPONSOR 2:14 – 3:47 · skipped</span><span>10:20</span></div>
+  <div style="position:relative;height:26px;border-radius:13px;background:rgba(255,255,255,.08);border:1px solid var(--line)">
+    <div style="position:absolute;left:0;top:0;bottom:0;width:21%;border-radius:13px 0 0 13px;background:rgba(167,139,250,.28)"></div>
+    <div style="position:absolute;left:21%;top:-1px;bottom:-1px;width:16%;border-radius:6px;
+       background:repeating-linear-gradient(115deg,rgba(124,58,237,.9),rgba(124,58,237,.9) 10px,rgba(167,139,250,.9) 10px,rgba(167,139,250,.9) 20px);
+       box-shadow:0 0 30px rgba(124,58,237,.6);display:grid;place-items:center">
+       <span style="font-family:var(--mono);font-size:12px;font-weight:500;color:#fff">SPONSOR</span></div>
+    <!-- skip arrow leaping past -->
+    <div style="position:absolute;left:37%;top:50%;transform:translate(-6px,-50%)">${skipGlyph(22, '#fff')}</div>
+    <div style="position:absolute;left:37%;top:0;bottom:0;width:63%;border-radius:0 13px 13px 0;background:rgba(255,255,255,.05)"></div>
+  </div>
+</div>
+<div style="display:flex;gap:16px;margin-top:56px;flex-wrap:wrap">
+  ${[['Transcript-based detection', 'Understands what’s actually said'], ['Self-healing selectors', 'Re-finds the Skip button when YouTube changes'], ['Free on-device AI', 'Or bring your own key']].map(([a, b]) => `
+    <div class="card" style="flex:1;min-width:280px">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px"><span class="ic">${check()}</span>
+        <b style="font-size:20px">${a}</b></div>
+      <div style="color:var(--dim);font-size:17px;line-height:1.45">${b}</div></div>`).join('')}
+</div>`)
+
+// ============ 4 — THREE LAYERS ============
+slides.push(`
+${brand}
+<div class="eyebrow" style="margin-top:48px">What it does</div>
+<h2 style="font-size:60px;margin-top:16px">One ad blocker, <span class="grad">three layers</span></h2>
+<p class="sub" style="font-size:22px;margin-top:20px;max-width:900px">
+  Web-wide blocking, plus the ads filter lists can’t reach — the ones sites serve
+  from their own domains, including YouTube’s in-stream video ads.</p>
+<div style="display:flex;gap:22px;margin-top:46px">
+  ${[
+    [icoGlobe, 'Block ads across the web', 'Filter-list ad &amp; tracker blocking on every site — plus cookie-notice, popup, and social lists. Pause any site from the popup.'],
+    [icoShield, 'Block first-party ads', 'Sponsored pins, promoted products, feed ads, and YouTube’s in-stream video ads — the ones filter lists miss. Removed automatically.'],
+    [icoPlay, 'Skip YouTube &amp; sponsors', 'Clicks “Skip” the instant it appears and uses AI to skip creator sponsor and self-promo reads — pre-roll to post-roll.'],
+  ].map(([ic, t, d], i) => `
+    <div class="card" style="flex:1;display:flex;flex-direction:column;gap:16px;padding:34px 30px">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <span style="width:56px;height:56px;border-radius:15px;background:rgba(124,58,237,.15);border:1px solid rgba(167,139,250,.32);display:grid;place-items:center">${ic}</span>
+        <span style="font-family:var(--mono);font-size:26px;color:var(--faint);font-weight:500">0${i + 1}</span></div>
+      <div style="font-size:25px;font-weight:900;letter-spacing:-.01em;line-height:1.12">${t}</div>
+      <div style="color:var(--dim);font-size:17px;line-height:1.5">${d}</div></div>`).join('')}
+</div>`)
+
+// ============ 5 — PRIVATE & FREE ============
+slides.push(`
+<div style="position:absolute;right:-40px;bottom:-60px">${enso(460, .12)}</div>
+${brand}
+<div class="eyebrow" style="margin-top:48px">Private by design</div>
+<h2 style="font-size:64px;margin-top:16px">Powerful. Private. <span class="grad">Free.</span></h2>
+<p class="sub" style="font-size:23px;margin-top:20px;max-width:820px">
+  Everything runs in your browser. No account, no subscription, nothing you watch leaves your device.</p>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-top:52px;max-width:1010px">
+  ${[
+    ['Free on-device AI by default', 'Uses Chrome’s built-in model — or bring your own key. Nothing you watch is ever collected.'],
+    ['No tracking, no ads of our own', 'We don’t build a profile, sell data, or inject affiliate links. Ever.'],
+    ['Local-only mode', 'A one-switch hard privacy guarantee: zero external network calls.'],
+    ['Filter lists auto-update', 'Data-only refreshes keep blocking effective between releases — no manual updates.'],
+  ].map(([a, b]) => `
+    <div class="card" style="display:flex;gap:18px;align-items:flex-start;padding:26px 26px">
+      <span class="ic" style="width:34px;height:34px">${check()}</span>
+      <div><div style="font-size:21px;font-weight:700;margin-bottom:6px">${a}</div>
+        <div style="color:var(--dim);font-size:16.5px;line-height:1.45">${b}</div></div></div>`).join('')}
+</div>
+<div class="footer"><div style="color:var(--faint);font-family:var(--mono);font-size:15px">Add to Chrome — free</div>${skipGlyph(26)}</div>`)
+
+// ============ 6 — AI FOCUSED ============
+const aiSpark = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M12 3l1.7 5.1L19 10l-5.3 1.9L12 17l-1.7-5.1L5 10l5.3-1.9L12 3z" fill="#c4b5fd"/><path d="M19 3.5l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7.7-2z" fill="#a78bfa"/></svg>`
+const aiHeal = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#c4b5fd" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2 5.3"/><path d="M20 4v5h-5"/></svg>`
+const aiScan = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#c4b5fd" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="6.5"/><circle cx="12" cy="12" r="1.6" fill="#c4b5fd" stroke="none"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>`
+const aiShield = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#c4b5fd" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z"/><path d="M9 12l2 2 4-4"/></svg>`
+slides.push(`
+<div class="glow" style="width:560px;height:560px;right:-120px;top:-80px;background:radial-gradient(circle,rgba(124,58,237,.42),transparent 62%)"></div>
+${brand}
+<div class="eyebrow" style="margin-top:44px">Powered by AI</div>
+<h2 style="font-size:58px;margin-top:14px">AI where filter lists <span class="grad">can’t reach</span></h2>
+<p class="sub" style="font-size:21px;margin-top:18px;max-width:900px">
+  Crowdsourced databases can’t see a creator’s sponsor read or an ad no list ever learned.
+  Ad Sensei uses AI to handle exactly those — free on-device by default, or your own key.</p>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:38px;max-width:1015px">
+  ${[
+    [aiSpark, 'Transcript-based sponsor detection', 'Reads what’s actually said to find paid segments — precision-first, so it never cuts real content.'],
+    [aiHeal, 'Self-healing selectors', 'When YouTube changes its layout and breaks skipping, the AI re-finds the button and caches the fix. No update needed.'],
+    [aiScan, 'Gap-filler for missed ads', 'Catches ads the filter lists miss on a site, learns them once, and hides them on every return visit.'],
+    [aiShield, 'Reviewed popups &amp; consent', 'Hides annoyance popups but keeps logins and consent dialogs — and clicks “reject all” on cookie prompts for you.'],
+  ].map(([ic, t, d]) => `
+    <div class="card" style="display:flex;gap:18px;align-items:flex-start;padding:26px 26px">
+      <span style="flex:none;width:48px;height:48px;border-radius:13px;background:rgba(124,58,237,.16);border:1px solid rgba(167,139,250,.34);display:grid;place-items:center">${ic}</span>
+      <div><div style="font-size:20px;font-weight:800;margin-bottom:6px;letter-spacing:-.01em">${t}</div>
+        <div style="color:var(--dim);font-size:16px;line-height:1.46">${d}</div></div></div>`).join('')}
+</div>
+<div class="footer">
+  <span class="pill"><span class="dot"></span>Runs on Chrome’s built-in on-device model — nothing you watch is sent anywhere</span>
+  ${skipGlyph(24)}
+</div>`)
+
+slides.forEach((body, i) => {
+  writeFileSync(`${OUT}/slide-${i + 1}.html`, HEAD + body + FOOT)
+})
+console.log(`wrote ${slides.length} slides to ${OUT}`)

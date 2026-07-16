@@ -1,0 +1,33 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@500;700;900&family=Roboto+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:440px;height:280px;overflow:hidden}
+body{
+  font-family:'Roboto',system-ui,Arial,sans-serif;color:#f7f5fc;
+  background:
+    radial-gradient(420px 280px at 82% -20%, rgba(124,58,237,.55), transparent 60%),
+    radial-gradient(360px 300px at -10% 120%, rgba(109,40,217,.4), transparent 62%),
+    linear-gradient(155deg,#141021 0%,#0a0810 62%,#08060d 100%);
+  position:relative;display:flex;flex-direction:column;justify-content:center;padding:34px 36px;
+}
+.enso{position:absolute;right:-70px;top:-50px;opacity:.16}
+.brand{display:flex;align-items:center;gap:12px;margin-bottom:18px}
+.mark{width:40px;height:40px;border-radius:11px;background:linear-gradient(150deg,#7c3aed,#6d28d9);
+  display:grid;place-items:center;box-shadow:0 6px 20px rgba(124,58,237,.55),inset 0 1px 0 rgba(255,255,255,.25)}
+.name{font-weight:900;font-size:23px;letter-spacing:-.01em}
+.name b{color:#a78bfa}
+h1{font-weight:900;font-size:33px;line-height:1.05;letter-spacing:-.02em}
+h1 .g{background:linear-gradient(92deg,#a78bfa,#c4b5fd);-webkit-background-clip:text;background-clip:text;color:transparent}
+.tag{font-family:'Roboto Mono',monospace;font-size:12.5px;letter-spacing:.06em;color:#b3adc6;margin-top:14px}
+</style></head><body>
+<div class="enso"><svg width="260" height="260" viewBox="0 0 100 100"><circle cx="50" cy="50" r="42" fill="none" stroke="url(#g)" stroke-width="5" stroke-linecap="round" pathLength="100" stroke-dasharray="86 100" transform="rotate(18 50 50)"/><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7c3aed"/><stop offset="1" stop-color="#a78bfa"/></linearGradient></defs></svg></div>
+<div class="brand">
+  <div class="mark"><svg width="19" height="12.4" viewBox="0 0 92 60"><polygon points="0,0 34,30 0,60" fill="#fff"/><polygon points="38,0 72,30 38,60" fill="#fff"/><rect x="80" y="0" width="12" height="60" rx="5" fill="#fff"/></svg></div>
+  <div class="name">Ad<b>Sensei</b></div>
+</div>
+<h1>Skip the ad.<br><span class="g">Every ad.</span></h1>
+<div class="tag">YouTube ads · sponsor reads · web-wide blocking</div>
+</body></html>
