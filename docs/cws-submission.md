@@ -157,11 +157,27 @@ with the telemetry endpoint host in `src/error-reporting.ts`)
    documented subset of uBlock Origin's scriptlet library — the same `safeSelf`
    toString-cloak pattern ships in uBlock Origin Lite on the Web Store today. It
    reads as evasion out of context, but it's standard, store-approved technique;
-   don't let its presence drive the build decision.
-2. **Obfuscation is banned** — do NOT minify-to-conceal or obfuscate to hide the
+   don't let its presence drive the build decision. It also targets *website*
+   anti-adblock detection, never Chrome, and is **dormant on a base install** —
+   it registers (MAIN world, via `chrome.scripting`) only after the user grants
+   the optional all-sites permission AND enables `defuseAntiAdblock`, so a
+   reviewer's default test install never activates it.
+
+2. **Differential filter-list updates** (`src/filter-updates.ts`) — the
+   extension periodically fetches refreshed cosmetic-filter DATA (a manifest +
+   `domain -> css-selector[]` shards) from `landing-beta-three-23.vercel.app`.
+   This is the store-sanctioned remote-*data* / configuration path that every
+   filter-list blocker uses, NOT remote code: no script is ever fetched or run.
+   Each payload is SHA-256-verified against the manifest, sanitized (universal/
+   structural selectors stripped), and validated via `querySelector` before it
+   can only ever become `selector{display:none}` CSS — fetched data cannot reach
+   the scriptlet engine or any code path. On by default, toggleable, off in
+   Local-only mode; disclosed in the privacy policy (§4). Static network (DNR)
+   rulesets stay bundled and update only with releases.
+3. **Obfuscation is banned** — do NOT minify-to-conceal or obfuscate to hide the
    above; that is a separate, account-level violation. Compliance = not shipping
    the code, not hiding it.
-3. **Single purpose** — keep the listing framed as "block ads and
+4. **Single purpose** — keep the listing framed as "block ads and
    interruptions," not a feature grab-bag.
-4. Ad blockers from new publishers get extra manual review; verify the
+5. Ad blockers from new publishers get extra manual review; verify the
    publisher and expect a longer first review.
