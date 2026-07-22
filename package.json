@@ -14,9 +14,9 @@
     "postinstall": "wxt prepare"
   },
   "devDependencies": {
-    "@adguard/dnr-rulesets": "^4.1.20260707190042",
-    "@types/chrome": "^0.0.287",
-    "typescript": "^5.6.0",
+    "@adguard/dnr-rulesets": "^5.0.0",
+    "@types/chrome": "^0.2.2",
+    "typescript": "^7.0.2",
     "wxt": "^0.20.27"
   },
   "overrides": {
