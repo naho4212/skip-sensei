@@ -65,9 +65,25 @@ const HEAL_AFTER_MS = 7000
  * Floor between check() runs. The MutationObserver fires for every player
  * DOM mutation, and check() itself mutates (event dispatch, seeks) — without
  * a floor that feeds back into a mutation storm that pegs the main thread.
- * The 1s fallback interval still guarantees forward progress.
+ * The fallback interval below still guarantees forward progress.
  */
 const CHECK_THROTTLE_MS = 250
+
+/**
+ * Safety-net poll when the player stops mutating mid-ad (no observer events to
+ * ride). Drives the seek-retry and end-of-ad transition, so it caps how long an
+ * ad can linger after YouTube goes quiet. Kept well above CHECK_THROTTLE_MS so
+ * the throttle, not this, governs steady-state cost.
+ */
+const FALLBACK_INTERVAL_MS = 400
+
+/**
+ * Floor between seek-to-end retries. A skippable ad is often non-seekable for
+ * its first few seconds (YouTube resets the seek); retrying this often re-tries
+ * the moment it becomes seekable, sometimes ending it before the ~5s Skip
+ * button even appears. Too low just fights a non-seekable ad and wastes cycles.
+ */
+const SEEK_RETRY_MS = 700
 
 /** Floor between synthetic click sequences on the same lingering button. */
 const CLICK_RETRY_MS = 500
@@ -358,7 +374,10 @@ export class AdEngine {
     })
     // Safety net: catches states the observer can miss (e.g. a skip button
     // that exists but only becomes clickable later without a DOM mutation).
-    this.fallbackTimer = window.setInterval(() => this.check(), 1000)
+    this.fallbackTimer = window.setInterval(
+      () => this.check(),
+      FALLBACK_INTERVAL_MS,
+    )
     this.check()
   }
 
@@ -781,9 +800,9 @@ export class AdEngine {
     if (video.paused && !video.ended) void video.play().catch(() => {})
 
     // Jump straight to the end of the ad — loading only the final segment,
-    // not the whole ad. Retry at most every 1.5s (not while a seek is in
-    // flight): if YouTube resets the seek on a non-seekable ad, this stops it
-    // fighting itself, and the 16x rate above still burns through in between.
+    // not the whole ad. Retry at most every SEEK_RETRY_MS (not while a seek is
+    // in flight): if YouTube resets the seek on a non-seekable ad, this stops
+    // it fighting itself, and the 16x rate above still burns through in between.
     // After a click, only seek while the ad-showing class is still up: in the
     // click→content transition the skip button can linger after the ad class
     // drops, and a seek landing on the freshly-swapped MAIN video would jump
@@ -792,7 +811,7 @@ export class AdEngine {
     if (
       !video.seeking &&
       target > video.currentTime + 1 &&
-      now - this.ffLastSeekAt > 1500 &&
+      now - this.ffLastSeekAt > SEEK_RETRY_MS &&
       (this.skipClickedAt === null || playerShowsAd(this.player))
     ) {
       this.ffLastSeekAt = now

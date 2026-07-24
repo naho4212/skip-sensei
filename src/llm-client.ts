@@ -21,8 +21,15 @@ import type {
  * then surfaces as an error — callers degrade to ad-skipping only.
  */
 
+// Provider defaults. Prefer a floating "latest" alias wherever the provider
+// maintains one — Google rotates the model behind `gemini-flash-latest`, so the
+// default tracks the current model with no extension release, and a retired
+// snapshot id can't 404 the default. OpenAI's bare names already float to the
+// current snapshot. Providers without a real alias (Groq, OpenRouter) pin a
+// current model and rely on the ModelUnavailableError self-heal below when one
+// is retired. Keep these current as a floor, not a ceiling.
 const DEFAULT_MODELS: Record<Exclude<LlmProvider, 'builtin'>, string> = {
-  gemini: 'gemini-2.5-flash',
+  gemini: 'gemini-flash-latest',
   anthropic: 'claude-haiku-4-5',
   openai: 'gpt-5-mini',
   groq: 'llama-3.3-70b-versatile',
@@ -121,6 +128,9 @@ export async function analyzeTranscript(
       // Rate limit: stop immediately so the caller re-runs the whole analysis
       // on the built-in model (chunked correctly for it).
       if (error instanceof RateLimitError) throw error
+      // A gone model 404s every chunk identically — bail on the first so the
+      // caller's fallback chain moves on instead of retrying it N more times.
+      if (error instanceof ModelUnavailableError) throw error
       // One slow/failed chunk shouldn't discard the whole video's analysis —
       // that section just loses its segments (a possible late/missed skip).
       failures++
@@ -443,6 +453,14 @@ export async function findConsentReject(
 /** Thrown when a provider returns a rate-limit / quota-exhausted status. */
 export class RateLimitError extends LlmError {}
 
+/**
+ * Thrown when a provider reports the requested model id doesn't exist / is no
+ * longer available (a retired snapshot, a typo'd Custom id). Distinct from a
+ * generic error so callers can self-heal to a working model instead of failing
+ * the analysis — the same graceful degradation we do for a rate limit.
+ */
+export class ModelUnavailableError extends LlmError {}
+
 // ---------------------------------------------------------------------------
 // Client-side request pacing — Gemini's free tier allows only ~5 requests per
 // minute, and AI-enhancement helper calls (popup review, gap-fill, consent)
@@ -529,6 +547,60 @@ export function resolveProvider(settings: Settings): LlmProvider {
   // Local-only mode forbids any external call — on-device AI only.
   if (settings.localOnlyMode) return 'builtin'
   return usable(settings.llmProvider, settings) ? settings.llmProvider : 'builtin'
+}
+
+/**
+ * Providers we auto-try as fallbacks. FREE-tier only — a saved paid key
+ * (OpenAI/Anthropic) is never auto-charged; it's used only when the user
+ * explicitly selects it. Local providers (ollama/openclaw) likewise run only
+ * when selected. The type excludes all of them so a paid provider can't be
+ * re-added here by accident.
+ */
+const FREE_FALLBACK_ORDER: Exclude<
+  LlmProvider,
+  'builtin' | 'ollama' | 'openclaw' | 'openai' | 'anthropic'
+>[] = ['gemini', 'groq', 'openrouter']
+
+/**
+ * Ordered provider configs to try for one analysis — best-effort across every
+ * credential the user has saved, ending at on-device AI so "all fallbacks
+ * failed" still yields a result. Order:
+ *   1. the selected provider with the user's exact model override,
+ *   2. the same provider on its auto-updating default (only if they'd pinned a
+ *      model — covers a retired snapshot / a Custom id typo'd for the wrong
+ *      provider, e.g. a Gemini id while Groq is selected),
+ *   3. every OTHER FREE-tier provider they have a key for and that isn't
+ *      cooling down, each on ITS OWN default model (never the selected
+ *      provider's override — a Gemini id sent to Groq is a guaranteed 404),
+ *   4. the built-in on-device model, always last.
+ *
+ * Selecting built-in or Local-only mode collapses this to on-device only — an
+ * explicit privacy choice we don't override by reaching for a saved key. Paid
+ * keys (OpenAI/Anthropic) are never auto-tried: they run only as the user's
+ * selected provider (steps 1-2), so a fallback can't silently spend money. The
+ * caller logs which provider actually ran.
+ */
+export function providerFallbackChain(settings: Settings): Settings[] {
+  const variant = (llmProvider: LlmProvider, model: string): Settings => ({
+    ...settings,
+    llmProvider,
+    model,
+  })
+  const selected = settings.llmProvider
+  if (settings.localOnlyMode || selected === 'builtin') {
+    return [variant('builtin', '')]
+  }
+
+  const chain: Settings[] = [variant(selected, settings.model)]
+  if (settings.model.trim()) chain.push(variant(selected, ''))
+  for (const provider of FREE_FALLBACK_ORDER) {
+    if (provider === selected) continue
+    if (settings.apiKeys[provider]?.trim() && !inCooldown(provider)) {
+      chain.push(variant(provider, ''))
+    }
+  }
+  chain.push(variant('builtin', ''))
+  return chain
 }
 
 /**
@@ -644,6 +716,9 @@ async function completeWithRetry(
       if (error instanceof TimeoutError) throw error
       // Rate limit → bail out so the whole analysis re-runs on the built-in model.
       if (error instanceof RateLimitError) throw error
+      // A missing model won't reappear on a same-model retry — bail out so the
+      // caller can switch to a working model / the built-in one.
+      if (error instanceof ModelUnavailableError) throw error
       lastError = error
     }
   }
@@ -685,8 +760,13 @@ async function completeSmart(
       CHUNK_TIMEOUT_MS[provider],
     )
   } catch (error) {
-    if (error instanceof RateLimitError && provider !== 'builtin') {
-      // Cooldown is set; fall back to on-device AI for this call.
+    // Rate-limited or the configured model is gone → fall back to on-device AI
+    // for this helper call so a stale model id never breaks a helper feature.
+    if (
+      (error instanceof RateLimitError ||
+        error instanceof ModelUnavailableError) &&
+      provider !== 'builtin'
+    ) {
       return await withTimeout(
         complete('builtin', '', system, prompt, settings, signal),
         CHUNK_TIMEOUT_MS.builtin,
@@ -984,5 +1064,17 @@ function throwForStatus(
     const retryAfter = Number(response.headers.get('retry-after')) || undefined
     setCooldown(provider, quotaHint, retryAfter)
     throw new RateLimitError(`${provider} rate limit / quota reached`)
+  }
+  // Model id gone (retired snapshot, bad Custom id): providers signal this as a
+  // 404, or a 400/403 whose body names the model. Distinguish it from other
+  // 4xx (auth, bad request) so callers can retry on a working model rather than
+  // surfacing a dead-model error to the user.
+  const modelGone =
+    /model/i.test(body) &&
+    /not found|not available|no longer available|not supported|does not exist|unknown model|deprecated|decommission/i.test(
+      body,
+    )
+  if (response.status === 404 || ((response.status === 400 || response.status === 403) && modelGone)) {
+    throw new ModelUnavailableError(`${provider} model unavailable: ${body.slice(0, 160)}`)
   }
 }

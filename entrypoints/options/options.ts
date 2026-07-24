@@ -131,24 +131,22 @@ const MODEL_OPTIONS: Record<
     { value: 'openclaw/default', label: 'openclaw/default (stable alias)' },
     // "Custom…" covers openclaw/<agentId> for a specific agent.
   ],
+  // Gemini publishes floating "-latest" aliases that always resolve to the
+  // current model, so we list only those (plus Custom…) — no pinned version to
+  // go stale and 404. The empty default resolves to gemini-flash-latest.
   gemini: [
-    { value: '', label: 'Provider default — gemini-2.5-flash' },
-    {
-      value: 'gemini-2.5-flash-lite',
-      label: 'gemini-2.5-flash-lite · fastest, biggest free quota',
-    },
-    { value: 'gemini-2.5-flash', label: 'gemini-2.5-flash' },
-    {
-      value: 'gemini-2.5-pro',
-      label: 'gemini-2.5-pro · smartest, tiny free quota',
-    },
+    { value: '', label: 'Provider default — auto-updating (recommended)' },
     {
       value: 'gemini-flash-latest',
-      label: 'gemini-flash-latest · auto-updates',
+      label: 'gemini-flash-latest · newest fast model',
     },
     {
       value: 'gemini-flash-lite-latest',
-      label: 'gemini-flash-lite-latest · auto-updates',
+      label: 'gemini-flash-lite-latest · fastest, biggest free quota',
+    },
+    {
+      value: 'gemini-pro-latest',
+      label: 'gemini-pro-latest · smartest, tiny free quota',
     },
   ],
   anthropic: [

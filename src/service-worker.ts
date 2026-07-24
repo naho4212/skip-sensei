@@ -5,6 +5,9 @@ import {
   verifyAdCandidates,
   findConsentReject,
   findElementSelector,
+  LlmError,
+  ModelUnavailableError,
+  providerFallbackChain,
   RateLimitError,
   resolveProvider,
   reviewPopup,
@@ -231,37 +234,52 @@ async function runAnalysis(
   const onProgress = (done: number, total: number) =>
     reportProgress(tabId, videoId, done, total)
   try {
-    let segments
-    try {
-      segments = await analyzeTranscript(
-        lines,
-        durationSeconds,
-        settings,
-        signal,
-        onProgress,
-      )
-    } catch (error) {
-      // Cloud provider hit its rate limit / quota — it's now in cooldown, so a
-      // retry resolves to the built-in model (re-chunked correctly for it).
-      if (error instanceof RateLimitError && !signal.aborted) {
+    // Try the user's provider first, then every other saved credential (see
+    // providerFallbackChain), and finally on-device AI. Advance on any
+    // provider-level error — rate limit, gone model, a Custom id sent to the
+    // wrong provider, an auth/network failure — so one bad key never fails an
+    // analysis when another credential (or the built-in model) could do it.
+    const chain = providerFallbackChain(settings)
+    let segments: Awaited<ReturnType<typeof analyzeTranscript>> | undefined
+    let usedSettings = settings
+    let lastError: unknown
+    for (let i = 0; i < chain.length; i++) {
+      const candidate = chain[i]
+      try {
         segments = await analyzeTranscript(
           lines,
           durationSeconds,
-          settings,
+          candidate,
           signal,
           onProgress,
         )
-      } else {
-        throw error
+        usedSettings = candidate
+        if (i > 0) {
+          void recordActivity(
+            'Sponsor detection AI',
+            `${settings.llmProvider} unavailable — analyzed with ${candidate.llmProvider} instead`,
+            videoId,
+          )
+        }
+        break
+      } catch (error) {
+        if (signal.aborted) throw error
+        // Non-provider errors (bugs) shouldn't silently churn the whole chain.
+        if (!(error instanceof LlmError)) throw error
+        lastError = error
       }
+    }
+    if (segments === undefined) {
+      throw lastError instanceof Error
+        ? lastError
+        : new LlmError('All providers failed')
     }
     const analysis: VideoAnalysis = {
       videoId,
       status: 'ok',
       segments,
-      // Record which provider actually produced the result (may be built-in
-      // after a fallback).
-      provider: resolveProvider(settings),
+      // The provider that actually produced the result (may be a fallback).
+      provider: usedSettings.llmProvider,
       analyzedAt: Date.now(),
       version: ANALYSIS_VERSION,
     }
@@ -273,8 +291,13 @@ async function runAnalysis(
     )
     return analysis
   } catch (error) {
-    // Rate limits are expected operating conditions, not defects.
-    if (!signal.aborted && !(error instanceof RateLimitError)) {
+    // Rate limits and gone-model errors are expected operating conditions that
+    // the fallbacks above handle when possible — not defects worth reporting.
+    if (
+      !signal.aborted &&
+      !(error instanceof RateLimitError) &&
+      !(error instanceof ModelUnavailableError)
+    ) {
       void reportError('analyze-video', error)
     }
     if (!signal.aborted) {
