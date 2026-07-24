@@ -64,7 +64,8 @@ const MAX_MANIFEST_BYTES = 256 * 1024
 const MAX_SHARD_BYTES = 512 * 1024 // bundled max ~69KB; generous headroom
 const MAX_SELECTORS_PER_DOMAIN = 200
 
-const META_KEY = 'skipSensei.filterUpdate'
+/** Written on every completed check — UI can watch it to re-render on landing. */
+export const FILTER_UPDATE_META_KEY = 'skipSensei.filterUpdate'
 
 interface UpdateMeta {
   schema: number
@@ -100,11 +101,11 @@ const emptyMeta = (): UpdateMeta => ({
 })
 
 async function getMeta(): Promise<UpdateMeta> {
-  const r = await chrome.storage.local.get(META_KEY)
-  return { ...emptyMeta(), ...(r[META_KEY] ?? {}) }
+  const r = await chrome.storage.local.get(FILTER_UPDATE_META_KEY)
+  return { ...emptyMeta(), ...(r[FILTER_UPDATE_META_KEY] ?? {}) }
 }
 async function setMeta(meta: UpdateMeta): Promise<void> {
-  await chrome.storage.local.set({ [META_KEY]: meta })
+  await chrome.storage.local.set({ [FILTER_UPDATE_META_KEY]: meta })
 }
 
 /** SHA-256 of raw bytes as lowercase hex — must match the build script's hash. */

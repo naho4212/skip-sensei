@@ -15,6 +15,7 @@ import {
   setSiteAllowlisted,
   updateSettings,
 } from '../../src/storage'
+import { FILTER_UPDATE_META_KEY } from '../../src/filter-updates'
 import {
   FREE_TIER_DAILY_LIMIT,
   type FilterUpdateStatus,
@@ -868,15 +869,29 @@ async function main() {
       fuStatusEl.textContent = 'Filter lists: bundled with this version.'
     }
   }
-  try {
-    renderFilterUpdate(
-      await chrome.runtime.sendMessage({
-        type: 'skipSensei:getFilterUpdateStatus',
-      }),
-    )
-  } catch {
-    /* SW asleep / no status yet — leave the default hint */
+  const refreshFilterUpdate = async () => {
+    try {
+      renderFilterUpdate(
+        await chrome.runtime.sendMessage({
+          type: 'skipSensei:getFilterUpdateStatus',
+        }),
+      )
+    } catch {
+      /* SW asleep / no status yet — leave the default hint */
+    }
   }
+  await refreshFilterUpdate()
+  // The startup check initFilterUpdates() fires usually lands AFTER this first
+  // render, which would leave the line reading "bundled with this version"
+  // until the next reload even though shards just applied. setMeta() writes the
+  // meta key on every completed check, so re-render whenever it changes — that
+  // covers both the startup race and a background check finishing while this
+  // page sits open.
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && FILTER_UPDATE_META_KEY in changes) {
+      void refreshFilterUpdate()
+    }
+  })
   fuCheckEl.addEventListener('click', async () => {
     fuCheckEl.disabled = true
     const prev = fuStatusEl.textContent
