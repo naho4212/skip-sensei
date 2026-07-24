@@ -249,10 +249,36 @@ const PROVIDER_INFO: Record<LlmProvider, string> = {
     'Analysis time: a few seconds, regardless of video length. Uses your OpenAI API key (default model gpt-5-mini); typical cost is well under 1¢ per video. Each video is analyzed once, then cached.',
 }
 
+/** Providers whose "active" state is a saved API key / gateway token. */
+const KEYED_PROVIDERS: LlmProvider[] = [
+  'gemini',
+  'groq',
+  'openrouter',
+  'openai',
+  'anthropic',
+  'openclaw',
+]
+
+/** Tag each primary-provider option with a "key saved" marker so the dropdown
+ * shows at a glance which providers are configured. Options are static in the
+ * HTML, so the original label is stashed in a data attribute to re-decorate
+ * idempotently (no marker accumulation across renders). */
+function decorateProviderOptions(settings: Settings) {
+  for (const opt of providerEl.options) {
+    if (opt.dataset.base === undefined) opt.dataset.base = opt.textContent ?? ''
+    const p = opt.value as LlmProvider
+    const hasKey =
+      KEYED_PROVIDERS.includes(p) &&
+      !!settings.apiKeys[p as KeyedProvider]?.trim()
+    opt.textContent = hasKey ? `${opt.dataset.base}  🟢 key saved` : opt.dataset.base
+  }
+}
+
 function render(settings: Settings) {
   currentSettings = settings
   const provider = settings.llmProvider
   providerEl.value = provider
+  decorateProviderOptions(settings)
   providerInfoEl.textContent = PROVIDER_INFO[provider]
   renderModelPicker(provider, settings.model)
   thresholdEl.value = String(settings.confidenceThreshold)
