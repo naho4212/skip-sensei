@@ -67,10 +67,12 @@ which the extensions page shows; keep the two in sync):
 > • Shows what it blocked on the page you're on, with a one-click pause per site
 >
 > PRIVACY
-> No account, no sign-in, no profile. Blocking is evaluated by Chrome itself,
-> so the extension never sees your browsing. Anonymous crash diagnostics are
-> optional and can be switched off, and Local-only mode disables every network
-> call the extension makes.
+> No account, no sign-in, no advertising profile. Blocking is evaluated by
+> Chrome's own engine, so the extension never inspects your requests. Optional
+> anonymous diagnostics report the domain where an ad-detection problem
+> happened (never full addresses, titles, or page content) so wrong hides can
+> be fixed — switch them off in one click, and Local-only mode disables every
+> network call the extension makes.
 >
 > AI THAT STAYS ON YOUR DEVICE
 > Sponsor detection and the other AI helpers prefer Chrome's built-in
@@ -146,11 +148,21 @@ which makes no network calls.
 a local Ollama server or self-hosted gateway on their own machine, so no data
 leaves their device. Contacted only if the user selects a local provider.
 
-**Optional `*://*/*`** (requested at runtime, not at install) — Needed only for
-two opt-in features: stripping tracking parameters from links you click, and
-neutralizing "disable your ad blocker" walls. Requested with a permission prompt
-at the moment the user enables those features; the base install never holds
-broad host access.
+**Optional `*://*/*`** (requested at runtime, not at install) — Needed for the
+opt-in features that have to run on sites other than YouTube:
+
+1. **Hiding ads on every site** — the cosmetic layer registers its content
+   script on all sites so it can hide ad elements that network blocking can't
+   reach, e.g. first-party promoted tiles (`src/cosmetic-register.ts`, gated on
+   the web-cosmetic setting). This is the main reason for the grant.
+2. **Keeping ad-blocked pages usable** — the anti-adblock helper
+   (`src/scriptlet-register.ts`, gated on `defuseAntiAdblock`).
+3. **Stripping tracking parameters** from links the user clicks.
+
+All three are requested with a permission prompt at the moment the user turns
+the feature on; the base install never holds broad host access, and none of the
+three registers anything until the grant exists (verified on a clean profile:
+`chrome.scripting.getRegisteredContentScripts()` returns empty).
 
 ---
 
@@ -158,13 +170,25 @@ broad host access.
 
 **Personally identifiable information:** No.
 **Health / financial / authentication / personal communications / location:** No.
-**Web history:** No — the extension does not collect or transmit the sites you
-visit.
+**Web history:** **Yes** — must be certified, do not answer No. Ad-detection
+diagnostic events include the bare domain of the page they fired on (`host`,
+added in `service-worker.ts`'s `skipSensei:event` case, plus a `domain` field in
+the cosmetic layer's own payloads). Because those events fire as the user
+browses, they are a partial, sampled record of visited domains, associated with
+a random install id. Never full URLs, paths, query strings, or page titles.
+Collected solely to diagnose a wrongly hidden element on a specific site — a
+gap-filler false positive is not fixable without knowing where it happened.
+Optional (one toggle), off in Local-only mode.
+
+> Answering "No" here would be false certification, which is an account-level
+> violation and far worse than the disclosure itself. If the `host`/`domain`
+> fields are ever removed, flip this back to No — and not before.
+
 **User activity (analytics):** Yes, limited and optional — anonymous, scrubbed
 crash/adaptation diagnostics (extension version, coarse browser tag, selected
-provider name, scrubbed error text, a self-heal CSS selector, a random install
-id). Off in Local-only mode and toggleable. No URLs, titles, keys, or personal
-data.
+provider name, scrubbed error text, the CSS selectors involved in an
+ad-detection event, a random install id). Off in Local-only mode and
+toggleable. No page titles, keys, or personal data.
 **Website content:** Yes — (a) a YouTube video transcript is sent to the user's
 chosen AI provider for sponsor detection, only when a cloud provider is
 selected (never with on-device/local AI or in Local-only mode); (b) for the
@@ -250,10 +274,21 @@ place. If the origin ever moves, all three must move together.
    the scriptlet engine or any code path. On by default, toggleable, off in
    Local-only mode; disclosed in the privacy policy (§4). Static network (DNR)
    rulesets stay bundled and update only with releases.
-3. **Obfuscation is banned** — do NOT minify-to-conceal or obfuscate to hide the
+3. **Domain collection in diagnostics is certified, and default-on.** The
+   `host`/`domain` fields (see the Web history disclosure above) are the one
+   piece of browsing-related data that leaves the browser. Disclosed in four
+   places that must stay in sync with the code: privacy policy §3 + §5, the
+   onboarding "Your data" card, the options tooltip, and the header comment in
+   `src/error-reporting.ts`. Residual risk a reviewer may raise: the toggle
+   ships **pre-checked**, so consent is opt-out rather than affirmative, and
+   CWS expects prominent disclosure plus consent for this data class. The
+   disclosure is prominent (first-run card, not buried), which is why on-by-
+   default is defensible — but if a reviewer objects, the cheap fix is shipping
+   the onboarding checkbox unchecked rather than removing the field.
+4. **Obfuscation is banned** — do NOT minify-to-conceal or obfuscate to hide the
    above; that is a separate, account-level violation. Compliance = not shipping
    the code, not hiding it.
-4. **Single purpose** — keep the listing framed as "block ads and
+5. **Single purpose** — keep the listing framed as "block ads and
    interruptions," not a feature grab-bag.
-5. Ad blockers from new publishers get extra manual review; verify the
+6. Ad blockers from new publishers get extra manual review; verify the
    publisher and expect a longer first review.

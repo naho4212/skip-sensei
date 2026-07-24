@@ -211,18 +211,30 @@ what i<!doctype html>
     <h2>3. Anonymous diagnostics (optional)</h2>
     <p>
       If you leave diagnostics on, the extension sends scrubbed, rate-limited,
-      anonymous reports so we can fix bugs and adapt to YouTube layout changes.
-      A report may contain: the extension version, a coarse browser tag (e.g.
-      "Chrome/138"), the name of the AI provider you selected, an error type and
-      a scrubbed error message/stack, a short context label, a CSS selector the
-      AI found when self-healing a layout change, and a random install
-      identifier that is not linked to you.
+      anonymous reports so we can fix bugs and repair ad detection when a site
+      changes how it serves ads. A report may contain: the extension version, a
+      coarse browser tag (e.g. "Chrome/138"), the name of the AI provider you
+      selected, an error type and a scrubbed error message/stack, a short
+      context label, the CSS selectors involved in an ad-detection event, and a
+      random install identifier that is not linked to you.
     </p>
     <p>
-      A diagnostic report <strong>never</strong> contains the URLs or titles of
-      pages or videos you view, your API keys, your name, email, IP-derived
-      identity, or any other personal information. You can turn this off at any
-      time, and it is always off in Local-only mode.
+      <strong>Ad-detection events also include the bare domain of the page the
+      event happened on</strong> — for example <code>example.com</code>, never
+      <code>example.com/the/page?you=viewed</code>. We collect it because a
+      wrongly hidden element is only fixable if we know which site it happened
+      on. Because these events fire as you browse, they amount to a partial,
+      sampled record of domains you visit, associated with the random install
+      identifier. That is the one piece of browsing-related data Ad Sensei
+      transmits, it is only ever used to fix ad detection, it is never sold or
+      shared, and switching diagnostics off stops it completely.
+    </p>
+    <p>
+      A diagnostic report <strong>never</strong> contains full web addresses,
+      paths or query strings, page or video titles, page content, your API keys,
+      your name, email, IP-derived identity, or any other personal information.
+      You can turn this off at any time under Settings → AI &amp; privacy, and
+      it is always off in Local-only mode.
     </p>
 
     <h2>4. Filter-list updates (optional)</h2>
@@ -243,7 +255,13 @@ what i<!doctype html>
 
     <h2>5. What Ad Sensei does not do</h2>
     <ul>
-      <li>It does not track, log, or transmit your browsing history.</li>
+      <li>
+        It does not track or transmit your browsing history — no list of pages
+        you visited, no URLs, no titles. The one exception is spelled out in
+        section 3: with diagnostics on, an ad-detection event reports the bare
+        domain it fired on, which is a sampled set of domains rather than a
+        history, and turning diagnostics off stops it.
+      </li>
       <li>It does not sell or rent any data to anyone.</li>
       <li>It does not inject its own advertising or affiliate links.</li>
       <li>It does not create an advertising profile of you.</li>

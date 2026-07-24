@@ -166,9 +166,12 @@
       <section class="ai-note privacy-note">
         <h2>Your data</h2>
         <p>
-          Everything runs in your browser. Nothing you watch or visit is
-          collected. Anonymous crash reports (error text + a random install
-          ID — never URLs, video titles, or page content) help us fix bugs.
+          Everything runs in your browser — what you watch, type, and read
+          stays on your device. Anonymous diagnostics help us fix bugs and
+          repair ad detection when a site changes: error text, a random install
+          ID, and <strong>the domain of the page where an ad-detection event
+          happened</strong> (e.g. "example.com") plus the CSS selectors
+          involved. Never full web addresses, page titles, or page content.
           They're on by default; turn them off here or in settings anytime.
           Ad Sensei also periodically downloads refreshed ad-filter rules (rule
           data only, never code) so blocking keeps working — off in Local-only
@@ -176,7 +179,7 @@
         </p>
         <label class="telemetry-toggle">
           <input type="checkbox" id="telemetry-optout" checked />
-          <span>Send anonymous crash reports</span>
+          <span>Send anonymous diagnostics (includes the site's domain)</span>
         </label>
         <p class="privacy-link">
           <a

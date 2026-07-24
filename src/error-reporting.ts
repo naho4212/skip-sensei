@@ -5,14 +5,25 @@ import { getSettings } from './storage'
  * intentionally do NOT exist here — Chrome Web Store stats cover installs and
  * versions; this only phones home when something breaks.
  *
- * What a report contains: extension version, coarse browser tag
+ * What an ERROR report contains: extension version, coarse browser tag
  * ("Chrome/138…"), active provider name, error class, scrubbed message,
  * scrubbed extension stack, a short context label, and a random UUID
  * generated locally (so "one user hit this 50 times" is distinguishable from
- * "50 users hit this once"). Never URLs, video ids, API keys, device ids, or
- * anything personal. Every send is fire-and-forget and swallowed on failure.
+ * "50 users hit this once").
  *
- * Users can turn this off in options ("Share anonymous error reports").
+ * What an EVENT report additionally contains: **the bare domain of the page the
+ * event fired on** (`host`, plus a `domain` field from the cosmetic layer's own
+ * payloads) and the CSS selectors involved. This is deliberate — a gap-filler
+ * false positive is only diagnosable if we know which site it happened on — but
+ * it means events transmit a sample of visited domains keyed to the install id,
+ * so it MUST stay disclosed as web-history collection in the privacy policy,
+ * the onboarding "Your data" card, the options tooltip, and the Web Store data
+ * certification. Never full URLs, paths, query strings, page titles, video ids,
+ * API keys, or page content.
+ *
+ * Every send is fire-and-forget and swallowed on failure. Users can turn all of
+ * it off in options ("Share anonymous diagnostics"), and it is off in
+ * Local-only mode.
  */
 
 // Canonical host, matching the published privacy policy. singlefin's Next
