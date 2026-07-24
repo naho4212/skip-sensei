@@ -291,9 +291,12 @@ function render(settings: Settings) {
   void renderRulesets()
 }
 
-/** Providers eligible as a fallback: any keyed cloud provider with a saved key,
- * plus local Ollama/OpenClaw, minus the current primary. On-device is always an
- * option (and the implicit final tier). */
+/** Providers eligible as a fallback: cloud providers you've saved a key for,
+ * minus the current primary. On-device is always the implicit final tier and is
+ * offered separately as "On-device Chrome AI only". Local providers
+ * (Ollama/OpenClaw) are intentionally NOT auto-listed — there's no saved-key
+ * signal that they're set up, so showing them would offer a fallback that just
+ * fails to a connection error; use them by selecting them as the primary. */
 function fallbackCandidates(settings: Settings): LlmProvider[] {
   const primary = settings.llmProvider
   const keyed: KeyedProvider[] = [
@@ -303,10 +306,7 @@ function fallbackCandidates(settings: Settings): LlmProvider[] {
     'openai',
     'anthropic',
   ]
-  const configured = keyed.filter((p) => settings.apiKeys[p]?.trim())
-  // Local providers don't need a key; offer them regardless.
-  const local: LlmProvider[] = ['ollama', 'openclaw']
-  return [...configured, ...local].filter((p) => p !== primary)
+  return keyed.filter((p) => p !== primary && settings.apiKeys[p]?.trim())
 }
 
 /** Rebuild the "If primary is unavailable" picker + the chain preview line. */
@@ -330,14 +330,15 @@ function renderFallback(settings: Settings) {
       return opt
     }),
   )
-  // A previously-saved fallback whose key was since removed falls back to
-  // on-device in the UI (the chain logic already skips un-credentialed ones).
+  // A previously-saved fallback that's no longer offerable (its key was removed,
+  // or it was a local provider we no longer auto-list) is reset to on-device so
+  // the stored value can't diverge from what the chain will actually do.
   const saved = settings.fallbackProvider
   const valid = options.some((o) => o.value === saved)
+  if (!valid && saved !== 'builtin') void save({ fallbackProvider: 'builtin' })
   fallbackEl.value = valid ? saved : 'builtin'
 
-  const mid =
-    valid && saved !== 'builtin' ? ` → ${PROVIDER_LABELS[saved]}` : ''
+  const mid = valid && saved !== 'builtin' ? ` → ${PROVIDER_LABELS[saved]}` : ''
   fallbackChainEl.textContent = `Chain: ${PROVIDER_LABELS[primary]}${mid} → On-device Chrome AI`
 }
 
