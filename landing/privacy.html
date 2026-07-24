@@ -180,7 +180,7 @@ what i<!doctype html>
       <tr>
         <td>Anonymous diagnostics</td>
         <td>
-          Our endpoint (<code>*.vercel.app/api/error</code> and
+          Our endpoint (<code>singlefinmedia.com/ad-sensei/api/error</code> and
           <code>/api/event</code>)
         </td>
         <td>
@@ -193,7 +193,9 @@ what i<!doctype html>
           A check for updated filter rules (a plain download that sends nothing
           about you)
         </td>
-        <td>Our update server (<code>*.vercel.app/filters</code>)</td>
+        <td>
+          Our update server (<code>singlefinmedia.com/ad-sensei/filters</code>)
+        </td>
         <td>
           Periodically, to download refreshed ad-selector lists — rule data
           only, integrity-checked, never code. On by default, toggle under
@@ -228,7 +230,7 @@ what i<!doctype html>
       So ad-blocking keeps working when a site changes how it serves ads, the
       extension periodically downloads refreshed filter rules — lists of CSS
       selectors that identify ad elements on a page — from our update server
-      (landing-beta-three-23.vercel.app). This is a one-way download of rule
+      (singlefinmedia.com). This is a one-way download of rule
       <strong>data</strong> only: no program code is ever downloaded or run, and
       every list is integrity-checked (SHA-256) before it is applied.
     </p>

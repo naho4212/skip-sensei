@@ -15,8 +15,11 @@ import { getSettings } from './storage'
  * Users can turn this off in options ("Share anonymous error reports").
  */
 
-const ENDPOINT = 'https://landing-beta-three-23.vercel.app/api/error'
-const EVENT_ENDPOINT = 'https://landing-beta-three-23.vercel.app/api/event'
+// Canonical host, matching the published privacy policy. singlefin's Next
+// project proxies /ad-sensei/:path+ to the landing project (CORS preserved);
+// sends are fire-and-forget, so a broken rewrite degrades to no telemetry.
+const ENDPOINT = 'https://www.singlefinmedia.com/ad-sensei/api/error'
+const EVENT_ENDPOINT = 'https://www.singlefinmedia.com/ad-sensei/api/event'
 
 const INSTALL_ID_KEY = 'skipSensei.installId'
 const ERROR_BUDGET_KEY = 'skipSensei.errorBudget'

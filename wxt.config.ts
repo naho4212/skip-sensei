@@ -19,8 +19,10 @@ export default defineConfig({
   },
   manifest: {
     name: 'Ad Sensei',
+    // Leads with the web-wide single purpose; YouTube is that purpose applied
+    // to one site (see docs/cws-submission.md — trademark-in-listing risk).
     description:
-      'Skip YouTube ads and AI-detected creator sponsor segments, and block ads & trackers across the web.',
+      'Block ads and trackers across the web — plus in-video ads and AI-detected sponsor segments on YouTube.',
     icons: {
       16: 'icons/icon-16.png',
       32: 'icons/icon-32.png',

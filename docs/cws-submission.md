@@ -28,6 +28,77 @@ as if they were separate products.
 
 ---
 
+## Store listing fields
+
+| Field | Value |
+|---|---|
+| Item name | `Ad Sensei` (no "YouTube" — trademark in a listing title reads as implied affiliation) |
+| Category | **Privacy & Security** |
+| Language | English (United States) |
+| Homepage URL | `https://www.singlefinmedia.com/ad-sensei` |
+| Support URL | `https://github.com/naho4212/skip-sensei/issues` |
+| Support email | `info@singlefinmedia.com` (matches the options → About contact link) |
+| Visibility | Public, all regions |
+| Pricing | Free, no in-app purchases |
+
+**Summary / short description** (132 char max — mirrors `manifest.description`,
+which the extensions page shows; keep the two in sync):
+
+> Block ads and trackers across the web — plus in-video ads and AI-detected
+> sponsor segments on YouTube.
+
+**Detailed description** (paste as-is; plain text, the store renders no markup):
+
+> **Ad Sensei blocks ads and trackers everywhere — and skips the ones that
+> can't be blocked.**
+>
+> Most blockers stop third-party ad requests and stop there. Ad Sensei does
+> that, using bundled filter lists evaluated by Chrome's own declarative
+> engine, and then handles the ads that arrive from a site's own servers,
+> where request blocking can't reach: promoted tiles on Pinterest, sponsored
+> results on Amazon and Reddit, feed ads and in-stream video ads on YouTube.
+>
+> WHAT IT DOES
+> • Blocks ads, trackers, malware domains, cookie notices, and social widgets
+> • Hides the first-party "sponsored" placements sites serve themselves
+> • Skips YouTube video ads — pre-roll, mid-roll, and post-roll
+> • Skips creator sponsor reads inside videos, via SponsorBlock's community
+>   data or an optional AI transcript analysis
+> • Shows what it blocked on the page you're on, with a one-click pause per site
+>
+> PRIVACY
+> No account, no sign-in, no profile. Blocking is evaluated by Chrome itself,
+> so the extension never sees your browsing. Anonymous crash diagnostics are
+> optional and can be switched off, and Local-only mode disables every network
+> call the extension makes.
+>
+> AI THAT STAYS ON YOUR DEVICE
+> Sponsor detection and the other AI helpers prefer Chrome's built-in
+> on-device model, which sends nothing anywhere. You can point them at your
+> own provider key instead (Gemini, Claude, OpenAI, Groq, OpenRouter, or a
+> local Ollama server) if you prefer. Either way there's no subscription and
+> no server of ours in the loop.
+>
+> SMALL PERMISSIONS BY DEFAULT
+> A fresh install asks for YouTube access and nothing broader. Access to all
+> sites is optional and requested only at the moment you turn on a feature
+> that needs it.
+>
+> HONEST ABOUT THE LIMITS
+> YouTube stitches some ads into the video stream itself. Those can't be
+> prevented from loading by any extension — Ad Sensei skips them as they
+> start, so you see about a second rather than thirty. Anything claiming
+> otherwise on a stream-inserted ad is overselling.
+>
+> Free and open source (MIT): https://github.com/naho4212/skip-sensei
+
+**Claim discipline:** every line above maps to a shipped feature, and the
+limits paragraph is deliberate — "zero ads" / "never think about an ad again"
+style copy is a misleading-claims risk and was already scrubbed from the
+landing page. Keep the two in sync.
+
+---
+
 ## Permission justifications
 
 **storage** — Stores your settings, statistics, the per-video sponsor-analysis
@@ -106,7 +177,7 @@ in the privacy policy.
 
 **Remote data (not user data):** the extension periodically downloads refreshed
 filter-rule lists (CSS selectors that identify ad elements) from our update
-server (`landing-beta-three-23.vercel.app/filters`). This is a one-way download
+server (`www.singlefinmedia.com/ad-sensei/filters`). This is a one-way download
 of DATA — no remote code — integrity-checked (SHA-256) before use; static
 network rulesets remain bundled and update only with releases. The request sends
 no user data (a plain GET); the server sees only that some install checked in
@@ -120,8 +191,13 @@ the privacy policy (section 4).
 - Data use is limited to providing the user-facing features.
 
 **Privacy policy URL:** https://www.singlefinmedia.com/ad-sensei/privacy.html
-(replace with the custom domain once one is attached — it must stay in sync
-with the telemetry endpoint host in `src/error-reporting.ts`)
+
+All three outbound hosts now sit on this same origin — telemetry
+(`src/error-reporting.ts`), filter updates (`src/filter-updates.ts`), and the
+policy itself — so a reviewer sees one publisher domain, not a Vercel
+scaffolding alias. singlefin's Next project rewrites `/ad-sensei/:path+` to the
+landing project and preserves the CORS + cache headers; keep that rewrite in
+place. If the origin ever moves, all three must move together.
 
 ---
 
@@ -165,7 +241,7 @@ with the telemetry endpoint host in `src/error-reporting.ts`)
 
 2. **Differential filter-list updates** (`src/filter-updates.ts`) — the
    extension periodically fetches refreshed cosmetic-filter DATA (a manifest +
-   `domain -> css-selector[]` shards) from `landing-beta-three-23.vercel.app`.
+   `domain -> css-selector[]` shards) from `www.singlefinmedia.com/ad-sensei`.
    This is the store-sanctioned remote-*data* / configuration path that every
    filter-list blocker uses, NOT remote code: no script is ever fetched or run.
    Each payload is SHA-256-verified against the manifest, sanitized (universal/

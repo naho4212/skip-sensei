@@ -38,14 +38,18 @@ import type { FilterUpdateStatus } from './types'
 /**
  * Where the payload is served. Host-agnostic: reachability depends only on the
  * host returning `Access-Control-Allow-Origin: *`, not on any manifest grant.
- * Baked to the landing Vercel alias DIRECTLY (not the singlefinmedia.com
- * /ad-sensei proxy) — same rationale as the telemetry endpoints: no dependency
- * on the singlefin rewrite, and the /ad-sensei path has a trailing-slash loop.
+ * Baked to the canonical singlefinmedia.com host so the update origin matches
+ * the published privacy policy (the earlier `landing-beta-*.vercel.app` alias
+ * read as scaffolding to a store reviewer). The singlefin Next project proxies
+ * `/ad-sensei/:path+` to the landing project, preserving the CORS and
+ * cache-control headers below; the old trailing-slash loop only ever affected
+ * the bare page path, not deep paths. Falls back to bundled shards if the
+ * rewrite is ever removed, so the dependency is fail-closed.
  * Served as static files under landing/filters/ (CORS via landing/vercel.json):
  * `<UPDATE_BASE>/manifest.json` and `<UPDATE_BASE>/cosmetic/<i>.json`. The build
  * script (scripts/build-filter-payload.mjs) emits exactly that directory.
  */
-const UPDATE_BASE = 'https://landing-beta-three-23.vercel.app/filters'
+const UPDATE_BASE = 'https://www.singlefinmedia.com/ad-sensei/filters'
 
 /** Keep byte-identical with src/cosmetic-filters.ts and the build script. */
 const SHARD_COUNT = 128
