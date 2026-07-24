@@ -17,11 +17,16 @@ import {
 } from '../../src/storage'
 import { FILTER_UPDATE_META_KEY } from '../../src/filter-updates'
 import {
+  type CatalogModel,
+  supportsModelCatalog,
+} from '../../src/model-catalog'
+import {
   FREE_TIER_DAILY_LIMIT,
   type FilterUpdateStatus,
   type KeyedProvider,
   type LlmProvider,
   type Message,
+  type ModelCatalogResult,
   type Settings,
 } from '../../src/types'
 
@@ -34,6 +39,11 @@ const cloudFieldsEl = $('cloud-fields')
 const apiKeyEl = $<HTMLInputElement>('api-key')
 const modelSelectEl = $<HTMLSelectElement>('model-select')
 const modelEl = $<HTMLInputElement>('model')
+const modelRefreshEl = $<HTMLButtonElement>('model-refresh')
+const modelRefreshStatusEl = $('model-refresh-status')
+const fallbackFieldEl = $('fallback-field')
+const fallbackEl = $<HTMLSelectElement>('fallback-provider')
+const fallbackChainEl = $('fallback-chain')
 const thresholdEl = $<HTMLInputElement>('threshold')
 const thresholdValueEl = $<HTMLOutputElement>('threshold-value')
 const showToastEl = $<HTMLInputElement>('show-toast')
@@ -43,6 +53,22 @@ const savedNoteEl = $('saved-note')
 
 let savedTimer: number | null = null
 let currentSettings: Settings
+
+/** Live model lists fetched on demand (per provider), merged into the picker
+ * below the curated aliases. Seeded from storage cache on load. */
+const modelCatalogs: Partial<Record<LlmProvider, CatalogModel[]>> = {}
+
+/** Human labels for the fallback dropdown + chain line. */
+const PROVIDER_LABELS: Record<LlmProvider, string> = {
+  builtin: 'On-device Chrome AI',
+  gemini: 'Gemini',
+  groq: 'Groq',
+  openrouter: 'OpenRouter',
+  ollama: 'Ollama',
+  openclaw: 'OpenClaw',
+  anthropic: 'Anthropic',
+  openai: 'OpenAI',
+}
 
 /** Where to get a key, per keyed cloud provider. */
 const KEY_LINKS: Record<KeyedProvider, string> = {
@@ -165,13 +191,22 @@ const MODEL_OPTIONS: Record<
   ],
 }
 
-/** Rebuild the model dropdown for the active provider and reflect settings. */
+/** Rebuild the model dropdown for the active provider and reflect settings.
+ * Curated auto-updating aliases sit up top; any on-demand-fetched catalog
+ * models the aliases don't already cover are appended below them. */
 function renderModelPicker(provider: LlmProvider, model: string) {
   if (provider === 'builtin') return
+  const curated = MODEL_OPTIONS[provider]
+  const curatedValues = new Set(curated.map((o) => o.value))
+  const fetched = (modelCatalogs[provider] ?? []).filter(
+    (m) => !curatedValues.has(m.id),
+  )
   const options = [
-    ...MODEL_OPTIONS[provider],
+    ...curated,
+    ...fetched.map((m) => ({ value: m.id, label: m.label })),
     { value: CUSTOM_MODEL, label: 'Custom…' },
   ]
+  const listedValues = new Set(options.map((o) => o.value))
   modelSelectEl.replaceChildren(
     ...options.map(({ value, label }) => {
       const option = document.createElement('option')
@@ -183,9 +218,7 @@ function renderModelPicker(provider: LlmProvider, model: string) {
   // Don't yank the custom field away mid-typing (e.g. "gpt-5" on the way to
   // "gpt-5.2" matches a listed model when the debounced save fires).
   const editing = document.activeElement === modelEl
-  const isListed =
-    !editing &&
-    (model === '' || MODEL_OPTIONS[provider].some((o) => o.value === model))
+  const isListed = !editing && (model === '' || listedValues.has(model))
   modelSelectEl.value = isListed ? model : CUSTOM_MODEL
   modelEl.hidden = isListed
   modelEl.value = isListed ? '' : model
@@ -248,9 +281,107 @@ function render(settings: Settings) {
             ? 'Get a free key →'
             : 'Get a key →'
     }
+    // Model-list refresh is only meaningful for providers with a catalog.
+    modelRefreshEl.hidden = !supportsModelCatalog(provider)
   }
+  // Always run (self-hides for a built-in primary) so its own hidden state
+  // stays correct rather than relying on the cloud-fields parent.
+  renderFallback(settings)
   void renderUsage(provider)
   void renderRulesets()
+}
+
+/** Providers eligible as a fallback: any keyed cloud provider with a saved key,
+ * plus local Ollama/OpenClaw, minus the current primary. On-device is always an
+ * option (and the implicit final tier). */
+function fallbackCandidates(settings: Settings): LlmProvider[] {
+  const primary = settings.llmProvider
+  const keyed: KeyedProvider[] = [
+    'gemini',
+    'groq',
+    'openrouter',
+    'openai',
+    'anthropic',
+  ]
+  const configured = keyed.filter((p) => settings.apiKeys[p]?.trim())
+  // Local providers don't need a key; offer them regardless.
+  const local: LlmProvider[] = ['ollama', 'openclaw']
+  return [...configured, ...local].filter((p) => p !== primary)
+}
+
+/** Rebuild the "If primary is unavailable" picker + the chain preview line. */
+function renderFallback(settings: Settings) {
+  const primary = settings.llmProvider
+  // No fallback picker when the primary is already on-device.
+  fallbackFieldEl.hidden = primary === 'builtin'
+  fallbackChainEl.hidden = primary === 'builtin'
+  if (primary === 'builtin') return
+
+  const candidates = fallbackCandidates(settings)
+  const options: { value: LlmProvider; label: string }[] = [
+    { value: 'builtin', label: 'On-device Chrome AI only' },
+    ...candidates.map((p) => ({ value: p, label: PROVIDER_LABELS[p] })),
+  ]
+  fallbackEl.replaceChildren(
+    ...options.map(({ value, label }) => {
+      const opt = document.createElement('option')
+      opt.value = value
+      opt.textContent = label
+      return opt
+    }),
+  )
+  // A previously-saved fallback whose key was since removed falls back to
+  // on-device in the UI (the chain logic already skips un-credentialed ones).
+  const saved = settings.fallbackProvider
+  const valid = options.some((o) => o.value === saved)
+  fallbackEl.value = valid ? saved : 'builtin'
+
+  const mid =
+    valid && saved !== 'builtin' ? ` → ${PROVIDER_LABELS[saved]}` : ''
+  fallbackChainEl.textContent = `Chain: ${PROVIDER_LABELS[primary]}${mid} → On-device Chrome AI`
+}
+
+const MODEL_CATALOG_PREFIX = 'skipSensei.modelCatalog.'
+
+/** Seed the in-memory catalogs from storage so a prior refresh survives a
+ * reopen of the options page. */
+async function loadCachedCatalogs() {
+  const all = await chrome.storage.local.get(null)
+  for (const [key, value] of Object.entries(all)) {
+    if (!key.startsWith(MODEL_CATALOG_PREFIX)) continue
+    const result = value as ModelCatalogResult
+    if (result?.models?.length) modelCatalogs[result.provider] = result.models
+  }
+}
+
+/** On-demand "Refresh list": fetch the provider's live models, merge into the
+ * picker, and report the outcome. Fails soft — keeps the current list on error. */
+async function refreshModels() {
+  const provider = currentSettings.llmProvider
+  if (!supportsModelCatalog(provider)) return
+  modelRefreshEl.disabled = true
+  modelRefreshStatusEl.hidden = false
+  modelRefreshStatusEl.textContent = 'Refreshing model list…'
+  try {
+    const result = (await chrome.runtime.sendMessage({
+      type: 'skipSensei:refreshModels',
+      provider,
+    })) as ModelCatalogResult
+    if (result.error) {
+      modelRefreshStatusEl.textContent = `Couldn't refresh: ${result.error}. Using the built-in list.`
+      return
+    }
+    modelCatalogs[provider] = result.models
+    // Re-render against the freshest saved model so the selection is preserved.
+    renderModelPicker(provider, currentSettings.model)
+    modelRefreshStatusEl.textContent = result.models.length
+      ? `Updated — ${result.models.length} models available.`
+      : 'No additional models found; using the built-in list.'
+  } catch {
+    modelRefreshStatusEl.textContent = 'Refresh failed (is the provider reachable?). Using the built-in list.'
+  } finally {
+    modelRefreshEl.disabled = false
+  }
 }
 
 const fmt = (n: number) =>
@@ -756,6 +887,7 @@ function debounce(fn: () => void, ms: number) {
 }
 
 async function main() {
+  await loadCachedCatalogs()
   render(await getSettings())
   void renderBuiltinStatus()
 
@@ -798,6 +930,10 @@ async function main() {
     'input',
     debounce(() => void save({ model: modelEl.value.trim() }), 400),
   )
+  modelRefreshEl.addEventListener('click', () => void refreshModels())
+  fallbackEl.addEventListener('change', () => {
+    void save({ fallbackProvider: fallbackEl.value as LlmProvider })
+  })
   $<HTMLInputElement>('openclaw-url').addEventListener(
     'input',
     debounce(() => {

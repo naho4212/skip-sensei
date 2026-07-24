@@ -550,34 +550,22 @@ export function resolveProvider(settings: Settings): LlmProvider {
 }
 
 /**
- * Providers we auto-try as fallbacks. FREE-tier only — a saved paid key
- * (OpenAI/Anthropic) is never auto-charged; it's used only when the user
- * explicitly selects it. Local providers (ollama/openclaw) likewise run only
- * when selected. The type excludes all of them so a paid provider can't be
- * re-added here by accident.
- */
-const FREE_FALLBACK_ORDER: Exclude<
-  LlmProvider,
-  'builtin' | 'ollama' | 'openclaw' | 'openai' | 'anthropic'
->[] = ['gemini', 'groq', 'openrouter']
-
-/**
- * Ordered provider configs to try for one analysis — best-effort across every
- * credential the user has saved, ending at on-device AI so "all fallbacks
- * failed" still yields a result. Order:
- *   1. the selected provider with the user's exact model override,
+ * Ordered provider configs to try for one analysis, ending at on-device AI so a
+ * total failure still yields a result. The order is EXPLICIT (user-configured),
+ * not automatic:
+ *   1. the primary provider (settings.llmProvider) with the user's model override,
  *   2. the same provider on its auto-updating default (only if they'd pinned a
  *      model — covers a retired snapshot / a Custom id typo'd for the wrong
  *      provider, e.g. a Gemini id while Groq is selected),
- *   3. every OTHER FREE-tier provider they have a key for and that isn't
- *      cooling down, each on ITS OWN default model (never the selected
- *      provider's override — a Gemini id sent to Groq is a guaranteed 404),
+ *   3. the user's chosen fallback provider (settings.fallbackProvider), if set
+ *      and credentialed, on ITS OWN default model (never the primary's override
+ *      — a Gemini id sent to Groq is a guaranteed 404),
  *   4. the built-in on-device model, always last.
  *
- * Selecting built-in or Local-only mode collapses this to on-device only — an
- * explicit privacy choice we don't override by reaching for a saved key. Paid
- * keys (OpenAI/Anthropic) are never auto-tried: they run only as the user's
- * selected provider (steps 1-2), so a fallback can't silently spend money. The
+ * Selecting built-in as the primary, or Local-only mode, collapses this to
+ * on-device only. The fallback provider is an explicit pick, so a paid provider
+ * used as a fallback is a deliberate opt-in, never a silent auto-charge — and
+ * `fallbackProvider === 'builtin'` (the default) means "no cloud fallback." The
  * caller logs which provider actually ran.
  */
 export function providerFallbackChain(settings: Settings): Settings[] {
@@ -593,11 +581,11 @@ export function providerFallbackChain(settings: Settings): Settings[] {
 
   const chain: Settings[] = [variant(selected, settings.model)]
   if (settings.model.trim()) chain.push(variant(selected, ''))
-  for (const provider of FREE_FALLBACK_ORDER) {
-    if (provider === selected) continue
-    if (settings.apiKeys[provider]?.trim() && !inCooldown(provider)) {
-      chain.push(variant(provider, ''))
-    }
+
+  // usable() already excludes a cooling-down or un-credentialed provider.
+  const fallback = settings.fallbackProvider
+  if (fallback !== 'builtin' && fallback !== selected && usable(fallback, settings)) {
+    chain.push(variant(fallback, ''))
   }
   chain.push(variant('builtin', ''))
   return chain

@@ -262,14 +262,32 @@
                 />
               </label>
               <label class="field">
-                <span>Model <em>(optional override)</em></span>
+                <span class="field-head">
+                  <span>Model <em>(optional override)</em></span>
+                  <button type="button" id="model-refresh" class="linklike">
+                    ↻ Refresh list
+                  </button>
+                </span>
                 <select id="model-select"></select>
                 <input type="text" id="model" placeholder="custom model id" hidden />
               </label>
+              <p class="hint" id="model-refresh-status" hidden></p>
               <p class="hint">
                 Your key is stored locally in this browser and sent only to the
                 provider you selected.
               </p>
+              <label class="field" id="fallback-field">
+                <span
+                  >If primary is unavailable<span
+                    class="info"
+                    tabindex="0"
+                    data-tip="If the primary provider fails (rate limit, a retired model, a bad key), Ad Sensei retries on this provider before the on-device model. Only providers you've saved a key for are listed. On-device Chrome AI is always the final fallback."
+                    >ⓘ</span
+                  ></span
+                >
+                <select id="fallback-provider"></select>
+              </label>
+              <p class="hint" id="fallback-chain"></p>
               <div class="usage" id="usage-box" hidden>
                 <div class="usage-head">
                   <span>Usage</span>

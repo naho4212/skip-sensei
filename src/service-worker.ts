@@ -54,10 +54,13 @@ import {
 import {
   ANALYSIS_VERSION,
   type BlockBreakdown,
+  type LlmProvider,
   type Message,
+  type ModelCatalogResult,
   type TranscriptLine,
   type VideoAnalysis,
 } from './types'
+import { fetchModelCatalog } from './model-catalog'
 
 /**
  * Service worker: LLM analysis orchestration, per-videoId segment caching,
@@ -345,6 +348,40 @@ async function findSelector(
   }
 }
 
+const MODEL_CATALOG_KEY = 'skipSensei.modelCatalog'
+
+/**
+ * On-demand "Refresh models": fetch the provider's live model list and cache it
+ * under skipSensei.modelCatalog.<provider>. Fails soft — on error the options
+ * page keeps whatever curated/cached list it already shows.
+ */
+async function refreshModelCatalog(
+  provider: LlmProvider,
+): Promise<ModelCatalogResult> {
+  const settings = await getSettings()
+  if (settings.localOnlyMode) {
+    return { provider, models: [], fetchedAt: null, error: 'Local-only mode is on' }
+  }
+  try {
+    const models = await fetchModelCatalog(provider, settings)
+    const result: ModelCatalogResult = {
+      provider,
+      models,
+      fetchedAt: Date.now(),
+      error: null,
+    }
+    await chrome.storage.local.set({ [`${MODEL_CATALOG_KEY}.${provider}`]: result })
+    return result
+  } catch (error) {
+    return {
+      provider,
+      models: [],
+      fetchedAt: null,
+      error: error instanceof Error ? error.message.slice(0, 160) : 'fetch failed',
+    }
+  }
+}
+
 /** AI consent auto-answer: find the reject/necessary-only button in a cookie banner. */
 async function findConsent(html: string): Promise<string | null> {
   const settings = await getSettings()
@@ -540,6 +577,9 @@ chrome.runtime.onMessage.addListener(
         return true
       case 'skipSensei:getFilterUpdateStatus':
         void getFilterUpdateStatus().then(sendResponse)
+        return true
+      case 'skipSensei:refreshModels':
+        void refreshModelCatalog(message.provider).then(sendResponse)
         return true
       case 'skipSensei:adblockWall':
         void recordAdblockWall(message.hostname)

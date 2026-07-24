@@ -226,6 +226,35 @@ section {
   text-decoration: underline;
 }
 
+/* Model field header row: label on the left, "Refresh list" on the right. */
+.field-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* Button that reads as an inline link (the model-list refresh control). */
+.linklike {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--link);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.linklike:hover:not(:disabled) {
+  text-decoration: underline;
+}
+.linklike:disabled {
+  color: var(--text-3);
+  cursor: default;
+}
+
 .field.checkbox {
   flex-direction: row;
   align-items: flex-start;

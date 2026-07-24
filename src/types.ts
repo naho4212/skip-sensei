@@ -93,6 +93,13 @@ export interface Settings {
   apiKeys: Partial<Record<KeyedProvider, string>>
   /** Model override; '' = provider default. */
   model: string
+  /**
+   * Optional secondary provider tried when the primary is unavailable, BEFORE
+   * the on-device model. 'builtin' (the default) means "no cloud fallback — go
+   * straight to on-device." Only meaningful when it differs from llmProvider
+   * and has a saved credential; picking it here is the explicit opt-in that
+   * lets a paid provider be used as a fallback. */
+  fallbackProvider: LlmProvider
   /** OpenClaw gateway chat-completions URL (port is user-configurable). */
   openclawUrl: string
 }
@@ -139,6 +146,15 @@ export interface FilterUpdateStatus {
   shardsApplied: number
 }
 
+/** Result of an on-demand "Refresh models" fetch (options → model picker). */
+export interface ModelCatalogResult {
+  provider: LlmProvider
+  /** Discovered chat models `{id, label}`, or [] on failure. */
+  models: { id: string; label: string }[]
+  fetchedAt: number | null
+  error: string | null
+}
+
 export const DEFAULT_SETTINGS: Settings = {
   masterEnabled: true,
   adEngineEnabled: true,
@@ -168,6 +184,7 @@ export const DEFAULT_SETTINGS: Settings = {
   llmProvider: 'builtin',
   apiKeys: {},
   model: '',
+  fallbackProvider: 'builtin',
   openclawUrl: 'http://127.0.0.1:18789/v1/chat/completions',
 }
 
@@ -370,6 +387,8 @@ export type Message =
   | { type: 'skipSensei:checkFilterUpdates' }
   // → FilterUpdateStatus; reads the last-applied filter-update metadata
   | { type: 'skipSensei:getFilterUpdateStatus' }
+  // → ModelCatalogResult; fetches the provider's live model list (options "Refresh models")
+  | { type: 'skipSensei:refreshModels'; provider: LlmProvider }
   | { type: 'skipSensei:adblockWall'; hostname: string } // site is showing an ad-blocker wall
   // → { ok: boolean }; clears youtube.com cookies + the backoff flag, then reloads the sender tab
   | { type: 'skipSensei:clearYtCookies' }
