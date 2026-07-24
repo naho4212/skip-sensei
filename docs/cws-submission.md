@@ -140,13 +140,16 @@ enabled.
 
 **AI provider hosts** (`generativelanguage.googleapis.com`, `api.anthropic.com`,
 `api.openai.com`, `api.groq.com`, `openrouter.ai`) — Sends a video's transcript
-to the AI provider the user selects, to detect sponsor segments. Contacted only
-when the user configures that provider; the default is Chrome's on-device AI,
-which makes no network calls.
+to the AI provider the user selects, to detect sponsor segments, and — only when
+the user clicks "Refresh model list" — fetches that provider's list of available
+models to populate the model picker (a plain read of the model catalog, no user
+data). Contacted only when the user configures that provider; the default is
+Chrome's on-device AI, which makes no network calls.
 
 **`http://localhost/*`, `http://127.0.0.1/*`** — Lets users route AI analysis to
 a local Ollama server or self-hosted gateway on their own machine, so no data
-leaves their device. Contacted only if the user selects a local provider.
+leaves their device (and, on "Refresh model list", reads the local server's list
+of installed models). Contacted only if the user selects a local provider.
 
 **Optional `*://*/*`** (requested at runtime, not at install) — Needed for the
 opt-in features that have to run on sites other than YouTube:
