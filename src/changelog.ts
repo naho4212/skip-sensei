@@ -15,6 +15,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.3.4',
+    date: '2026-07-28',
+    items: [
+      'Settings › Activity & logs is now tabbed — Feature activity, Settings history and Analysis cache each get their own tab with a count, so you can jump straight to one instead of scrolling past the others',
+      'Each log starts at 20 entries with “Show 20 more” / “Show all”, and long lists scroll inside their own box with the column headers pinned',
+    ],
+  },
+  {
     version: '0.2.26',
     date: '2026-07-16',
     items: [
