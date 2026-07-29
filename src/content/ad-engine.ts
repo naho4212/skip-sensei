@@ -278,6 +278,8 @@ export class AdEngine {
   private ffLastAdvanceAt = 0
   private ffLastSeekAt = 0
   private stuckRecoveries = 0
+  /** One skip-failure report per ad break, not one per tick. */
+  private failureReported = false
   private cloak: HTMLElement | null = null
   /** Enforcement walls dismissed this session (aggressive-mode circuit breaker). */
   private wallsSeen = 0
@@ -438,6 +440,7 @@ export class AdEngine {
       this.ffLastTime = -1
       this.ffLastSeekAt = 0
       this.stuckRecoveries = 0
+      this.failureReported = false
       this.breakMethods = []
       this.breakAdSeconds = 0
       this.curAdDuration = 0
@@ -818,6 +821,20 @@ export class AdEngine {
     ) {
       this.stuckRecoveries++
       this.ffLastAdvanceAt = now
+      // Last recovery attempt exhausted: from here the ad plays through and
+      // the user watches it. That's the engine LOSING, and nothing used to
+      // record it — every existing signal only fires on a successful skip.
+      if (this.stuckRecoveries === MAX_STUCK_RECOVERIES && !this.failureReported) {
+        this.failureReported = true
+        void this.send({
+          type: 'skipSensei:event',
+          kind: 'skip_failed',
+          fields: {
+            reason: 'stuck',
+            adSeconds: String(Math.round(video.duration || 0)),
+          },
+        })
+      }
       log('ad player looks stuck; recovery attempt', this.stuckRecoveries)
       video.playbackRate = 1
       video.currentTime = Math.max(0, video.duration - 1)

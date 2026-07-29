@@ -280,6 +280,67 @@ export async function clearYtBackoff(): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// Daily counters feeding the telemetry rollup.
+//
+// Per-event telemetry can't answer "how often" questions here: reportEvent
+// caps at 20 events/hour AND drops events whose field values repeat inside
+// that hour, so identical outcomes (the common case) collapse into one. What
+// survives is biased toward unusual values. Counting locally and shipping one
+// aggregate a day gives an honest denominator instead.
+// ---------------------------------------------------------------------------
+const DAILY_KEY = 'skipSensei.dailyCounters'
+
+export type DailyCounter =
+  | 'walls'
+  | 'breakerTrips'
+  | 'skipFailures'
+  | 'selfHeals'
+  | 'cosmeticUnhides'
+  | 'rulesetEnableFailures'
+  | 'visitorClearTried'
+  | 'visitorClearFailed'
+  | 'fullClears'
+
+interface DailyCounters {
+  /** Local YYYY-MM-DD the counts belong to; a new day resets them. */
+  day: string
+  counts: Partial<Record<DailyCounter, number>>
+}
+
+/** Local date, matching localDayKey below — 'today' must roll over at the
+ * user's midnight, not UTC's, or a rollup straddles two of their days. */
+const today = () => {
+  const d = new Date()
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
+let dailyChain: Promise<void> = Promise.resolve()
+
+export function bumpDailyCounter(name: DailyCounter, by = 1): Promise<void> {
+  dailyChain = dailyChain
+    .then(async () => {
+      const result = await chrome.storage.local.get(DAILY_KEY)
+      const cur: DailyCounters = result[DAILY_KEY] ?? { day: today(), counts: {} }
+      const fresh: DailyCounters =
+        cur.day === today() ? cur : { day: today(), counts: {} }
+      fresh.counts[name] = (fresh.counts[name] ?? 0) + by
+      await chrome.storage.local.set({ [DAILY_KEY]: fresh })
+    })
+    .catch(() => {})
+  return dailyChain
+}
+
+export async function getDailyCounters(): Promise<DailyCounters> {
+  const result = await chrome.storage.local.get(DAILY_KEY)
+  return result[DAILY_KEY] ?? { day: today(), counts: {} }
+}
+
+export async function resetDailyCounters(): Promise<void> {
+  await chrome.storage.local.set({ [DAILY_KEY]: { day: today(), counts: {} } })
+}
+
+// ---------------------------------------------------------------------------
 // How long ad skips actually take.
 //
 // This exists because the question "is a skip a flicker or five seconds?"

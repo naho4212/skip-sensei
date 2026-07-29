@@ -37,6 +37,7 @@ import {
 } from './scriptlet-register'
 import { clearCookiesFor, clearYtVisitorCookies } from './cookies'
 import { withResumeTime } from './resume'
+import { initTelemetryRollup } from './telemetry-rollup'
 import { isColdStart, runColdStart } from './lifecycle'
 import { fetchSponsorBlockSegments } from './sponsorblock'
 import { initErrorReporting, reportError, reportEvent } from './error-reporting'
@@ -46,6 +47,7 @@ import {
   getCachedAnalysis,
   getSettings,
   incrementStat,
+  bumpDailyCounter,
   recordActivity,
   recordAdblockWall,
   recordCorrection,
@@ -486,7 +488,7 @@ function abandonAnalysis(videoId: string) {
  */
 const WALL_DEDUPE_MS = 10_000
 
-async function handleWallSeen(walls: number) {
+async function handleWallSeen(walls: number, tabId?: number) {
   const last =
     (await chrome.storage.session.get('lastWallAt')).lastWallAt ?? 0
   const now = Date.now()
@@ -499,6 +501,18 @@ async function handleWallSeen(walls: number) {
   // The popup notice must show even when pruning was already off, so the
   // backoff flag is recorded regardless of whether the breaker has anything
   // left to disable.
+  void bumpDailyCounter('walls')
+  // A wall on a tab that just tried the visitor-only clear means that clear
+  // did not lift it. Counting failures rather than successes avoids needing a
+  // per-tab timer to decide when "no wall yet" has become "it worked" —
+  // successes fall out as tried minus failed in the rollup.
+  if (tabId !== undefined) {
+    const key = `ytVisitorClear.${tabId}`
+    const at = (await chrome.storage.session.get(key))[key] ?? 0
+    if (at && Date.now() - at < 5 * 60_000) {
+      void bumpDailyCounter('visitorClearFailed')
+    }
+  }
   await setYtBackoff(walls)
   void recordActivity(
     'Skip YouTube ads',
@@ -508,6 +522,7 @@ async function handleWallSeen(walls: number) {
   void reportEvent('yt_hard_block', { walls: String(walls) })
 
   if (!(await getSettings()).aggressivePruning) return
+  void bumpDailyCounter('breakerTrips')
   await updateSettings({ aggressivePruning: false })
   void recordActivity(
     'First-party ad blocking',
@@ -564,6 +579,18 @@ chrome.runtime.onMessage.addListener(
         return false
       }
       case 'skipSensei:event':
+        // Rates need a denominator the per-event stream can't provide (it
+        // dedupes identical payloads within the hour), so count locally too.
+        if (message.kind === 'self_heal') void bumpDailyCounter('selfHeals')
+        if (message.kind === 'skip_failed') void bumpDailyCounter('skipFailures')
+        if (
+          message.kind === 'gapfill_feedback' &&
+          message.fields?.verdict === 'not-ad'
+        ) {
+          // The user un-hid something we hid: a false positive, and the
+          // earliest warning that a heuristic has gone wrong on a live site.
+          void bumpDailyCounter('cosmeticUnhides')
+        }
         void reportEvent(message.kind, {
           ...(message.fields ?? {}),
           host: senderHost(sender) ?? '',
@@ -642,6 +669,9 @@ chrome.runtime.onMessage.addListener(
         void (async () => {
           try {
             const visitorOnly = message.scope === 'visitor'
+            void bumpDailyCounter(
+              visitorOnly ? 'visitorClearTried' : 'fullClears',
+            )
             const cleared = visitorOnly
               ? await clearYtVisitorCookies()
               : await clearCookiesFor({ domain: 'youtube.com' })
@@ -685,7 +715,7 @@ chrome.runtime.onMessage.addListener(
         })()
         return true
       case 'skipSensei:wallSeen':
-        void handleWallSeen(message.walls)
+        void handleWallSeen(message.walls, sender.tab?.id)
         return false
       case 'skipSensei:getWallState':
         void (async () => {
@@ -938,6 +968,10 @@ initCosmeticRegistration()
 // Differential filter-list updates: periodic + cold-start check for refreshed
 // cosmetic-shard DATA (self-throttling; gated on filterUpdatesEnabled).
 initFilterUpdates()
+
+// One aggregate telemetry event per day (distributions + counters). Alarm-
+// driven so service-worker dormancy can't skip it; self-throttling per day.
+initTelemetryRollup()
 
 // Cold-start gate: DNR ruleset state and chrome.scripting registrations persist
 // across service-worker restarts, so we only run the full sync on a genuine

@@ -1,3 +1,4 @@
+import { reportImmediateFailure } from './telemetry-rollup'
 import { getSettings, onSettingsChanged } from './storage'
 import type { BlockBreakdown } from './types'
 
@@ -152,6 +153,12 @@ async function setRulesets(ids: string[], on: boolean, label: string) {
         const msg =
           error instanceof Error ? error.message : `Could not update ${label}`
         lastError = `${label}: ${msg}`
+        // A user in this state has ad blocking that silently does nothing —
+        // don't make them wait for the daily rollup to surface it.
+        void reportImmediateFailure('ruleset_enable_failed', {
+          ruleset: label.slice(0, 40),
+          reason: msg.slice(0, 120),
+        })
         return
       }
       await new Promise((r) => setTimeout(r, 600))
