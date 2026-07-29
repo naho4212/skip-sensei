@@ -990,7 +990,10 @@ export class AdEngine {
     // cookies. So the full wipe leads, because it's the one that works, and
     // the narrow clear stays as a labelled second option rather than a step
     // everyone pays a reload for first.
-    const FULL_LABEL = 'Clear cookies & reload'
+    // The consequence belongs ON the button. Body copy explaining it isn't
+    // enough: this is read by someone whose video just died, who wants it
+    // back, and who will click the primary action without reading a word.
+    const FULL_LABEL = 'Clear cookies & reload (signs you out)'
     const KEEP_LABEL = 'Try without signing me out first'
 
     const full = document.createElement('button')
