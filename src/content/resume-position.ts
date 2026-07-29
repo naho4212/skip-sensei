@@ -1,10 +1,20 @@
 import { PLAYER, VIDEO } from '../selectors'
 import { log } from '../log'
-import {
-  forgetResumePosition,
-  getResumePosition,
-  recordResumePosition,
-} from '../storage'
+import { getResumePosition } from '../storage'
+import type { Message } from '../types'
+
+/** Position WRITES go through the service worker, whose single chain
+ * serializes all tabs — writing the shared map directly from here raced
+ * other watch tabs (each content-script context has its own storage-module
+ * instance, so its chain guards nothing beyond this tab). Reads stay direct.
+ * sendMessage throws synchronously in an orphaned context — swallow both. */
+function sendToSw(message: Message): void {
+  try {
+    chrome.runtime.sendMessage(message).catch(() => {})
+  } catch {
+    /* extension reloaded out from under us — nothing to save to */
+  }
+}
 
 /**
  * Never lose your place on a reload.
@@ -102,7 +112,7 @@ export class ResumePositionTracker {
     // Finished last time — start it over rather than dropping the user on the
     // outro, and drop the stale entry.
     if (stored >= video.duration - END_MARGIN_SECONDS) {
-      void forgetResumePosition(this.videoId)
+      sendToSw({ type: 'skipSensei:resumeForget', videoId: this.videoId })
       return
     }
     // Something already positioned this (YouTube's own history) — don't fight it.
@@ -126,13 +136,13 @@ export class ResumePositionTracker {
     if (!Number.isFinite(t) || t < MIN_RESTORE_SECONDS) return
     // Watched to the end — forget it, so reopening starts clean.
     if (Number.isFinite(video.duration) && t >= video.duration - END_MARGIN_SECONDS) {
-      void forgetResumePosition(this.videoId)
+      sendToSw({ type: 'skipSensei:resumeForget', videoId: this.videoId })
       this.lastSaved = -1
       return
     }
     if (Math.abs(t - this.lastSaved) < 1) return
     this.lastSaved = t
-    void recordResumePosition(this.videoId, t)
+    sendToSw({ type: 'skipSensei:resumeSave', videoId: this.videoId, seconds: t })
   }
 }
 

@@ -297,7 +297,12 @@ function render(settings: Settings) {
       urlEl.value = settings.openclawUrl
     }
     if (provider !== 'ollama') {
-      apiKeyEl.value = settings.apiKeys[provider] ?? ''
+      // Same mid-typing guard as the model/openclaw-url fields: the debounced
+      // save re-renders, and overwriting the field while it has focus dropped
+      // whatever was typed after the debounce fired.
+      if (document.activeElement !== apiKeyEl) {
+        apiKeyEl.value = settings.apiKeys[provider] ?? ''
+      }
       apiKeyLinkEl.href = KEY_LINKS[provider]
       $('api-key-label').textContent =
         provider === 'openclaw' ? 'Gateway token' : 'API key'
@@ -713,7 +718,11 @@ function showPanel(name: string) {
   const panel = PANELS.includes(name) ? name : 'youtube'
   for (const p of PANELS) $(`panel-${p}`).hidden = p !== panel
   for (const btn of document.querySelectorAll<HTMLButtonElement>('.nav-item')) {
-    btn.classList.toggle('active', btn.dataset.panel === panel)
+    const active = btn.dataset.panel === panel
+    btn.classList.toggle('active', active)
+    // The visual .active class is invisible to assistive tech.
+    if (active) btn.setAttribute('aria-current', 'page')
+    else btn.removeAttribute('aria-current')
   }
   // Render on demand — analytics/logs pull fresh data when first shown.
   if (panel === 'analytics') void renderAnalytics()
@@ -728,6 +737,11 @@ function setupNav() {
       showPanel(panel)
     })
   }
+  // Back/forward (and hand-edited hashes) switch panels too — replaceState
+  // alone wrote the hash but nothing ever read it after load.
+  window.addEventListener('hashchange', () =>
+    showPanel(location.hash.replace('#', '')),
+  )
   showPanel(location.hash.replace('#', '') || 'youtube')
 }
 
@@ -883,6 +897,8 @@ function infoIcon(tip: string): HTMLElement {
   el.className = 'info'
   el.tabIndex = 0
   el.dataset.tip = tip
+  // The CSS tooltip renders from data-tip, which screen readers never see.
+  el.setAttribute('aria-label', tip)
   el.textContent = 'ⓘ'
   // These rows render after init, so the global .info click-guard hasn't bound
   // them — stop the click from toggling the checkbox this icon sits inside.
@@ -1050,12 +1066,15 @@ async function main() {
   void renderBuiltinStatus()
 
   // Clicking an ⓘ shouldn't toggle the checkbox it sits inside — hover only.
-  document.querySelectorAll('.info').forEach((el) =>
+  // Also mirror each data-tip into aria-label: the CSS tooltip is invisible
+  // to screen readers, so focusing the icon should announce the tip text.
+  document.querySelectorAll<HTMLElement>('.info').forEach((el) => {
+    if (el.dataset.tip) el.setAttribute('aria-label', el.dataset.tip)
     el.addEventListener('click', (e) => {
       e.preventDefault()
       e.stopPropagation()
-    }),
-  )
+    })
+  })
 
   providerEl.addEventListener('change', () => {
     const provider = providerEl.value as LlmProvider
@@ -1235,6 +1254,11 @@ async function main() {
     $<HTMLInputElement>('telemetry').disabled = on
     sbEnabledEl.disabled = on
     for (const el of sbCatEls) el.disabled = on
+    // Filter updates are also forced off by local-only (a background GET
+    // would reveal the install) — grey them out like the rest of the
+    // overridden controls instead of leaving a checkbox that does nothing.
+    $<HTMLInputElement>('filter-updates').disabled = on
+    $<HTMLButtonElement>('filter-update-check').disabled = on
   }
   localOnlyEl.checked = loaded.localOnlyMode
   applyLocalOnlyUi(loaded.localOnlyMode)
@@ -1251,21 +1275,48 @@ async function main() {
 
   await renderAllowlist()
   const allowlistInput = $<HTMLInputElement>('allowlist-input')
-  const addSite = async () => {
-    const raw = allowlistInput.value.trim().toLowerCase()
-    // Accept a pasted URL or a bare hostname.
-    let host = raw
+  /** Mirror net-blocker's normalizeHost: scheme/path/port stripped, IDN →
+   * punycode via URL. Stored entries must be in the same (punycode) form the
+   * popup compares against tab hostnames and the DNR rule matches on —
+   * storing raw Unicode made the pause toggle disagree with the actual rule.
+   * Garbage input used to be stored silently and then dropped silently by
+   * the rule sanitizer (site "paused" but not); now it's rejected visibly. */
+  const normalizeAllowlistHost = (raw: string): string | null => {
+    let s = raw
+      .trim()
+      .toLowerCase()
+      .replace(/^[a-z][a-z0-9+.-]*:\/\//, '')
+      .replace(/[/?#].*$/, '')
+      .replace(/:\d+$/, '')
+      .replace(/^\*\.?/, '')
+      .replace(/\.$/, '')
+      .replace(/^www\./, '')
+    if (!s) return null
     try {
-      if (raw.includes('/')) host = new URL(raw.startsWith('http') ? raw : `https://${raw}`).hostname
+      s = new URL(`http://${s}`).hostname
     } catch {
-      host = raw
+      return null
     }
-    host = host.replace(/^www\./, '')
-    if (!host) return
+    return /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$/.test(s)
+      ? s
+      : null
+  }
+  const addSite = async () => {
+    const host = normalizeAllowlistHost(allowlistInput.value)
+    if (!host) {
+      if (allowlistInput.value.trim()) {
+        allowlistInput.setCustomValidity('Enter a website like example.com')
+        allowlistInput.reportValidity()
+      }
+      return
+    }
     await setSiteAllowlisted(host, true)
     allowlistInput.value = ''
     await renderAllowlist()
   }
+  allowlistInput.addEventListener('input', () =>
+    allowlistInput.setCustomValidity(''),
+  )
   $<HTMLButtonElement>('allowlist-add-btn').addEventListener('click', addSite)
   allowlistInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') void addSite()
@@ -1287,12 +1338,17 @@ async function main() {
   }
   $<HTMLButtonElement>('reset-toggles').addEventListener('click', async () => {
     // Keep AI config, paused sites, and (via storage) stats/cache/feedback.
+    // telemetryEnabled and localOnlyMode are PRIVACY CONSENTS, not feature
+    // toggles — a generic "back to defaults" must never silently re-opt the
+    // user into diagnostics or out of local-only mode.
     await resetSettingsToDefaults([
       'apiKeys',
       'llmProvider',
       'model',
       'openclawUrl',
       'allowlist',
+      'telemetryEnabled',
+      'localOnlyMode',
     ])
     location.reload()
   })

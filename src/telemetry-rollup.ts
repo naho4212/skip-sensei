@@ -1,10 +1,11 @@
 import { reportEvent } from './error-reporting'
 import {
   bumpDailyCounter,
+  drainDailyCounters,
   getDailyCounters,
   getSettings,
   getSkipTimings,
-  resetDailyCounters,
+  restoreDailyCounters,
   type SkipTiming,
 } from './storage'
 
@@ -92,10 +93,13 @@ function adoption(s: Awaited<ReturnType<typeof getSettings>>) {
 export async function sendDailyRollup(): Promise<boolean> {
   const settings = await getSettings()
   // reportEvent enforces the same gate, but returning early keeps us from
-  // clearing the local counters for a send that never leaves the machine.
+  // draining the local counters for a send that never leaves the machine.
   if (!settings.telemetryEnabled || settings.localOnlyMode) return false
 
-  const { day, counts } = await getDailyCounters()
+  // Atomic take-and-reset on the counter chain: a bump landing while the
+  // rollup is on the wire queues behind the drain and counts toward the NEXT
+  // rollup, instead of being wiped by an unchained reset afterwards.
+  const { day, counts } = await drainDailyCounters()
   const timings = await getSkipTimings()
   // Same local-date basis as the counters, so the stats and the counts in one
   // rollup describe the same 24 hours.
@@ -127,25 +131,54 @@ export async function sendDailyRollup(): Promise<boolean> {
     clear_full: String(counts.fullClears ?? 0),
   }
 
-  await reportEvent('daily_rollup', fields)
-  await resetDailyCounters()
-  await chrome.storage.local.set({ [LAST_SENT_KEY]: day })
-  return true
+  const attempted = await reportEvent('daily_rollup', fields)
+  if (attempted) {
+    await chrome.storage.local.set({ [LAST_SENT_KEY]: day })
+  } else {
+    // The shared 20-events/hour budget dropped it locally. Put the drained
+    // counts back and DON'T mark the day sent — a later wake retries once the
+    // budget window rolls, instead of silently losing the whole day.
+    await restoreDailyCounters({ day, counts })
+  }
+  return attempted
 }
 
-/** Send if a rollup hasn't gone out for the current day yet. */
-async function maybeSend(): Promise<void> {
-  const { day } = await getDailyCounters()
-  const last = (await chrome.storage.local.get(LAST_SENT_KEY))[LAST_SENT_KEY]
-  if (last === day) return
-  await sendDailyRollup()
+/**
+ * Send if a rollup hasn't gone out for the current day yet.
+ *
+ * Serialized: on an alarm-wake of a dormant worker, BOTH the init-time check
+ * and the delivered alarm event call this, and unserialized they both read
+ * LAST_SENT_KEY before either wrote it — two rollups, the second with
+ * freshly-drained (zeroed) counters, inflating install-day counts in the
+ * report. On the chain, the second caller sees the first's write and no-ops.
+ */
+let rollupChain: Promise<void> = Promise.resolve()
+
+function maybeSend(): Promise<void> {
+  rollupChain = rollupChain
+    .then(async () => {
+      const { day } = await getDailyCounters()
+      const last = (await chrome.storage.local.get(LAST_SENT_KEY))[
+        LAST_SENT_KEY
+      ]
+      if (last === day) return
+      await sendDailyRollup()
+    })
+    .catch(() => {})
+  return rollupChain
 }
 
 export function initTelemetryRollup(): void {
   chrome.alarms.onAlarm.addListener((alarm) => {
     if (alarm.name === ALARM_NAME) void maybeSend()
   })
-  chrome.alarms.create(ALARM_NAME, { periodInMinutes: PERIOD_MINUTES })
+  // Create only if missing: alarms persist across service-worker restarts,
+  // and re-creating one RESETS its timer to a full period from now — on an
+  // active browser (frequent SW wakes) the alarm would simply never fire.
+  void chrome.alarms.get(ALARM_NAME).then((existing) => {
+    if (!existing)
+      chrome.alarms.create(ALARM_NAME, { periodInMinutes: PERIOD_MINUTES })
+  })
   // A browser that's only open in short bursts may never see the alarm fire,
   // so also check on startup — maybeSend is idempotent per day.
   void maybeSend()

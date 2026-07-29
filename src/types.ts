@@ -427,15 +427,25 @@ export type Message =
       type: 'skipSensei:verifyAdCandidates'
       candidates: Array<{ index: number; html: string; text: string }>
       page: { host: string; title: string }
-    } // → number[] (indexes the AI confirmed as ads; fail-closed empty)
+    } // → number[] | null: indexes the AI confirmed as ads; [] = judged, none
+  //   confirmed; null = NO VERDICT (AI off or call failed) — retry later,
+  //   never cache null as "all vetoed"
   | {
       type: 'skipSensei:auditHiddenElements'
       candidates: Array<{ index: number; html: string; text: string }>
       page: { host: string; title: string }
-    } // → number[] (indexes the AI is CERTAIN are not ads; fail-closed empty = everything stays hidden)
+    } // → number[] | null: indexes the AI is CERTAIN are not ads; [] = judged,
+  //   everything stays hidden; null = NO VERDICT — retry later, never cache
+  //   as a definitive 'ad'
   | { type: 'skipSensei:reviewPopup'; html: string; desc?: string } // → boolean (hide this overlay?)
   | { type: 'skipSensei:logActivity'; feature: string; action: string } // content-script action → activity log
   | { type: 'skipSensei:findConsentReject'; html: string } // → string | null (reject-button selector)
+  // Storage writers routed from content scripts to the SW, where one write
+  // chain serializes them (each tab's own storage-module instance would race
+  // the shared keys otherwise). Same field shapes as the storage functions.
+  | { type: 'skipSensei:skipTiming'; s: number; m: string; ads: number }
+  | { type: 'skipSensei:resumeSave'; videoId: string; seconds: number }
+  | { type: 'skipSensei:resumeForget'; videoId: string }
 
 // ---------------------------------------------------------------------------
 // Messages: popup → content script
@@ -443,6 +453,7 @@ export type Message =
 
 export type TabMessage =
   | { type: 'skipSensei:getPageStatus' }
+  | { type: 'skipSensei:pageHasAds' } // → boolean (ad content loaded before blocking — reload would clear it)
   | { type: 'skipSensei:hasYouTubeEmbed' } // → boolean (page embeds a YT video)
   // → number: content-video position to restore after a cookie-clear reload (0 = none)
   | { type: 'skipSensei:getResumePosition' }

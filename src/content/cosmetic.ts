@@ -11,7 +11,6 @@ import {
   getSettings,
   getVetoedGapfill,
   onSettingsChanged,
-  recordActivity,
   removeVetoedGapfill,
   setGapfillSelectors,
   setListAuditVerdicts,
@@ -76,9 +75,19 @@ const HEURISTIC_SELECTORS = [
   '[class*=" ad--"]',
   '[class*="-advertisement"]',
   '[class*="advertisement-"]',
-  '[id^="banner-ad"]',
-  '[class^="banner-ad"]',
-  '[class*=" banner-ad"]',
+  // "banner-ad" must END the token too — a bare prefix match also caught
+  // "banner-add…"/"banner-admin…". Attribute selectors can't express token
+  // boundaries, so enumerate: exact, hyphen-continued, and space-delimited.
+  '[id="banner-ad"]',
+  '[id="banner-ads"]',
+  '[id^="banner-ad-"]',
+  '[class="banner-ad"]',
+  '[class="banner-ads"]',
+  '[class^="banner-ad-"]',
+  '[class^="banner-ad "]',
+  '[class*=" banner-ad "]',
+  '[class*=" banner-ad-"]',
+  '[class$=" banner-ad"]',
 ]
 
 const SELECTORS = [
@@ -400,6 +409,20 @@ function bareDomain(): string {
   return location.hostname.replace(/^www\./, '')
 }
 
+/** Activity entries route through the SW, whose single write chain
+ * serializes all tabs — direct storage writes from N content-script contexts
+ * raced the shared log and dropped entries. The SW stamps the site from the
+ * sender tab. sendMessage throws synchronously in an orphaned context. */
+function sendActivity(feature: string, action: string): void {
+  try {
+    void chrome.runtime
+      .sendMessage({ type: 'skipSensei:logActivity', feature, action })
+      .catch(() => {})
+  } catch {
+    /* extension reloaded out from under us */
+  }
+}
+
 /** Whether this page embeds a YouTube video — an iframe player (standard or
  *  privacy-enhanced), or a common lazy-embed placeholder. Lets the popup show
  *  the "This video" section on non-YouTube pages that host a YouTube video. */
@@ -446,7 +469,12 @@ let listRequested = false
 function requestListSelectors(onReady: () => void): void {
   if (listRequested) return
   listRequested = true
-  if (isYouTube()) {
+  // User-content hosts (webmail/chat/docs): list rules inherited from a parent
+  // domain reach them (google.com rules apply on mail.google.com), the AI
+  // audit is deliberately excluded there, and these apps carry no third-party
+  // display ads the lists could catch — so a bad rule has all downside and no
+  // upside. Skip the list entirely, same as the gap-filler and collapser do.
+  if (isYouTube() || isUserContentHost()) {
     listSelectors = []
     return
   }
@@ -800,7 +828,10 @@ const PROTECTED_ANCESTORS =
 
 function isAdBadge(el: Element): boolean {
   if (el.tagName.toLowerCase() === 'ad-badge-view-model') return true
-  if (/ad-badge/i.test(String(el.className))) return true
+  // Token-anchored: "ad-badge" must start a token ("yt-ad-badge" counts,
+  // "download-badge"/"thread-badge" — words that merely END in "ad" — don't).
+  // The querySelectorAll prefilter stays broad; this is the decider.
+  if (/(^|[\s_-])ad-badge/i.test(String(el.className))) return true
   return AD_BADGE_TEXT.test((el.textContent ?? '').trim())
 }
 
@@ -890,15 +921,17 @@ function isSafeGapfillSelector(sel: string): boolean {
   return els.every((el) => {
     // Interactive/form elements are never the right thing to hide as "an ad"
     // (telemetry caught the AI proposing a job-application address input).
+    // Same tag set as isSafeCandidate — a cached selector gets the same test
+    // the candidate passed at proposal time.
     if (
       el.matches(
-        'a, button, nav, header, input, select, textarea, form, label, fieldset',
+        'a, button, nav, header, footer, main, input, select, textarea, form, label, fieldset, body, html',
       )
     )
       return false
     if (
       el.closest(
-        'form, nav, header, [role="navigation"], [role="banner"], [role="menu"], [role="menubar"]',
+        'form, nav, header, footer, [role="navigation"], [role="banner"], [role="menu"], [role="menubar"]',
       )
     )
       return false
@@ -1008,8 +1041,13 @@ function pageHasLoadedAds(): boolean {
 // ---------------------------------------------------------------------------
 
 const EMPTY_SLOT_CLASS = 'skip-sensei-empty-slot'
+// "dfp" is token-anchored like "gpt": three unanchored characters turn up in
+// hashed/minified class names, and the likeliest match is a lazy-load
+// skeleton box — empty and non-interactive, exactly what isEmptyAdSlot
+// accepts. "advert"/"sponsor"/"adsense"/"doubleclick" stay substrings: long
+// enough that accidental containment doesn't happen.
 const SLOT_NAME_RE =
-  /(^|[-_ ])ads?([-_ ]|$)|advert|sponsor|adsense|doubleclick|(^|[-_ ])gpt([-_ ]|$)|dfp/i
+  /(^|[-_ ])ads?([-_ ]|$)|advert|sponsor|adsense|doubleclick|(^|[-_ ])gpt([-_ ]|$)|(^|[-_ ])dfp([-_ ]|$)/i
 // camelCase ad tokens (weather.com's WX_Bot300AdX1). Deliberately
 // case-SENSITIVE: with /i this would match "LoadTime"/"ReadMore".
 const SLOT_NAME_CAMEL_RE = /(\d|[a-z])Ad[A-Z0-9]/
@@ -1065,6 +1103,25 @@ async function collapseEmptyAdSlots() {
   const brandAllowed = !(await getRejectedGapfill(bareDomain())).includes(
     `.${BRANDED_SLOT_CLASS}`,
   )
+  // Self-heal a mis-collapse: a tagged slot that later gains real content was
+  // a lazy section whose skeleton matched an ad token, not an ad husk —
+  // un-tag it so the content shows. Only form controls or substantial text
+  // qualify as "real content": a late-arriving ad creative is a link/image,
+  // and un-tagging on those would un-hide ads. textContent, not innerText —
+  // hidden elements have no innerText.
+  for (const el of document.querySelectorAll<HTMLElement>(
+    `.${EMPTY_SLOT_CLASS}, .${BRANDED_SLOT_CLASS}`,
+  )) {
+    const text = (el.textContent ?? '').trim()
+    if (
+      el.querySelector('input:not([type="hidden"]), select, textarea') ||
+      text.length > 120
+    ) {
+      el.classList.remove(EMPTY_SLOT_CLASS, BRANDED_SLOT_CLASS)
+      el.querySelector(`:scope > .${SLOT_BRAND_CLASS}`)?.remove()
+      log('un-collapsed a slot that gained real content')
+    }
+  }
   // Name-based candidates: the element's OWN id/class declares it an ad slot.
   // Trusted even inside <header> — masthead billboard slots are a standard
   // news-site pattern (e.g. Business Insider's .masthead-ad) — because
@@ -1249,10 +1306,9 @@ function scanSponsoredCards() {
     }
   }
   if (tagged > 0) {
-    void recordActivity(
+    sendActivity(
       'Block all ads',
       `hid ${tagged} sponsored post(s) by their ad label`,
-      bareDomain(),
     )
     // Mining data: which long-tail domains carry labelled first-party ads —
     // recurring ones can be promoted into shipped per-site rules.
@@ -1626,7 +1682,7 @@ const CANDIDATE_NAME_RE =
  * display ads that filter lists miss.
  */
 const USER_CONTENT_HOST_RE =
-  /^(mail|webmail|email)\.|(^|\.)(outlook\.(live|office|office365)\.com|icloud\.com|fastmail\.com|proton\.me|tutanota\.com|web\.whatsapp\.com|web\.telegram\.org|messenger\.com|discord\.com|slack\.com|teams\.microsoft\.com|teams\.live\.com|docs\.google\.com|drive\.google\.com|calendar\.google\.com|chat\.google\.com|meet\.google\.com|keep\.google\.com|contacts\.google\.com|notion\.so)$/i
+  /^(mail|webmail|email)\.|(^|\.)(outlook\.com|outlook\.(live|office|office365)\.com|icloud\.com|fastmail\.com|proton\.me|tutanota\.com|app\.hey\.com|web\.whatsapp\.com|web\.telegram\.org|messenger\.com|discord\.com|slack\.com|teams\.microsoft\.com|teams\.live\.com|docs\.google\.com|drive\.google\.com|calendar\.google\.com|chat\.google\.com|meet\.google\.com|keep\.google\.com|contacts\.google\.com|messages\.google\.com|voice\.google\.com|notion\.so)$/i
 
 function isUserContentHost(): boolean {
   return USER_CONTENT_HOST_RE.test(location.hostname)
@@ -1805,18 +1861,16 @@ async function requestAndProcessProposals() {
   await setVetoedGapfill(domain, vetoed) // also marks the domain as scanned
   if (kept.length > 0) {
     log('gap-filler hid', kept.length, 'ad element(s):', kept)
-    void recordActivity(
+    sendActivity(
       'AI enhancements',
       `hid ${kept.length} ad element(s) the filter lists missed`,
-      domain,
     )
   }
   if (vetoed.length > 0) {
     log('AI declined', vetoed.length, 'ad candidate(s):', vetoed)
-    void recordActivity(
+    sendActivity(
       'AI enhancements',
       `${vetoed.length} ad-like element(s) stayed visible — the AI wasn't sure they're ads. Rate them in the popup`,
-      domain,
     )
   }
   // Which sites the lists miss and what the AI confirmed vs declined —
@@ -1937,13 +1991,20 @@ async function auditListHides() {
     // textContent, not innerText — display:none elements have no innerText.
     // A text-less element still qualifies when it carries UI structure: a
     // blocked ad slot is an inert husk, a hidden search box is not.
-    const el = els.find(
+    // Up to 3 samples per selector, not 1: a selector can match both a real
+    // ad and a UI element, and a verdict generalized from a single sample
+    // would un-hide the ads (or keep the UI hidden) along with it. The
+    // verdict aggregation below only records agreement across all samples.
+    const qualifying = els.filter(
       (e): e is HTMLElement =>
         e instanceof HTMLElement &&
         ((e.textContent ?? '').trim().length >= AUDIT_TEXT_MIN ||
           hasUiStructure(e)),
     )
-    if (el) suspects.push({ selector, el })
+    for (const el of qualifying.slice(0, 3)) {
+      if (suspects.length >= 8) break
+      suspects.push({ selector, el })
+    }
   }
   if (suspects.length === 0) return
   auditCallsLeft--
@@ -1963,21 +2024,30 @@ async function auditListHides() {
     return
   }
   const cleared = new Set(notAds)
-  const updates: Record<string, 'ad' | 'ui'> = {}
+  // Per-selector consensus across its samples: all 'ui' → un-hide, all 'ad'
+  // → stays hidden, mixed → NO cached verdict (the selector matches both ads
+  // and UI on this site; a later pass or visit re-audits rather than letting
+  // one sample speak for the other matches).
+  const bySelector = new Map<string, { total: number; ui: number }>()
   suspects.forEach((s, i) => {
-    updates[s.selector] = cleared.has(i) ? 'ui' : 'ad'
+    const tally = bySelector.get(s.selector) ?? { total: 0, ui: 0 }
+    tally.total++
+    if (cleared.has(i)) tally.ui++
+    bySelector.set(s.selector, tally)
   })
+  const updates: Record<string, 'ad' | 'ui'> = {}
+  for (const [selector, tally] of bySelector) {
+    if (tally.ui === tally.total) updates[selector] = 'ui'
+    else if (tally.ui === 0) updates[selector] = 'ad'
+  }
   await setListAuditVerdicts(domain, updates)
-  const uiSelectors = suspects
-    .filter((_, i) => cleared.has(i))
-    .map((s) => s.selector)
+  const uiSelectors = Object.keys(updates).filter((s) => updates[s] === 'ui')
   if (uiSelectors.length > 0) {
     await apply() // re-inject styles without the rescued selectors
     log('AI audit un-hid', uiSelectors.length, 'list-hidden element(s):', uiSelectors)
-    void recordActivity(
+    sendActivity(
       'AI enhancements',
       `un-hid ${uiSelectors.length} element(s) a filter rule wrongly hid — your content or the site's UI, not ads`,
-      domain,
     )
   }
   // Recurring 'ui' verdicts on a rule = a list bug worth fixing at the source.
@@ -2001,12 +2071,9 @@ async function auditListHides() {
  */
 async function scanForAds() {
   const settings = await getSettings()
-  if (
-    settings.aiEnhancements &&
-    !settings.localOnlyMode &&
-    !isYouTube() &&
-    !isUserContentHost()
-  ) {
+  // No localOnlyMode gate: the automatic gap-filler runs in local-only too —
+  // llm-client routes it to the on-device builtin model, nothing leaves.
+  if (settings.aiEnhancements && !isYouTube() && !isUserContentHost()) {
     await requestAndProcessProposals()
     await auditListHides()
   }
@@ -2110,8 +2177,21 @@ function onPageReady() {
   initConsent() // AI cookie-consent auto-reject
 }
 
+/** Early guard pass: the heuristic CSS has been hiding its matches since
+ * document_start, but the first guard check with a real DOM used to wait for
+ * window.load — on image-heavy pages that left a wrongly-matched search box
+ * or nav hidden for seconds. Run the guard the moment the DOM exists. */
+function earlyGuardPass() {
+  if (refreshHeuristicGuard()) void apply()
+}
+
 if (document.readyState === 'complete') onPageReady()
-else window.addEventListener('load', onPageReady)
+else {
+  window.addEventListener('load', onPageReady)
+  if (document.readyState === 'loading')
+    document.addEventListener('DOMContentLoaded', earlyGuardPass)
+  else earlyGuardPass() // 'interactive': DOM is already there — check now
+}
 onSettingsChanged(() => {
   void reportReloadState()
   initPopupReviewer()

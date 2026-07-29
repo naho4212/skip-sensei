@@ -135,10 +135,16 @@ export async function reportError(
 export async function reportEvent(
   kind: string,
   fields: Record<string, string> = {},
-): Promise<void> {
+): Promise<boolean> {
+  // Returns whether a send was ATTEMPTED: false when the telemetry gate, the
+  // hourly budget, or the same-values dedupe dropped the event locally — the
+  // daily rollup uses this to retry later instead of marking the day sent for
+  // an event that never left the machine. A network failure after dispatch
+  // still counts as attempted (at-most-once; no retry loops on flaky links).
+  let attempted = false
   try {
     const { telemetryEnabled, llmProvider, localOnlyMode } = await getSettings()
-    if (!telemetryEnabled || localOnlyMode) return
+    if (!telemetryEnabled || localOnlyMode) return false
 
     const now = Date.now()
     const result = await chrome.storage.local.get(EVENT_BUDGET_KEY)
@@ -158,11 +164,12 @@ export async function reportEvent(
 
     const dedupeKey = `${kind}:${Object.values(scrubbed).join('|').slice(0, 100)}`
     if (budget.count >= MAX_EVENTS_PER_HOUR || budget.seen.includes(dedupeKey))
-      return
+      return false
     budget.count += 1
     budget.seen.push(dedupeKey)
     await chrome.storage.local.set({ [EVENT_BUDGET_KEY]: budget })
 
+    attempted = true
     await fetch(EVENT_ENDPOINT, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -178,8 +185,10 @@ export async function reportEvent(
         browser: browserTag(),
       }),
     })
+    return true
   } catch {
     // Telemetry must never itself become an error source.
+    return attempted
   }
 }
 

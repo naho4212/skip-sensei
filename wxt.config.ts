@@ -76,6 +76,12 @@ export default defineConfig({
     // scripts/build-rulesets.mjs).
     declarative_net_request: {
       rule_resources: [
+        // Always-on YouTube exemption (1 allowAllRequests rule): network-
+        // blocking YouTube trips its enforcement walls, so the exemption must
+        // exist from INSTALL time — a static enabled ruleset has no runtime
+        // ordering, no dynamic-rule race, and no failure mode. The disabled-
+        // at-install rationale below doesn't apply to a single rule.
+        { id: 'yt_exempt', enabled: true, path: 'rulesets/yt_exempt.json' },
         { id: 'ads_base', enabled: false, path: 'rulesets/ads_base.json' },
         { id: 'ads_mobile', enabled: false, path: 'rulesets/ads_mobile.json' },
         { id: 'trackers', enabled: false, path: 'rulesets/trackers.json' },

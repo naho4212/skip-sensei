@@ -44,6 +44,7 @@ import { initErrorReporting, reportError, reportEvent } from './error-reporting'
 import {
   clearYtBackoff,
   deleteCachedAnalysis,
+  forgetResumePosition,
   getCachedAnalysis,
   getSettings,
   incrementStat,
@@ -51,6 +52,8 @@ import {
   recordActivity,
   recordAdblockWall,
   recordCorrection,
+  recordResumePosition,
+  recordSkipTiming,
   resetStats,
   setCachedAnalysis,
   updateSettings,
@@ -430,36 +433,43 @@ async function reviewPopupMsg(
 /**
  * Gap-filler v2: the content script finds ad candidates deterministically and
  * generates the selectors itself; the AI only vetoes ("is this an ad? when
- * unsure, no"). Returns confirmed candidate indexes; [] on any failure, so
- * failure means an ad might show — never that real UI gets hidden.
+ * unsure, no"). Returns confirmed candidate indexes.
+ *
+ * Failures (LLM outage, bad key, quota, feature raced off) return NULL — "no
+ * verdict, ask again later" — never []. The content script caches [] as a
+ * real answer ("all candidates vetoed" / "domain scanned"), so conflating the
+ * two turned one transient error into a permanent no-retry state.
  */
 async function verifyCandidates(
   candidates: Array<{ index: number; html: string; text?: string }>,
   page?: { host: string; title: string },
-): Promise<number[]> {
+): Promise<number[] | null> {
   const settings = await getSettings()
-  if (!settings.aiEnhancements) return []
+  if (!settings.aiEnhancements) return null
   const controller = new AbortController()
   try {
     return await verifyAdCandidates(candidates, page, settings, controller.signal)
   } catch {
-    return []
+    return null // no verdict — the content script retries on a later visit
   }
 }
 
 /** AI audit of list-driven hides: which of these hidden elements are CLEARLY
- * not ads? Fail-closed to [] — on any failure everything stays hidden. */
+ * not ads? Failures return NULL (no verdict, retry later), never [] — a []
+ * would be cached as a definitive 'ad' verdict per selector and permanently
+ * skip re-auditing, so one LLM hiccup would disable the rescue for good.
+ * Everything stays hidden while there's no verdict, so fail direction holds. */
 async function auditHidden(
   candidates: Array<{ index: number; html: string; text?: string }>,
   page?: { host: string; title: string },
-): Promise<number[]> {
+): Promise<number[] | null> {
   const settings = await getSettings()
-  if (!settings.aiEnhancements) return []
+  if (!settings.aiEnhancements) return null
   const controller = new AbortController()
   try {
     return await auditHiddenElements(candidates, page, settings, controller.signal)
   } catch {
-    return []
+    return null
   }
 }
 
@@ -487,6 +497,19 @@ function abandonAnalysis(videoId: string) {
  * inside the same second and the wall counts were inflated accordingly.
  */
 const WALL_DEDUPE_MS = 10_000
+
+/** Serialize wall reports: two tabs showing the same enforcement wall deliver
+ * two messages, and the storage dedupe below is read-then-write across an
+ * await — unserialized, both passed the 10s gate and double-counted. Single
+ * decision-maker (this file) AND single flight (this chain). */
+let wallChain: Promise<void> = Promise.resolve()
+
+function queueWallSeen(walls: number, tabId?: number): Promise<void> {
+  wallChain = wallChain
+    .then(() => handleWallSeen(walls, tabId))
+    .catch(() => {})
+  return wallChain
+}
 
 async function handleWallSeen(walls: number, tabId?: number) {
   const last =
@@ -632,6 +655,18 @@ chrome.runtime.onMessage.addListener(
       case 'skipSensei:logActivity':
         void recordActivity(message.feature, message.action, senderHost(sender))
         return false
+      // Storage writers routed here from content scripts so ONE chain (this
+      // context's) serializes them — each tab's own module instance would
+      // otherwise read-modify-write the shared keys against every other tab.
+      case 'skipSensei:skipTiming':
+        void recordSkipTiming({ s: message.s, m: message.m, ads: message.ads })
+        return false
+      case 'skipSensei:resumeSave':
+        void recordResumePosition(message.videoId, message.seconds)
+        return false
+      case 'skipSensei:resumeForget':
+        void forgetResumePosition(message.videoId)
+        return false
       case 'skipSensei:checkBuiltinAI':
         void builtinAvailability().then((availability) =>
           sendResponse({ availability }),
@@ -715,7 +750,7 @@ chrome.runtime.onMessage.addListener(
         })()
         return true
       case 'skipSensei:wallSeen':
-        void handleWallSeen(message.walls, sender.tab?.id)
+        void queueWallSeen(message.walls, sender.tab?.id)
         return false
       case 'skipSensei:getWallState':
         void (async () => {

@@ -57,7 +57,11 @@ function renderSettings(settings: Settings) {
   aiEnhancementsToggle.checked = settings.aiEnhancements
   for (const pill of document.querySelectorAll<HTMLButtonElement>('.pill')) {
     const key = pill.dataset.key as keyof Settings
-    pill.classList.toggle('on', Boolean(settings[key]))
+    const on = Boolean(settings[key])
+    pill.classList.toggle('on', on)
+    // The visual .on class is invisible to assistive tech — these are toggle
+    // buttons, so their state must ride aria-pressed.
+    pill.setAttribute('aria-pressed', String(on))
   }
   document.body.classList.toggle('disabled', !settings.masterEnabled)
   $('brand-status').textContent = settings.masterEnabled
@@ -65,12 +69,32 @@ function renderSettings(settings: Settings) {
     : 'Paused'
 }
 
-/** "This site" / "Controls" views — plain show/hide, reset on every open. */
+/** "This site" / "Controls" views — plain show/hide, reset on every open.
+ * Real tablist semantics: aria-selected + roving tabindex so the active view
+ * is announced, matching the options page's log subtabs. */
 function selectTab(tab: 'site' | 'controls') {
   $('view-site').hidden = tab !== 'site'
   $('view-controls').hidden = tab !== 'controls'
-  $('tab-site').classList.toggle('on', tab === 'site')
-  $('tab-controls').classList.toggle('on', tab === 'controls')
+  for (const [id, name] of [
+    ['tab-site', 'site'],
+    ['tab-controls', 'controls'],
+  ] as const) {
+    const btn = $<HTMLButtonElement>(id)
+    const active = name === tab
+    btn.classList.toggle('on', active)
+    btn.setAttribute('aria-selected', String(active))
+    btn.tabIndex = active ? 0 : -1
+  }
+}
+
+/** True when `url`'s HOST is youtube.com — never a substring test on the full
+ * URL, which matched paths/queries like /article-about-youtube.com-adblock. */
+function isYouTubeUrl(url: string | undefined): boolean {
+  try {
+    return /(^|\.)youtube\.com$/.test(new URL(url ?? '').hostname)
+  } catch {
+    return false
+  }
 }
 
 /** Compact large counts so four stat cards fit (48,392 → 48.4K). */
@@ -126,15 +150,22 @@ async function renderSiteSection() {
         .sendMessage({ type: 'skipSensei:getTabBlocked', tabId: tab.id })
         .catch(() => null)
     }
-    const total = bd ? BLOCK_CATEGORY_LABELS.reduce((s, [k]) => s + bd![k], 0) : 0
-    pageBlockedEl.textContent = `${total} blocked here`
-    // Per-type line: only the categories that actually blocked something.
-    pageBreakdownEl.textContent =
-      bd && total > 0
-        ? BLOCK_CATEGORY_LABELS.filter(([k]) => bd![k] > 0)
-            .map(([k, label]) => `${bd![k]} ${label}${bd![k] === 1 ? '' : 's'}`)
-            .join(' · ')
-        : ''
+    // null = the live recount was throttled (getMatchedRules quota) or the SW
+    // didn't answer — KEEP the last shown value per the net-blocker contract;
+    // overwriting with "0 blocked here" was a lie the popup used to tell.
+    if (bd) {
+      const total = BLOCK_CATEGORY_LABELS.reduce((s, [k]) => s + bd![k], 0)
+      pageBlockedEl.textContent = `${total} blocked here`
+      // Per-type line: only the categories that actually blocked something.
+      pageBreakdownEl.textContent =
+        total > 0
+          ? BLOCK_CATEGORY_LABELS.filter(([k]) => bd![k] > 0)
+              .map(([k, label]) => `${bd![k]} ${label}${bd![k] === 1 ? '' : 's'}`)
+              .join(' · ')
+          : ''
+    } else if (!pageBlockedEl.textContent) {
+      pageBlockedEl.textContent = '— blocked here' // first paint, no data yet
+    }
   }
 }
 
@@ -173,7 +204,7 @@ async function renderBlockerState() {
         active: true,
         currentWindow: true,
       })
-      const onYouTube = Boolean(tab?.url?.includes('youtube.com'))
+      const onYouTube = isYouTubeUrl(tab?.url)
       const needsReload = !onYouTube && (await pageHasLoadedAds())
       if (needsReload) {
         blockerNoteEl.className = 'blocker-note'
@@ -240,11 +271,15 @@ function renderProgress(status: PageStatus | null) {
   wrap.hidden = false
   if (status.progressTotal && status.progressTotal > 0) {
     bar.classList.remove('indeterminate')
-    bar.style.width = `${Math.max(6, (100 * (status.progressDone ?? 0)) / status.progressTotal)}%`
+    const pct = (100 * (status.progressDone ?? 0)) / status.progressTotal
+    bar.style.width = `${Math.max(6, pct)}%`
+    wrap.setAttribute('aria-valuenow', String(Math.round(pct)))
   } else {
     // No chunk info yet (transcript still downloading, or single fast call).
+    // Indeterminate = no aria-valuenow, per the progressbar pattern.
     bar.classList.add('indeterminate')
     bar.style.width = '35%'
+    wrap.removeAttribute('aria-valuenow')
   }
 }
 
@@ -425,6 +460,10 @@ function hiddenItemRow(tabId: number, item: HiddenElement): HTMLLIElement {
   li.className = item.vetoed ? 'hidden-item vetoed' : 'hidden-item'
   li.addEventListener('mouseenter', () => sendHighlight(tabId, item.selector))
   li.addEventListener('mouseleave', () => sendHighlight(tabId, null))
+  // Keyboard parity: tabbing onto a row's 👍/👎 buttons outlines the element
+  // on the page just like hovering does (focusin/out bubble from the buttons).
+  li.addEventListener('focusin', () => sendHighlight(tabId, item.selector))
+  li.addEventListener('focusout', () => sendHighlight(tabId, null))
 
   const info = document.createElement('div')
   info.className = 'hidden-info'
@@ -584,7 +623,7 @@ async function renderVideoStatus() {
   // On YouTube proper we have the full page status; on any other site the
   // detail only makes sense when the page actually embeds a YouTube video, so
   // ask the content script before showing it. Anything else stays hidden.
-  if (!tab.url?.includes('youtube.com')) {
+  if (!isYouTubeUrl(tab.url)) {
     const hasEmbed = await chrome.tabs
       .sendMessage(tab.id, { type: 'skipSensei:hasYouTubeEmbed' }, TOP_FRAME)
       .catch(() => false)
@@ -889,8 +928,29 @@ async function main() {
   renderStats(await getStats())
   onStatsChanged(renderStats)
 
-  $('tab-site').addEventListener('click', () => selectTab('site'))
-  $('tab-controls').addEventListener('click', () => selectTab('controls'))
+  const tabs: Array<['tab-site' | 'tab-controls', 'site' | 'controls']> = [
+    ['tab-site', 'site'],
+    ['tab-controls', 'controls'],
+  ]
+  tabs.forEach(([id, name], i) => {
+    const btn = $<HTMLButtonElement>(id)
+    btn.addEventListener('click', () => selectTab(name))
+    // Arrow keys move between tabs, the way a tablist is expected to behave.
+    btn.addEventListener('keydown', (e) => {
+      const step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0
+      if (!step) return
+      e.preventDefault()
+      const [nextId, nextName] = tabs[(i + step + tabs.length) % tabs.length]
+      selectTab(nextName)
+      $<HTMLButtonElement>(nextId).focus()
+    })
+  })
+
+  // The ⓘ tips render via CSS from data-tip, which screen readers never see —
+  // mirror each tip into aria-label so focusing the icon announces it.
+  document.querySelectorAll<HTMLElement>('.info[data-tip]').forEach((el) => {
+    if (el.dataset.tip) el.setAttribute('aria-label', el.dataset.tip)
+  })
 
   // Granular web-blocking pills: each maps 1:1 to a settings key. The DNR
   // side works without the broad grant (the blockAds toggle owns that ask).
@@ -1069,10 +1129,15 @@ async function main() {
     scanBtn.textContent = 'Scan for ads'
   })
   // Analysis finishes async while the popup is open; 1s keeps the elapsed
-  // timer ticking smoothly, and the blocked-ads count fresh.
+  // timer ticking smoothly. The blocked-count refresh is DELIBERATELY slower:
+  // each one triggers a live getMatchedRules recount in the SW, and that API
+  // is quota-limited to 20 calls per 10 minutes — a 1s cadence exhausted the
+  // quota in ~20s of the popup being open and then starved the badge counts
+  // for everyone. 10s keeps a lingering popup well inside the budget.
+  let tick = 0
   setInterval(() => {
     void renderVideoStatus()
-    void renderSiteSection()
+    if (++tick % 10 === 0) void renderSiteSection()
   }, 1000)
 }
 

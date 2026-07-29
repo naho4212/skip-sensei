@@ -16,6 +16,37 @@ const SRC =
 const OUT = 'public/rulesets'
 
 /**
+ * Static-rule priority ceiling, ENFORCED below. The runtime exemption rules
+ * (the yt_exempt ruleset written here, and the dynamic allowlist rule in
+ * src/net-blocker.ts — EXEMPT_PRIORITY there) sit at 100,000,000 and MUST
+ * out-prioritize every block rule we ship: DNR resolves by priority first,
+ * and action precedence (allow > block) only breaks ties. AdGuard's converter
+ * encodes $important as +1,000,000 (observed max 1,100,201), which is exactly
+ * how the old 1,000,000-priority exemption silently lost to
+ * `||youtube.com/get_video_info?*=adunit&` at 1,000,001. If AdGuard ever
+ * raises its scheme past this ceiling, the build FAILS here instead of
+ * shipping an exemption that can be out-prioritized.
+ */
+const STATIC_PRIORITY_CEILING = 10_000_000
+/** Keep identical with EXEMPT_PRIORITY / ALLOWLIST_PRIORITY in src/net-blocker.ts. */
+const EXEMPT_PRIORITY = 100_000_000
+
+/** A truncated/empty AdGuard source file must fail the build, not ship a
+ * near-empty ruleset with a green exit code. Every current list is well above
+ * this floor (smallest: social at ~600). */
+const MIN_RULES_PER_SET = 100
+
+/**
+ * Domains that must NEVER be network-blocked (enforcement-wall trigger).
+ * Keep identical with NETWORK_EXEMPT in src/net-blocker.ts. Shipped as a
+ * one-rule STATIC ruleset enabled in the manifest, so the exemption exists
+ * from install time with no runtime ordering, no dynamic-rule race, and no
+ * failure mode — the dynamic allowlist rule is then belt-and-braces for
+ * these domains and the carrier for the user's own allowlist.
+ */
+const NETWORK_EXEMPT = ['youtube.com', 'youtube-nocookie.com', 'googlevideo.com']
+
+/**
  * Which rules to keep. block/allow need no host permissions and no resource
  * files. redirect rules are kept ONLY when self-contained — i.e. they strip
  * query params via `transform` (the URL Tracking list) rather than pointing at
@@ -54,8 +85,46 @@ for (const { adguardId, id, name } of RULESETS) {
       if (typeof r.priority === 'number') rule.priority = r.priority
       return rule
     })
+
+  // Invariant gates — fail the BUILD rather than ship a broken artifact.
+  if (kept.length < MIN_RULES_PER_SET) {
+    throw new Error(
+      `${id}: only ${kept.length} rules kept — source file truncated or format changed`,
+    )
+  }
+  const overCeiling = kept.filter(
+    (r) => (r.priority ?? 1) >= STATIC_PRIORITY_CEILING,
+  )
+  if (overCeiling.length > 0) {
+    throw new Error(
+      `${id}: ${overCeiling.length} rule(s) at priority >= ${STATIC_PRIORITY_CEILING} ` +
+        `(max ${Math.max(...overCeiling.map((r) => r.priority))}) — these would ` +
+        `out-prioritize the YouTube/allowlist exemption. Raise EXEMPT_PRIORITY ` +
+        `(both here and in src/net-blocker.ts) above the new AdGuard ceiling first.`,
+    )
+  }
+
   writeFileSync(`${OUT}/${id}.json`, JSON.stringify(kept))
   console.log(
     `${id}: ${kept.length} rules kept of ${rules.length} (${name})`,
   )
 }
+
+// The always-on exemption ruleset (see NETWORK_EXEMPT above): one
+// allowAllRequests rule covering YouTube's page + embed frames, enabled in
+// the manifest so it is live from install time.
+const exemptRules = [
+  {
+    id: 1,
+    priority: EXEMPT_PRIORITY,
+    action: { type: 'allowAllRequests' },
+    condition: {
+      requestDomains: NETWORK_EXEMPT,
+      resourceTypes: ['main_frame', 'sub_frame'],
+    },
+  },
+]
+writeFileSync(`${OUT}/yt_exempt.json`, JSON.stringify(exemptRules))
+console.log(
+  `yt_exempt: ${exemptRules.length} rule (always-on YouTube exemption, priority ${EXEMPT_PRIORITY})`,
+)

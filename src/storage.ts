@@ -24,6 +24,25 @@ const LAST_SEEN_VERSION_KEY = 'skipSensei.lastSeenVersion'
 const CACHE_MAX_ENTRIES = 200
 const CORRECTIONS_MAX_ENTRIES = 200
 
+/**
+ * Serialize read-modify-write storage ops so concurrent writers in the SAME
+ * JS context can't interleave (both read → both write → one write lost).
+ *
+ * THE LIMIT, learned the hard way: every extension context — the service
+ * worker, each tab's content script, the popup — evaluates its own copy of
+ * this module, so each gets its own chain. A chain therefore only serializes
+ * writers that all run in ONE context. Writers reachable from several
+ * contexts (content scripts in N tabs) must be routed through the service
+ * worker via a message; the chain then lives where all the writes are.
+ */
+function makeChain(): (task: () => Promise<void>) => Promise<void> {
+  let tail: Promise<void> = Promise.resolve()
+  return (task) => {
+    tail = tail.then(task).catch(() => {})
+    return tail
+  }
+}
+
 export async function getSettings(): Promise<Settings> {
   const result = await chrome.storage.local.get(SETTINGS_KEY)
   return { ...DEFAULT_SETTINGS, ...(result[SETTINGS_KEY] ?? {}) }
@@ -97,13 +116,17 @@ function diffSettings(
   return entries
 }
 
-async function appendSettingsLog(entries: SettingsLogEntry[]) {
-  if (entries.length === 0) return
-  const result = await chrome.storage.local.get(SETTINGS_LOG_KEY)
-  const log: SettingsLogEntry[] = result[SETTINGS_LOG_KEY] ?? []
-  log.push(...entries)
-  await chrome.storage.local.set({
-    [SETTINGS_LOG_KEY]: log.slice(-SETTINGS_LOG_MAX),
+const settingsLogChain = makeChain()
+
+function appendSettingsLog(entries: SettingsLogEntry[]): Promise<void> {
+  if (entries.length === 0) return Promise.resolve()
+  return settingsLogChain(async () => {
+    const result = await chrome.storage.local.get(SETTINGS_LOG_KEY)
+    const log: SettingsLogEntry[] = result[SETTINGS_LOG_KEY] ?? []
+    log.push(...entries)
+    await chrome.storage.local.set({
+      [SETTINGS_LOG_KEY]: log.slice(-SETTINGS_LOG_MAX),
+    })
   })
 }
 
@@ -135,8 +158,11 @@ export async function setLastSeenVersion(version: string): Promise<void> {
 
 // ---------------------------------------------------------------------------
 // Feature activity log — what the features actually DID (ad skipped, popup
-// hidden, cookie banner answered, selector healed…), newest last. Written by
-// the service worker only, so entries never race each other.
+// hidden, cookie banner answered, selector healed…), newest last. Writes are
+// chained (concurrent SW calls used to interleave and drop entries) AND must
+// come from the service worker: content scripts route through the
+// 'skipSensei:logActivity' message — a direct call from a tab would write on
+// that tab's own chain and race every other context.
 // ---------------------------------------------------------------------------
 
 const ACTIVITY_LOG_KEY = 'skipSensei.activityLog'
@@ -152,16 +178,20 @@ export interface ActivityEntry {
   site?: string
 }
 
-export async function recordActivity(
+const activityChain = makeChain()
+
+export function recordActivity(
   feature: string,
   action: string,
   site?: string,
 ): Promise<void> {
-  const result = await chrome.storage.local.get(ACTIVITY_LOG_KEY)
-  const entries: ActivityEntry[] = result[ACTIVITY_LOG_KEY] ?? []
-  entries.push({ at: Date.now(), feature, action, ...(site ? { site } : {}) })
-  await chrome.storage.local.set({
-    [ACTIVITY_LOG_KEY]: entries.slice(-ACTIVITY_LOG_MAX),
+  return activityChain(async () => {
+    const result = await chrome.storage.local.get(ACTIVITY_LOG_KEY)
+    const entries: ActivityEntry[] = result[ACTIVITY_LOG_KEY] ?? []
+    entries.push({ at: Date.now(), feature, action, ...(site ? { site } : {}) })
+    await chrome.storage.local.set({
+      [ACTIVITY_LOG_KEY]: entries.slice(-ACTIVITY_LOG_MAX),
+    })
   })
 }
 
@@ -315,20 +345,17 @@ const today = () => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 
-let dailyChain: Promise<void> = Promise.resolve()
+const dailyChain = makeChain()
 
 export function bumpDailyCounter(name: DailyCounter, by = 1): Promise<void> {
-  dailyChain = dailyChain
-    .then(async () => {
-      const result = await chrome.storage.local.get(DAILY_KEY)
-      const cur: DailyCounters = result[DAILY_KEY] ?? { day: today(), counts: {} }
-      const fresh: DailyCounters =
-        cur.day === today() ? cur : { day: today(), counts: {} }
-      fresh.counts[name] = (fresh.counts[name] ?? 0) + by
-      await chrome.storage.local.set({ [DAILY_KEY]: fresh })
-    })
-    .catch(() => {})
-  return dailyChain
+  return dailyChain(async () => {
+    const result = await chrome.storage.local.get(DAILY_KEY)
+    const cur: DailyCounters = result[DAILY_KEY] ?? { day: today(), counts: {} }
+    const fresh: DailyCounters =
+      cur.day === today() ? cur : { day: today(), counts: {} }
+    fresh.counts[name] = (fresh.counts[name] ?? 0) + by
+    await chrome.storage.local.set({ [DAILY_KEY]: fresh })
+  })
 }
 
 export async function getDailyCounters(): Promise<DailyCounters> {
@@ -336,8 +363,41 @@ export async function getDailyCounters(): Promise<DailyCounters> {
   return result[DAILY_KEY] ?? { day: today(), counts: {} }
 }
 
-export async function resetDailyCounters(): Promise<void> {
-  await chrome.storage.local.set({ [DAILY_KEY]: { day: today(), counts: {} } })
+/**
+ * Atomically take the counters and reset the store — ON the write chain, so a
+ * bump landing mid-rollup queues behind the drain and survives into the next
+ * day's counts instead of being wiped by the reset. (The rollup used to do an
+ * unchained read → network send → reset; anything counted during the send
+ * window vanished without ever appearing in a rollup.)
+ */
+export function drainDailyCounters(): Promise<DailyCounters> {
+  let snapshot: DailyCounters = { day: today(), counts: {} }
+  return dailyChain(async () => {
+    const result = await chrome.storage.local.get(DAILY_KEY)
+    snapshot = result[DAILY_KEY] ?? { day: today(), counts: {} }
+    await chrome.storage.local.set({
+      [DAILY_KEY]: { day: today(), counts: {} },
+    })
+  }).then(() => snapshot)
+}
+
+/** Put a drained snapshot back (the send was dropped, e.g. by the event
+ * budget) by summing it into whatever accumulated since. If the local day has
+ * rolled over since the drain, the snapshot is stale and is discarded rather
+ * than mislabelled into the new day. */
+export function restoreDailyCounters(snapshot: DailyCounters): Promise<void> {
+  return dailyChain(async () => {
+    const result = await chrome.storage.local.get(DAILY_KEY)
+    const cur: DailyCounters = result[DAILY_KEY] ?? { day: today(), counts: {} }
+    if (cur.day !== snapshot.day) return
+    const merged: DailyCounters = { day: cur.day, counts: { ...cur.counts } }
+    for (const [name, count] of Object.entries(snapshot.counts) as Array<
+      [DailyCounter, number | undefined]
+    >) {
+      merged.counts[name] = (merged.counts[name] ?? 0) + (count ?? 0)
+    }
+    await chrome.storage.local.set({ [DAILY_KEY]: merged })
+  })
 }
 
 // ---------------------------------------------------------------------------
@@ -364,20 +424,21 @@ export interface SkipTiming {
   ads: number
 }
 
-let skipTimingChain: Promise<void> = Promise.resolve()
+/** SERVICE WORKER ONLY — content scripts route through the
+ * 'skipSensei:skipTiming' message. The chain serializes writers in one
+ * context; two watch tabs calling this directly would each run their own
+ * chain and race the shared list (each tab has its own module instance). */
+const skipTimingChain = makeChain()
 
 export function recordSkipTiming(entry: Omit<SkipTiming, 'at'>): Promise<void> {
-  skipTimingChain = skipTimingChain
-    .then(async () => {
-      const result = await chrome.storage.local.get(SKIP_TIMINGS_KEY)
-      const list: SkipTiming[] = result[SKIP_TIMINGS_KEY] ?? []
-      list.push({ ...entry, at: Date.now() })
-      await chrome.storage.local.set({
-        [SKIP_TIMINGS_KEY]: list.slice(-SKIP_TIMINGS_MAX),
-      })
+  return skipTimingChain(async () => {
+    const result = await chrome.storage.local.get(SKIP_TIMINGS_KEY)
+    const list: SkipTiming[] = result[SKIP_TIMINGS_KEY] ?? []
+    list.push({ ...entry, at: Date.now() })
+    await chrome.storage.local.set({
+      [SKIP_TIMINGS_KEY]: list.slice(-SKIP_TIMINGS_MAX),
     })
-    .catch(() => {})
-  return skipTimingChain
+  })
 }
 
 export async function getSkipTimings(): Promise<SkipTiming[]> {
@@ -408,27 +469,26 @@ interface ResumeEntry {
   at: number
 }
 
-/** Writes are serialized: two watch tabs saving at once would otherwise
- * read-modify-write the shared map and silently drop each other's entry. */
-let resumeChain: Promise<void> = Promise.resolve()
+/** SERVICE WORKER ONLY — content scripts route through the
+ * 'skipSensei:resumeSave' / 'skipSensei:resumeForget' messages. Save and
+ * forget share one chain: two watch tabs write the same map, and each tab's
+ * own module instance would otherwise serialize against nothing but itself. */
+const resumeChain = makeChain()
 
 export function recordResumePosition(
   videoId: string,
   seconds: number,
 ): Promise<void> {
-  resumeChain = resumeChain
-    .then(async () => {
-      const result = await chrome.storage.local.get(RESUME_KEY)
-      const map: Record<string, ResumeEntry> = result[RESUME_KEY] ?? {}
-      map[videoId] = { t: seconds, at: Date.now() }
-      const fresh = Object.entries(map)
-        .filter(([, e]) => Date.now() - e.at < RESUME_MAX_AGE_MS)
-        .sort((a, b) => b[1].at - a[1].at)
-        .slice(0, RESUME_MAX_ENTRIES)
-      await chrome.storage.local.set({ [RESUME_KEY]: Object.fromEntries(fresh) })
-    })
-    .catch(() => {})
-  return resumeChain
+  return resumeChain(async () => {
+    const result = await chrome.storage.local.get(RESUME_KEY)
+    const map: Record<string, ResumeEntry> = result[RESUME_KEY] ?? {}
+    map[videoId] = { t: seconds, at: Date.now() }
+    const fresh = Object.entries(map)
+      .filter(([, e]) => Date.now() - e.at < RESUME_MAX_AGE_MS)
+      .sort((a, b) => b[1].at - a[1].at)
+      .slice(0, RESUME_MAX_ENTRIES)
+    await chrome.storage.local.set({ [RESUME_KEY]: Object.fromEntries(fresh) })
+  })
 }
 
 /** Stored position for a video, or null when there's nothing worth restoring. */
@@ -440,12 +500,17 @@ export async function getResumePosition(videoId: string): Promise<number | null>
   return entry.t
 }
 
-export async function forgetResumePosition(videoId: string): Promise<void> {
-  const result = await chrome.storage.local.get(RESUME_KEY)
-  const map: Record<string, ResumeEntry> = result[RESUME_KEY] ?? {}
-  if (!(videoId in map)) return
-  delete map[videoId]
-  await chrome.storage.local.set({ [RESUME_KEY]: map })
+export function forgetResumePosition(videoId: string): Promise<void> {
+  // Same chain as the saves: an unchained forget used to read the map while a
+  // chained save was in flight and write the stale copy back — resurrecting
+  // the deleted entry or dropping the concurrent save.
+  return resumeChain(async () => {
+    const result = await chrome.storage.local.get(RESUME_KEY)
+    const map: Record<string, ResumeEntry> = result[RESUME_KEY] ?? {}
+    if (!(videoId in map)) return
+    delete map[videoId]
+    await chrome.storage.local.set({ [RESUME_KEY]: map })
+  })
 }
 
 // ---------------------------------------------------------------------------
@@ -487,21 +552,33 @@ async function readAdblockWalls(): Promise<AdblockWallMap> {
   return (result[ADBLOCK_WALL_KEY] as AdblockWallMap | undefined) ?? {}
 }
 
+/**
+ * Chain for the low-frequency learned/derived maps below (adblock walls,
+ * healed selectors, the gapfill family, audit verdicts). Serializes writers
+ * within a context; the residual risk is cross-context (two tabs' content
+ * scripts writing the same map in the same instant), accepted here because
+ * these writes are rare and a lost entry self-heals on the next visit —
+ * unlike stats/timings/activity, which are routed through the SW instead.
+ */
+const learnChain = makeChain()
+
 /** Note a wall on `host`. Throttled: a fresh record isn't overwritten, so the
  * notice doesn't re-surface every page load a detected site is open. */
-export async function recordAdblockWall(host: string): Promise<void> {
-  if (!host) return
-  const map = await readAdblockWalls()
-  const existing = map[host]
-  if (existing && Date.now() - existing.at < ADBLOCK_WALL_TTL_MS) return
-  map[host] = { at: Date.now() }
-  // Cap: keep the most recent records only.
-  const trimmed = Object.fromEntries(
-    Object.entries(map)
-      .sort((a, b) => b[1].at - a[1].at)
-      .slice(0, ADBLOCK_WALL_MAX),
-  )
-  await chrome.storage.local.set({ [ADBLOCK_WALL_KEY]: trimmed })
+export function recordAdblockWall(host: string): Promise<void> {
+  if (!host) return Promise.resolve()
+  return learnChain(async () => {
+    const map = await readAdblockWalls()
+    const existing = map[host]
+    if (existing && Date.now() - existing.at < ADBLOCK_WALL_TTL_MS) return
+    map[host] = { at: Date.now() }
+    // Cap: keep the most recent records only.
+    const trimmed = Object.fromEntries(
+      Object.entries(map)
+        .sort((a, b) => b[1].at - a[1].at)
+        .slice(0, ADBLOCK_WALL_MAX),
+    )
+    await chrome.storage.local.set({ [ADBLOCK_WALL_KEY]: trimmed })
+  })
 }
 
 export async function getAdblockWall(host: string): Promise<AdblockWall | null> {
@@ -511,17 +588,24 @@ export async function getAdblockWall(host: string): Promise<AdblockWall | null> 
   return Date.now() - wall.at < ADBLOCK_WALL_TTL_MS ? wall : null
 }
 
-export async function clearAdblockWall(host: string): Promise<void> {
-  if (!host) return
-  const map = await readAdblockWalls()
-  if (!(host in map)) return
-  delete map[host]
-  await chrome.storage.local.set({ [ADBLOCK_WALL_KEY]: map })
+export function clearAdblockWall(host: string): Promise<void> {
+  if (!host) return Promise.resolve()
+  return learnChain(async () => {
+    const map = await readAdblockWalls()
+    if (!(host in map)) return
+    delete map[host]
+    await chrome.storage.local.set({ [ADBLOCK_WALL_KEY]: map })
+  })
 }
 
 // ---------------------------------------------------------------------------
-// Per-videoId analysis cache (LRU-ish: index ordered by insertion, oldest evicted)
+// Per-videoId analysis cache (LRU-ish: index ordered by insertion, oldest
+// evicted). Index writes are chained: two analyses finishing concurrently
+// (different videos — inflight only dedupes per-video) used to race the index
+// and drop an entry, orphaning a cache record that then never got evicted.
 // ---------------------------------------------------------------------------
+
+const cacheChain = makeChain()
 
 export async function getCachedAnalysis(
   videoId: string,
@@ -531,32 +615,39 @@ export async function getCachedAnalysis(
   return (result[key] as VideoAnalysis | undefined) ?? null
 }
 
-export async function setCachedAnalysis(analysis: VideoAnalysis) {
-  const indexResult = await chrome.storage.local.get(CACHE_INDEX_KEY)
-  let index: string[] = indexResult[CACHE_INDEX_KEY] ?? []
-  index = index.filter((id) => id !== analysis.videoId)
-  index.push(analysis.videoId)
+export function setCachedAnalysis(analysis: VideoAnalysis): Promise<void> {
+  return cacheChain(async () => {
+    const indexResult = await chrome.storage.local.get(CACHE_INDEX_KEY)
+    let index: string[] = indexResult[CACHE_INDEX_KEY] ?? []
+    index = index.filter((id) => id !== analysis.videoId)
+    index.push(analysis.videoId)
 
-  const evicted = index.splice(0, Math.max(0, index.length - CACHE_MAX_ENTRIES))
-  if (evicted.length > 0) {
-    await chrome.storage.local.remove(evicted.map((id) => CACHE_PREFIX + id))
-  }
-  await chrome.storage.local.set({
-    [CACHE_INDEX_KEY]: index,
-    [CACHE_PREFIX + analysis.videoId]: analysis,
+    const evicted = index.splice(
+      0,
+      Math.max(0, index.length - CACHE_MAX_ENTRIES),
+    )
+    if (evicted.length > 0) {
+      await chrome.storage.local.remove(evicted.map((id) => CACHE_PREFIX + id))
+    }
+    await chrome.storage.local.set({
+      [CACHE_INDEX_KEY]: index,
+      [CACHE_PREFIX + analysis.videoId]: analysis,
+    })
   })
 }
 
 /** Drop one video's cached analysis (+ its index entry) so a re-analyze
  * actually re-fetches the transcript and re-runs the AI instead of returning
  * the previous verdict. */
-export async function deleteCachedAnalysis(videoId: string) {
-  await chrome.storage.local.remove(CACHE_PREFIX + videoId)
-  const indexResult = await chrome.storage.local.get(CACHE_INDEX_KEY)
-  const index: string[] = indexResult[CACHE_INDEX_KEY] ?? []
-  const next = index.filter((id) => id !== videoId)
-  if (next.length !== index.length)
-    await chrome.storage.local.set({ [CACHE_INDEX_KEY]: next })
+export function deleteCachedAnalysis(videoId: string): Promise<void> {
+  return cacheChain(async () => {
+    await chrome.storage.local.remove(CACHE_PREFIX + videoId)
+    const indexResult = await chrome.storage.local.get(CACHE_INDEX_KEY)
+    const index: string[] = indexResult[CACHE_INDEX_KEY] ?? []
+    const next = index.filter((id) => id !== videoId)
+    if (next.length !== index.length)
+      await chrome.storage.local.set({ [CACHE_INDEX_KEY]: next })
+  })
 }
 
 // ---------------------------------------------------------------------------
@@ -571,19 +662,29 @@ export async function getHealedSelectors(): Promise<Record<string, string[]>> {
   return result[HEALED_KEY] ?? {}
 }
 
-export async function addHealedSelector(target: string, selector: string) {
-  const all = await getHealedSelectors()
-  const list = all[target] ?? []
-  if (!list.includes(selector)) list.unshift(selector)
-  all[target] = list.slice(0, 8) // keep a few most-recent
-  await chrome.storage.local.set({ [HEALED_KEY]: all })
+export function addHealedSelector(
+  target: string,
+  selector: string,
+): Promise<void> {
+  return learnChain(async () => {
+    const all = await getHealedSelectors()
+    const list = all[target] ?? []
+    if (!list.includes(selector)) list.unshift(selector)
+    all[target] = list.slice(0, 8) // keep a few most-recent
+    await chrome.storage.local.set({ [HEALED_KEY]: all })
+  })
 }
 
 /** Replace a healed-selector list wholesale (used to purge unsafe entries). */
-export async function setHealedSelectors(target: string, selectors: string[]) {
-  const all = await getHealedSelectors()
-  all[target] = selectors
-  await chrome.storage.local.set({ [HEALED_KEY]: all })
+export function setHealedSelectors(
+  target: string,
+  selectors: string[],
+): Promise<void> {
+  return learnChain(async () => {
+    const all = await getHealedSelectors()
+    all[target] = selectors
+    await chrome.storage.local.set({ [HEALED_KEY]: all })
+  })
 }
 
 // ---------------------------------------------------------------------------
@@ -603,32 +704,42 @@ export async function getGapfillSelectors(
   return all[domain] ?? []
 }
 
-export async function addGapfillSelectors(domain: string, selectors: string[]) {
-  if (selectors.length === 0) return
-  const result = await chrome.storage.local.get(GAPFILL_KEY)
-  const all: Record<string, string[]> = result[GAPFILL_KEY] ?? {}
-  const existing = new Set(all[domain] ?? [])
-  for (const s of selectors) existing.add(s)
-  all[domain] = [...existing].slice(0, GAPFILL_MAX_PER_DOMAIN)
+export function addGapfillSelectors(
+  domain: string,
+  selectors: string[],
+): Promise<void> {
+  if (selectors.length === 0) return Promise.resolve()
+  return learnChain(async () => {
+    const result = await chrome.storage.local.get(GAPFILL_KEY)
+    const all: Record<string, string[]> = result[GAPFILL_KEY] ?? {}
+    const existing = new Set(all[domain] ?? [])
+    for (const s of selectors) existing.add(s)
+    all[domain] = [...existing].slice(0, GAPFILL_MAX_PER_DOMAIN)
 
-  // Evict oldest domains if the map grows too large (insertion order).
-  const domains = Object.keys(all)
-  if (domains.length > GAPFILL_MAX_DOMAINS) {
-    for (const d of domains.slice(0, domains.length - GAPFILL_MAX_DOMAINS)) {
-      delete all[d]
+    // Evict oldest domains if the map grows too large (insertion order).
+    const domains = Object.keys(all)
+    if (domains.length > GAPFILL_MAX_DOMAINS) {
+      for (const d of domains.slice(0, domains.length - GAPFILL_MAX_DOMAINS)) {
+        delete all[d]
+      }
     }
-  }
-  await chrome.storage.local.set({ [GAPFILL_KEY]: all })
+    await chrome.storage.local.set({ [GAPFILL_KEY]: all })
+  })
 }
 
 /** Replace a domain's gap-fill selectors wholesale (used to purge selectors
  * that turned out to match real UI, not ads). Empty list removes the domain. */
-export async function setGapfillSelectors(domain: string, selectors: string[]) {
-  const result = await chrome.storage.local.get(GAPFILL_KEY)
-  const all: Record<string, string[]> = result[GAPFILL_KEY] ?? {}
-  if (selectors.length === 0) delete all[domain]
-  else all[domain] = selectors
-  await chrome.storage.local.set({ [GAPFILL_KEY]: all })
+export function setGapfillSelectors(
+  domain: string,
+  selectors: string[],
+): Promise<void> {
+  return learnChain(async () => {
+    const result = await chrome.storage.local.get(GAPFILL_KEY)
+    const all: Record<string, string[]> = result[GAPFILL_KEY] ?? {}
+    if (selectors.length === 0) delete all[domain]
+    else all[domain] = selectors
+    await chrome.storage.local.set({ [GAPFILL_KEY]: all })
+  })
 }
 
 // Per-domain selectors the USER marked "not an ad" — never re-hidden or
@@ -641,23 +752,30 @@ export async function getRejectedGapfill(domain: string): Promise<string[]> {
   return all[domain] ?? []
 }
 
-export async function addRejectedGapfill(domain: string, selector: string) {
-  const result = await chrome.storage.local.get(GAPFILL_REJECTED_KEY)
-  const all: Record<string, string[]> = result[GAPFILL_REJECTED_KEY] ?? {}
-  const list = new Set(all[domain] ?? [])
-  list.add(selector)
-  all[domain] = [...list].slice(-50)
-  await chrome.storage.local.set({ [GAPFILL_REJECTED_KEY]: all })
+export function addRejectedGapfill(
+  domain: string,
+  selector: string,
+): Promise<void> {
+  return learnChain(async () => {
+    const result = await chrome.storage.local.get(GAPFILL_REJECTED_KEY)
+    const all: Record<string, string[]> = result[GAPFILL_REJECTED_KEY] ?? {}
+    const list = new Set(all[domain] ?? [])
+    list.add(selector)
+    all[domain] = [...list].slice(-50)
+    await chrome.storage.local.set({ [GAPFILL_REJECTED_KEY]: all })
+  })
 }
 
 /** Undo every "not an ad" rating on a domain — the popup's escape hatch for
  * mistaken 👎s (which silently disable hiding rules and whole features like
  * the slot collapser for the site). */
-export async function clearRejectedGapfill(domain: string) {
-  const result = await chrome.storage.local.get(GAPFILL_REJECTED_KEY)
-  const all: Record<string, string[]> = result[GAPFILL_REJECTED_KEY] ?? {}
-  delete all[domain]
-  await chrome.storage.local.set({ [GAPFILL_REJECTED_KEY]: all })
+export function clearRejectedGapfill(domain: string): Promise<void> {
+  return learnChain(async () => {
+    const result = await chrome.storage.local.get(GAPFILL_REJECTED_KEY)
+    const all: Record<string, string[]> = result[GAPFILL_REJECTED_KEY] ?? {}
+    delete all[domain]
+    await chrome.storage.local.set({ [GAPFILL_REJECTED_KEY]: all })
+  })
 }
 
 // Per-domain selectors the AI proposed but the safety guard refused to apply
@@ -675,26 +793,36 @@ export async function getVetoedGapfill(domain: string): Promise<string[] | null>
   return all[domain] ?? null
 }
 
-export async function setVetoedGapfill(domain: string, selectors: string[]) {
-  const result = await chrome.storage.local.get(GAPFILL_VETOED_KEY)
-  const all: Record<string, string[]> = result[GAPFILL_VETOED_KEY] ?? {}
-  const existing = new Set(all[domain] ?? [])
-  for (const s of selectors) existing.add(s)
-  all[domain] = [...existing].slice(0, 12)
-  const domains = Object.keys(all)
-  if (domains.length > 300) {
-    for (const d of domains.slice(0, domains.length - 300)) delete all[d]
-  }
-  await chrome.storage.local.set({ [GAPFILL_VETOED_KEY]: all })
+export function setVetoedGapfill(
+  domain: string,
+  selectors: string[],
+): Promise<void> {
+  return learnChain(async () => {
+    const result = await chrome.storage.local.get(GAPFILL_VETOED_KEY)
+    const all: Record<string, string[]> = result[GAPFILL_VETOED_KEY] ?? {}
+    const existing = new Set(all[domain] ?? [])
+    for (const s of selectors) existing.add(s)
+    all[domain] = [...existing].slice(0, 12)
+    const domains = Object.keys(all)
+    if (domains.length > 300) {
+      for (const d of domains.slice(0, domains.length - 300)) delete all[d]
+    }
+    await chrome.storage.local.set({ [GAPFILL_VETOED_KEY]: all })
+  })
 }
 
 /** Drop one selector after the user rated it; keeps the domain key (= scanned). */
-export async function removeVetoedGapfill(domain: string, selector: string) {
-  const result = await chrome.storage.local.get(GAPFILL_VETOED_KEY)
-  const all: Record<string, string[]> = result[GAPFILL_VETOED_KEY] ?? {}
-  if (!all[domain]) return
-  all[domain] = all[domain].filter((s) => s !== selector)
-  await chrome.storage.local.set({ [GAPFILL_VETOED_KEY]: all })
+export function removeVetoedGapfill(
+  domain: string,
+  selector: string,
+): Promise<void> {
+  return learnChain(async () => {
+    const result = await chrome.storage.local.get(GAPFILL_VETOED_KEY)
+    const all: Record<string, string[]> = result[GAPFILL_VETOED_KEY] ?? {}
+    if (!all[domain]) return
+    all[domain] = all[domain].filter((s) => s !== selector)
+    await chrome.storage.local.set({ [GAPFILL_VETOED_KEY]: all })
+  })
 }
 
 // Per-domain selectors the USER confirmed as ads after the safety guard vetoed
@@ -707,13 +835,18 @@ export async function getConfirmedGapfill(domain: string): Promise<string[]> {
   return all[domain] ?? []
 }
 
-export async function addConfirmedGapfill(domain: string, selector: string) {
-  const result = await chrome.storage.local.get(GAPFILL_CONFIRMED_KEY)
-  const all: Record<string, string[]> = result[GAPFILL_CONFIRMED_KEY] ?? {}
-  const list = new Set(all[domain] ?? [])
-  list.add(selector)
-  all[domain] = [...list].slice(-50)
-  await chrome.storage.local.set({ [GAPFILL_CONFIRMED_KEY]: all })
+export function addConfirmedGapfill(
+  domain: string,
+  selector: string,
+): Promise<void> {
+  return learnChain(async () => {
+    const result = await chrome.storage.local.get(GAPFILL_CONFIRMED_KEY)
+    const all: Record<string, string[]> = result[GAPFILL_CONFIRMED_KEY] ?? {}
+    const list = new Set(all[domain] ?? [])
+    list.add(selector)
+    all[domain] = [...list].slice(-50)
+    await chrome.storage.local.set({ [GAPFILL_CONFIRMED_KEY]: all })
+  })
 }
 
 // ---------------------------------------------------------------------------
@@ -737,23 +870,26 @@ export async function getListAuditVerdicts(
   return all[domain] ?? {}
 }
 
-export async function setListAuditVerdicts(
+export function setListAuditVerdicts(
   domain: string,
   verdicts: Record<string, ListAuditVerdict>,
-) {
-  const result = await chrome.storage.local.get(LIST_AUDIT_KEY)
-  const all: Record<string, Record<string, ListAuditVerdict>> =
-    result[LIST_AUDIT_KEY] ?? {}
-  const merged = { ...(all[domain] ?? {}), ...verdicts }
-  // Cap per-domain entries (drop oldest keys — insertion order).
-  const keys = Object.keys(merged)
-  for (const k of keys.slice(0, Math.max(0, keys.length - 40))) delete merged[k]
-  all[domain] = merged
-  const domains = Object.keys(all)
-  if (domains.length > 300) {
-    for (const d of domains.slice(0, domains.length - 300)) delete all[d]
-  }
-  await chrome.storage.local.set({ [LIST_AUDIT_KEY]: all })
+): Promise<void> {
+  return learnChain(async () => {
+    const result = await chrome.storage.local.get(LIST_AUDIT_KEY)
+    const all: Record<string, Record<string, ListAuditVerdict>> =
+      result[LIST_AUDIT_KEY] ?? {}
+    const merged = { ...(all[domain] ?? {}), ...verdicts }
+    // Cap per-domain entries (drop oldest keys — insertion order).
+    const keys = Object.keys(merged)
+    for (const k of keys.slice(0, Math.max(0, keys.length - 40)))
+      delete merged[k]
+    all[domain] = merged
+    const domains = Object.keys(all)
+    if (domains.length > 300) {
+      for (const d of domains.slice(0, domains.length - 300)) delete all[d]
+    }
+    await chrome.storage.local.set({ [LIST_AUDIT_KEY]: all })
+  })
 }
 
 // ---------------------------------------------------------------------------
@@ -790,27 +926,35 @@ export async function getApiUsage(): Promise<ApiUsage> {
   return usage
 }
 
-export async function recordApiUsage(
+/** Chained: concurrent analyses (different videos) each record usage; an
+ * unchained read-modify-write undercounted requests and tokens. */
+const usageChain = makeChain()
+
+export function recordApiUsage(
   provider: LlmProvider,
   inputTokens: number,
   outputTokens: number,
 ): Promise<void> {
-  const usage = await getApiUsage() // handles rollover
-  const m = usage.monthly[provider] ?? {
-    requests: 0,
-    inputTokens: 0,
-    outputTokens: 0,
-  }
-  m.requests += 1
-  m.inputTokens += inputTokens
-  m.outputTokens += outputTokens
-  usage.monthly[provider] = m
-  usage.dailyRequests[provider] = (usage.dailyRequests[provider] ?? 0) + 1
-  await chrome.storage.local.set({ [USAGE_KEY]: usage })
+  return usageChain(async () => {
+    const usage = await getApiUsage() // handles rollover
+    const m = usage.monthly[provider] ?? {
+      requests: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+    }
+    m.requests += 1
+    m.inputTokens += inputTokens
+    m.outputTokens += outputTokens
+    usage.monthly[provider] = m
+    usage.dailyRequests[provider] = (usage.dailyRequests[provider] ?? 0) + 1
+    await chrome.storage.local.set({ [USAGE_KEY]: usage })
+  })
 }
 
-export async function resetApiUsage(): Promise<void> {
-  await chrome.storage.local.set({ [USAGE_KEY]: freshUsage() })
+export function resetApiUsage(): Promise<void> {
+  return usageChain(async () => {
+    await chrome.storage.local.set({ [USAGE_KEY]: freshUsage() })
+  })
 }
 
 export interface CacheEntryStat {
@@ -958,16 +1102,20 @@ export interface Correction {
   reportedAt: number
 }
 
+const correctionsChain = makeChain()
+
 export async function recordCorrection(
   videoId: string,
   start: number,
   end: number,
 ) {
-  const result = await chrome.storage.local.get(CORRECTIONS_KEY)
-  const corrections: Correction[] = result[CORRECTIONS_KEY] ?? []
-  corrections.push({ videoId, start, end, reportedAt: Date.now() })
-  await chrome.storage.local.set({
-    [CORRECTIONS_KEY]: corrections.slice(-CORRECTIONS_MAX_ENTRIES),
+  await correctionsChain(async () => {
+    const result = await chrome.storage.local.get(CORRECTIONS_KEY)
+    const corrections: Correction[] = result[CORRECTIONS_KEY] ?? []
+    corrections.push({ videoId, start, end, reportedAt: Date.now() })
+    await chrome.storage.local.set({
+      [CORRECTIONS_KEY]: corrections.slice(-CORRECTIONS_MAX_ENTRIES),
+    })
   })
 
   const analysis = await getCachedAnalysis(videoId)

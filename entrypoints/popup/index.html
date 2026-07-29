@@ -29,7 +29,11 @@
           ↻
         </button>
         <label class="switch" title="Turn Ad Sensei on or off">
-          <input type="checkbox" id="master-toggle" />
+          <input
+            type="checkbox"
+            id="master-toggle"
+            aria-label="Turn Ad Sensei on or off"
+          />
           <span class="slider"></span>
         </label>
       </div>
@@ -37,9 +41,28 @@
 
     <!-- Two views: "This site" (page status + per-page tools) and
          "Controls" (feature toggles). Footer stays pinned below both. -->
-    <nav class="seg" aria-label="Popup views">
-      <button type="button" id="tab-site" class="seg-btn on">This site</button>
-      <button type="button" id="tab-controls" class="seg-btn">Controls</button>
+    <nav class="seg" role="tablist" aria-label="Popup views">
+      <button
+        type="button"
+        id="tab-site"
+        class="seg-btn on"
+        role="tab"
+        aria-selected="true"
+        aria-controls="view-site"
+      >
+        This site
+      </button>
+      <button
+        type="button"
+        id="tab-controls"
+        class="seg-btn"
+        role="tab"
+        aria-selected="false"
+        aria-controls="view-controls"
+        tabindex="-1"
+      >
+        Controls
+      </button>
     </nav>
 
     <div class="view-wrap">
@@ -121,7 +144,7 @@
       </button>
     </section>
 
-    <main id="view-site">
+    <main id="view-site" role="tabpanel" aria-labelledby="tab-site">
       <!-- Active site: prominent at the top. Shown only for the general
            "Block all ads" engine on a real web page. -->
       <section class="site-hero" id="site-section" hidden>
@@ -132,7 +155,11 @@
           <span class="page-breakdown" id="page-breakdown"></span>
         </div>
         <label class="power" title="Pause ad blocking on this site">
-          <input type="checkbox" id="pause-site-toggle" />
+          <input
+            type="checkbox"
+            id="pause-site-toggle"
+            aria-label="Pause ad blocking on this site"
+          />
           <span class="power-btn" aria-hidden="true">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path
@@ -193,7 +220,15 @@
               ↻
             </button>
           </div>
-          <div class="progress" id="analysis-progress" hidden>
+          <div
+            class="progress"
+            id="analysis-progress"
+            role="progressbar"
+            aria-label="Analyzing transcript"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            hidden
+          >
             <div class="progress-bar" id="analysis-bar"></div>
           </div>
           <ul class="segments" id="segment-list" hidden></ul>
@@ -284,7 +319,7 @@
       </section>
     </main>
 
-    <main id="view-controls" hidden>
+    <main id="view-controls" role="tabpanel" aria-labelledby="tab-controls" hidden>
       <!-- Controls -->
       <section class="controls">
         <label class="ctl-row">
@@ -390,11 +425,11 @@
         <div class="pill-group">
           <div class="pill-title">Also blocked everywhere</div>
           <div class="pills">
-            <button type="button" class="pill" data-key="blockTrackers">Trackers</button>
-            <button type="button" class="pill" data-key="blockCookieNotices">Cookie banners</button>
-            <button type="button" class="pill" data-key="blockPopups">Popups</button>
-            <button type="button" class="pill" data-key="blockSocial">Social widgets</button>
-            <button type="button" class="pill" data-key="blockUrlTracking">URL tracking</button>
+            <button type="button" class="pill" data-key="blockTrackers" aria-pressed="false">Trackers</button>
+            <button type="button" class="pill" data-key="blockCookieNotices" aria-pressed="false">Cookie banners</button>
+            <button type="button" class="pill" data-key="blockPopups" aria-pressed="false">Popups</button>
+            <button type="button" class="pill" data-key="blockSocial" aria-pressed="false">Social widgets</button>
+            <button type="button" class="pill" data-key="blockUrlTracking" aria-pressed="false">URL tracking</button>
           </div>
         </div>
 
@@ -439,23 +474,26 @@
         </a>
 
       </section>
-
+    </main>
+    <!-- view-wrap ends here; the footer sits OUTSIDE both tab views so it
+         stays pinned below whichever one is showing. (It used to sit inside
+         view-controls with a stray </div> that force-closed the <main> —
+         the parser produced this structure anyway; now the markup says so.) -->
     </div>
 
-      <footer>
-        <button type="button" id="share-btn" class="footer-link">
-          ↗ Share
-        </button>
-        <span class="footer-sep">·</span>
-        <a
-          href="https://buymeacoffee.com/singlefin"
-          target="_blank"
-          rel="noopener"
-          class="footer-link coffee"
-          >☕ Buy me a coffee</a
-        >
-      </footer>
-    </main>
+    <footer>
+      <button type="button" id="share-btn" class="footer-link">
+        ↗ Share
+      </button>
+      <span class="footer-sep">·</span>
+      <a
+        href="https://buymeacoffee.com/singlefin"
+        target="_blank"
+        rel="noopener"
+        class="footer-link coffee"
+        >☕ Buy me a coffee</a
+      >
+    </footer>
 
     <script type="module" src="./popup.ts"></script>
   </body>

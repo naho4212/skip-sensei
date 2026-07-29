@@ -79,15 +79,49 @@ async function loadShard(index: number): Promise<Shard | null> {
 }
 
 /**
+ * Multi-part public suffixes (eTLDs). Excluding only the final label isn't
+ * enough: for example.co.uk the parent-domain walk would emit "co.uk", and a
+ * list rule keyed on it would apply across every UK site. Common second-level
+ * registries; not the full PSL — a miss here only means one extra candidate
+ * that almost certainly keys no rule, so completeness isn't safety-critical.
+ */
+const MULTI_PART_TLDS = new Set([
+  'co.uk', 'org.uk', 'ac.uk', 'gov.uk', 'me.uk', 'net.uk', 'sch.uk',
+  'com.au', 'net.au', 'org.au', 'edu.au', 'gov.au', 'asn.au', 'id.au',
+  'co.jp', 'ne.jp', 'or.jp', 'ac.jp', 'go.jp',
+  'co.nz', 'net.nz', 'org.nz', 'govt.nz',
+  'com.br', 'net.br', 'org.br', 'gov.br',
+  'com.mx', 'org.mx', 'net.mx',
+  'co.in', 'net.in', 'org.in', 'firm.in', 'gen.in', 'ind.in',
+  'com.cn', 'net.cn', 'org.cn', 'gov.cn',
+  'com.tw', 'org.tw', 'idv.tw',
+  'com.hk', 'org.hk', 'net.hk',
+  'co.kr', 'or.kr', 'ne.kr', 'go.kr',
+  'com.sg', 'org.sg', 'net.sg',
+  'com.tr', 'org.tr', 'net.tr',
+  'co.za', 'org.za', 'net.za', 'web.za',
+  'com.ar', 'net.ar', 'org.ar',
+  'com.co', 'net.co',
+  'com.pe', 'com.ve', 'com.my', 'com.ph', 'com.pk', 'com.eg', 'com.sa',
+  'com.vn', 'com.ua', 'net.ua', 'org.ua',
+  'co.th', 'or.th', 'in.th',
+  'co.id', 'or.id', 'web.id',
+])
+
+/**
  * Every rule domain that can apply to `hostname`: itself and each parent
- * domain, since a rule on `example.com` also covers `www.example.com`. The
- * bare TLD is not a candidate — no rule is keyed on it, and matching one would
- * apply a rule site-wide across a whole TLD.
+ * domain, since a rule on `example.com` also covers `www.example.com`.
+ * Public suffixes are not candidates — neither the bare TLD nor a multi-part
+ * one like co.uk; matching either would apply a rule registry-wide.
  */
 function candidateDomains(hostname: string): string[] {
   const labels = hostname.split('.')
   const out: string[] = []
-  for (let i = 0; i + 1 < labels.length; i++) out.push(labels.slice(i).join('.'))
+  for (let i = 0; i + 1 < labels.length; i++) {
+    const domain = labels.slice(i).join('.')
+    if (MULTI_PART_TLDS.has(domain)) break
+    out.push(domain)
+  }
   return out
 }
 

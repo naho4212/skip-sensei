@@ -323,6 +323,12 @@ export function initFilterUpdates(): void {
   chrome.alarms.onAlarm.addListener((alarm) => {
     if (alarm.name === ALARM_NAME) void checkForUpdates(false)
   })
-  chrome.alarms.create(ALARM_NAME, { periodInMinutes: CHECK_PERIOD_MIN })
+  // Create only if missing: alarms persist across SW restarts, and
+  // re-creating one resets its timer a full period out — on an active browser
+  // the periodic check would never fire (the cold-start check masked this).
+  void chrome.alarms.get(ALARM_NAME).then((existing) => {
+    if (!existing)
+      chrome.alarms.create(ALARM_NAME, { periodInMinutes: CHECK_PERIOD_MIN })
+  })
   void checkForUpdates(false)
 }

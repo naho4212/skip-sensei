@@ -17,8 +17,6 @@ import {
   addHealedSelector,
   getHealedSelectors,
   getSettings,
-  recordActivity,
-  recordSkipTiming,
   setHealedSelectors,
 } from '../storage'
 import type { AdSkipMethod } from '../types'
@@ -534,7 +532,12 @@ export class AdEngine {
       target === 'skipButton'
         ? `self-healed the skip button → ${selector}`
         : `self-healed the ad-blocker wall → ${selector}`
-    void recordActivity('AI enhancements', label, 'youtube.com')
+    // Via the SW: activity writes from N tabs raced the shared log directly.
+    void this.send({
+      type: 'skipSensei:logActivity',
+      feature: 'AI enhancements',
+      action: label,
+    })
     void this.send({
       type: 'skipSensei:event',
       kind: 'self_heal',
@@ -600,7 +603,11 @@ export class AdEngine {
       ].filter(Boolean)
       desc = `skipped ${ads} ads${footage ? ` (${footage})` : ''} in ${secs}s (${parts.join(', ')})`
     }
-    void recordActivity('Skip YouTube ads', desc, 'youtube.com')
+    void this.send({
+      type: 'skipSensei:logActivity',
+      feature: 'Skip YouTube ads',
+      action: desc,
+    })
     if (ads > 0) {
       const primary: AdSkipMethod =
         clicks > 0 ? 'skip-button' : ffs > 0 ? 'fast-forward' : 'stuck-recovery'
@@ -609,9 +616,16 @@ export class AdEngine {
       this.onSkip(primary, ads, true)
     }
     // Structured copy of the same numbers the activity line describes in prose,
-    // so Options can actually aggregate them (median / p90 / worst).
+    // so Options can actually aggregate them (median / p90 / worst). Routed
+    // through the SW: two watch tabs writing the timings list directly would
+    // race it — each tab's storage module has its own serialization chain.
     if (ads > 0) {
-      void recordSkipTiming({ s: Number(secs), m: label, ads })
+      void this.send({
+        type: 'skipSensei:skipTiming',
+        s: Number(secs),
+        m: label,
+        ads,
+      })
     }
     void this.send({
       type: 'skipSensei:event',

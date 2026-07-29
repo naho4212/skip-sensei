@@ -15,8 +15,24 @@ import type { BlockBreakdown } from './types'
 const AD_RULESET_IDS = ['ads_base', 'ads_mobile']
 const TRACKER_RULESET_IDS = ['trackers']
 
-/** Priority for allowlist rules — must beat the static block rules (priority 1). */
-const ALLOWLIST_PRIORITY = 1_000_000
+/** The always-on 1-rule static exemption ruleset (built by
+ * build-rulesets.mjs, enabled in the manifest) — the primary guarantee that
+ * YouTube is never network-blocked. The dynamic allowlist rule below is
+ * belt-and-braces for it and the carrier for the user's own allowlist. */
+const EXEMPT_RULESET_ID = 'yt_exempt'
+
+/**
+ * Priority for the exemption/allowlist rules. Must beat EVERY static block
+ * rule: DNR resolves by priority first — action precedence (allow > block)
+ * only breaks ties — and AdGuard's $important rules ship at 1,000,000+
+ * (observed 1,000,302), which is how a 1,000,000-priority exemption lost to
+ * `||youtube.com/get_video_info?*=adunit&` at 1,000,001. build-rulesets.mjs
+ * FAILS the build if any static rule reaches its 10M ceiling; keep this
+ * constant identical to EXEMPT_PRIORITY there.
+ */
+const ALLOWLIST_PRIORITY = 100_000_000
+/** Fixed id of the single dynamic exemption/allowlist rule. */
+const ALLOWLIST_RULE_ID = 1
 
 export interface BlockerState {
   enabled: boolean
@@ -24,7 +40,9 @@ export interface BlockerState {
   error?: string
 }
 
-let lastError: string | undefined
+/** Failures from the LAST sync, one per failing group (a single `lastError`
+ * used to keep only the final group's failure and hide the rest). */
+let lastErrors: string[] = []
 
 /**
  * Desired ruleset state per group, derived from settings. Ad blocking is the
@@ -34,18 +52,22 @@ let lastError: string | undefined
  * no-op). Malware/phishing blocking (URLhaus) is protection, not ad blocking —
  * standalone and on by default.
  */
+/** `needsExemption`: this group's lists contain YouTube-targeting block rules
+ * (verified in the built data for every AdGuard-derived set), so it may only
+ * be enabled while the YouTube exemption is confirmed in place. Malware
+ * (URLhaus domains) is the one set with no YouTube exposure. */
 function desiredRulesets(
   settings: Awaited<ReturnType<typeof getSettings>>,
-): Array<{ ids: string[]; on: boolean; label: string }> {
+): Array<{ ids: string[]; on: boolean; label: string; needsExemption: boolean }> {
   const master = settings.masterEnabled
   return [
-    { ids: AD_RULESET_IDS, on: master && settings.blockAllAds, label: 'ad blocking' },
-    { ids: TRACKER_RULESET_IDS, on: master && settings.blockTrackers, label: 'tracker blocking' },
-    { ids: ['cookies'], on: master && settings.blockAllAds && settings.blockCookieNotices, label: 'cookie-notice blocking' },
-    { ids: ['social'], on: master && settings.blockAllAds && settings.blockSocial, label: 'social blocking' },
-    { ids: ['popups'], on: master && settings.blockAllAds && settings.blockPopups, label: 'popup blocking' },
-    { ids: ['url_tracking'], on: master && settings.blockUrlTracking, label: 'URL tracking protection' },
-    { ids: ['malware'], on: master && settings.blockMalware, label: 'malware blocking' },
+    { ids: AD_RULESET_IDS, on: master && settings.blockAllAds, label: 'ad blocking', needsExemption: true },
+    { ids: TRACKER_RULESET_IDS, on: master && settings.blockTrackers, label: 'tracker blocking', needsExemption: true },
+    { ids: ['cookies'], on: master && settings.blockAllAds && settings.blockCookieNotices, label: 'cookie-notice blocking', needsExemption: true },
+    { ids: ['social'], on: master && settings.blockAllAds && settings.blockSocial, label: 'social blocking', needsExemption: true },
+    { ids: ['popups'], on: master && settings.blockAllAds && settings.blockPopups, label: 'popup blocking', needsExemption: true },
+    { ids: ['url_tracking'], on: master && settings.blockUrlTracking, label: 'URL tracking protection', needsExemption: true },
+    { ids: ['malware'], on: master && settings.blockMalware, label: 'malware blocking', needsExemption: false },
   ]
 }
 
@@ -82,21 +104,69 @@ export function syncNetBlocker(): Promise<BlockerState> {
 
 async function doSyncNetBlocker(): Promise<BlockerState> {
   const settings = await getSettings()
-  lastError = undefined
+  lastErrors = []
+
+  // THE EXEMPTION COMES FIRST — before any blocking ruleset can go live.
+  // Enabling the AdGuard-derived rulesets without it network-blocks YouTube
+  // ad endpoints (||youtube.com/api/stats/ads and friends), which is the
+  // documented enforcement-wall trigger. The static yt_exempt ruleset ships
+  // enabled, so this is normally a no-op read; the dynamic rule adds the
+  // user allowlist on top.
+  await setRulesets([EXEMPT_RULESET_ID], true, 'YouTube exemption')
+  let allowlistError: unknown
+  try {
+    await syncAllowlist(settings.allowlist)
+  } catch (error) {
+    allowlistError = error // only fatal if NO exemption survives (below)
+  }
+
+  // Exemption is confirmed by reading Chrome's actual state, not by assuming
+  // our writes worked: either the static ruleset is enabled or the dynamic
+  // rule exists. Without it, fail toward "no ad blocking" — force every
+  // YouTube-exposed group OFF. No blocking beats enforcement walls.
+  const exemptionOk =
+    (await enabledRulesetIds()).has(EXEMPT_RULESET_ID) ||
+    (await hasDynamicExemption())
+  if (!exemptionOk) {
+    const msg =
+      allowlistError instanceof Error
+        ? allowlistError.message
+        : 'exemption rule missing'
+    lastErrors.push(`YouTube exemption: ${msg} — ad blocking held off`)
+    void reportImmediateFailure('ruleset_enable_failed', {
+      ruleset: 'yt_exempt',
+      reason: msg.slice(0, 120),
+    })
+  }
 
   // Each ruleset group is enabled in a SEPARATE call so that if one hits the
   // shared rule-pool limit, the others still apply.
   for (const group of desiredRulesets(settings)) {
-    await setRulesets(group.ids, group.on, group.label)
-  }
-
-  try {
-    await syncAllowlist(settings.allowlist)
-  } catch {
-    // allowlist failures are non-fatal
+    const on = group.on && (exemptionOk || !group.needsExemption)
+    await setRulesets(group.ids, on, group.label)
   }
 
   return getBlockerState()
+}
+
+/** Chrome's live enabled-ruleset state; empty set when the read fails (treated
+ * as "not confirmed", which fails toward not enabling blocking). */
+async function enabledRulesetIds(): Promise<Set<string>> {
+  try {
+    return new Set(await chrome.declarativeNetRequest.getEnabledRulesets())
+  } catch {
+    return new Set()
+  }
+}
+
+/** Whether the dynamic exemption/allowlist rule currently exists. */
+async function hasDynamicExemption(): Promise<boolean> {
+  try {
+    const rules = await chrome.declarativeNetRequest.getDynamicRules()
+    return rules.some((r) => r.id === ALLOWLIST_RULE_ID)
+  } catch {
+    return false
+  }
 }
 
 /**
@@ -112,10 +182,19 @@ export async function verifyNetBlocker(): Promise<void> {
     const current = new Set(
       await chrome.declarativeNetRequest.getEnabledRulesets(),
     )
-    const drifted = desiredRulesets(settings).some(({ ids, on }) =>
+    const groups = desiredRulesets(settings)
+    const drifted = groups.some(({ ids, on }) =>
       ids.some((id) => current.has(id) !== on),
     )
-    if (drifted) await syncNetBlocker()
+    // The exemption is part of the invariant, not just the block rulesets:
+    // "blocking on, exemption gone" is the one state that must never survive
+    // a drift check — it network-blocks YouTube until the next settings
+    // change. The static ruleset check is free (same read); the dynamic-rule
+    // read only runs when a YouTube-exposed group is meant to be on.
+    const exemptMissing = !current.has(EXEMPT_RULESET_ID)
+    const wantsBlocking = groups.some((g) => g.on && g.needsExemption)
+    const dynamicMissing = wantsBlocking && !(await hasDynamicExemption())
+    if (drifted || exemptMissing || dynamicMissing) await syncNetBlocker()
   } catch {
     // best-effort — the event-driven syncs still cover the common paths
   }
@@ -148,11 +227,28 @@ async function setRulesets(ids: string[], on: boolean, label: string) {
       return
     } catch (error) {
       if (attempt === 1) {
+        // Last resort for multi-ruleset groups: updateEnabledRulesets is
+        // all-or-nothing, so if the pair together exceeds the shared pool
+        // but one ruleset alone fits (ads_base without ads_mobile), enable
+        // individually rather than losing the whole group.
+        if (on && ids.length > 1) {
+          const failed: string[] = []
+          for (const id of ids) {
+            try {
+              await chrome.declarativeNetRequest.updateEnabledRulesets({
+                enableRulesetIds: [id],
+              })
+            } catch {
+              failed.push(id)
+            }
+          }
+          if (failed.length === 0) return
+        }
         // Most likely the enabled-static-rule limit (this extension's own
         // stale allocation, or other extensions using the shared pool).
         const msg =
           error instanceof Error ? error.message : `Could not update ${label}`
-        lastError = `${label}: ${msg}`
+        lastErrors.push(`${label}: ${msg}`)
         // A user in this state has ad blocking that silently does nothing —
         // don't make them wait for the daily rollup to surface it.
         void reportImmediateFailure('ruleset_enable_failed', {
@@ -177,6 +273,9 @@ async function setRulesets(ids: string[], on: boolean, label: string) {
  * like a user hitting "Skip") plus cosmetic hiding of display ads. Result:
  * ad-free YouTube without giving YouTube a reason to flag the session.
  */
+/** Keep identical with NETWORK_EXEMPT in scripts/build-rulesets.mjs, which
+ * bakes the same list into the always-on static yt_exempt ruleset. These
+ * domains ride the dynamic rule too, as belt-and-braces. */
 const NETWORK_EXEMPT = ['youtube.com', 'youtube-nocookie.com', 'googlevideo.com']
 
 /**
@@ -193,14 +292,26 @@ const NETWORK_EXEMPT = ['youtube.com', 'youtube-nocookie.com', 'googlevideo.com'
  * plausible hostname so one bad allowlist input can't take the rule down.
  */
 function normalizeHost(raw: string): string | null {
-  const s = raw
+  let s = raw
     .trim()
     .toLowerCase()
     .replace(/^[a-z][a-z0-9+.-]*:\/\//, '') // scheme
     .replace(/[/?#].*$/, '') // path / query / fragment
     .replace(/:\d+$/, '') // port
+    .replace(/^\*\.?/, '') // pasted filter-style wildcard ("*.example.com")
+    .replace(/\.$/, '') // trailing-dot FQDN
+  if (!s) return null
+  // IDN → punycode via the platform's canonical encoder, so "münchen.de"
+  // becomes a usable requestDomains entry instead of being silently dropped
+  // (the user's allowlist entry doing nothing, with no feedback). Anything
+  // URL can't parse as a host is not a hostname.
+  try {
+    s = new URL(`http://${s}`).hostname
+  } catch {
+    return null
+  }
   if (
-    !/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/.test(s)
+    !/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$/.test(s)
   ) {
     return null
   }
@@ -224,7 +335,7 @@ async function syncAllowlist(hostnames: string[]) {
       ? []
       : [
           {
-            id: 1,
+            id: ALLOWLIST_RULE_ID,
             priority: ALLOWLIST_PRIORITY,
             action: {
               type: 'allowAllRequests' as chrome.declarativeNetRequest.RuleActionType,
@@ -253,7 +364,11 @@ export async function getBlockerState(): Promise<BlockerState> {
   } catch {
     // ignore — reported via error below
   }
-  return { enabled: blockAllAds, active, error: lastError }
+  return {
+    enabled: blockAllAds,
+    active,
+    error: lastErrors.length > 0 ? lastErrors.join('; ') : undefined,
+  }
 }
 
 export interface RulesetInfo {
@@ -447,7 +562,9 @@ export function initNetBlocker(cb: BlockCallbacks) {
       // Many sites load ads AFTER 'complete' (lazy-load, consent walls, SPA
       // routing). One delayed re-poll catches those; the badge is set to the
       // full snapshot, so this only ever corrects the number upward, never
-      // double-counts. The popup's on-open query is the accurate backstop.
+      // double-counts. Known hole: if the SW suspends within these 9s the
+      // timer dies with it — accepted, because the popup's on-open query is
+      // the accurate backstop and blocking itself is never affected.
       setTimeout(() => void countTabBlocks(tabId, cb), 9000)
     }
   })
