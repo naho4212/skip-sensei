@@ -650,22 +650,87 @@ button:disabled {
 /* ── Activity & logs tables ── */
 .section-head {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+}
+.section-head > button {
+  flex: none;
 }
 .totals {
   font-size: 13px;
   color: var(--text-2);
-  margin: 8px 0;
+  margin: 8px 0 18px;
 }
 .totals b {
   color: var(--text);
   font-variant-numeric: tabular-nums;
 }
+
+/* Sub-tabs: one log table at a time, so the panel never scrolls forever. */
+.subtabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--divider);
+}
+.subtab {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 12px 11px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  border-radius: 8px 8px 0 0;
+  background: none;
+  color: var(--text-2);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    color 0.12s,
+    background 0.12s;
+}
+.subtab:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.subtab:focus-visible,
+.more-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.subtab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+.subtab-count {
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-3);
+  background: var(--field-bg);
+  border-radius: 999px;
+  padding: 1px 7px;
+}
+.subtab.active .subtab-count {
+  color: #fff;
+  background: var(--accent);
+}
+
+.log-view {
+  padding-top: 18px;
+}
+
 .table-wrap {
-  overflow-x: auto;
-  margin: 8px 0;
+  overflow: auto;
+  /* Cap the box so an expanded list scrolls inside itself instead of
+   * stretching the page — the header stays pinned while it does. */
+  max-height: 60vh;
+  margin: 10px 0 0;
+  border: 1px solid var(--divider);
+  border-radius: 10px;
 }
 .log-table {
   width: 100%;
@@ -673,10 +738,14 @@ button:disabled {
   font-size: 13px;
 }
 .log-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   text-align: left;
   font-weight: 600;
   color: var(--text-3);
-  padding: 6px 10px;
+  padding: 8px 10px;
+  background: var(--bg);
   border-bottom: 1px solid var(--divider);
   white-space: nowrap;
 }
@@ -704,6 +773,47 @@ button:disabled {
 }
 .log-table a:hover {
   text-decoration: underline;
+}
+.log-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* Paging footer under each table. */
+.table-more {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 10px 0 0;
+}
+.table-more-count {
+  font-size: 12px;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+.table-more-actions {
+  display: flex;
+  gap: 8px;
+}
+.more-btn {
+  padding: 6px 12px;
+  border: 1px solid var(--divider);
+  border-radius: 8px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.more-btn:hover {
+  background: var(--hover);
+}
+.more-btn.quiet {
+  border-color: transparent;
+  color: var(--text-2);
+  font-weight: 500;
 }
 .empty {
   color: var(--text-3);
