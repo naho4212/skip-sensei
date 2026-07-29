@@ -19,8 +19,6 @@ import {
   getSettings,
   recordActivity,
   setHealedSelectors,
-  setYtBackoff,
-  updateSettings,
 } from '../storage'
 import type { AdSkipMethod } from '../types'
 import { MIN_RESUME_SECONDS } from '../resume'
@@ -101,14 +99,6 @@ const CLICK_RETRY_MS = 500
 /** Ad playback frozen this long → try to unwedge the player. */
 const STUCK_AFTER_MS = 3000
 const MAX_STUCK_RECOVERIES = 3
-
-/**
- * Circuit breaker for aggressive pruning: one enforcement wall is enough to
- * back off. YouTube can flag the signed-in session on the FIRST wall, so
- * waiting for more just prolongs the exposure — the ABP posture is to detect
- * the wall and stop fighting immediately. Reactive skipping continues.
- */
-const WALLS_BEFORE_BREAKER = 1
 
 /**
  * Cloak: opaque cover over the player while an ad is being neutralized, so
@@ -290,7 +280,6 @@ export class AdEngine {
   private cloak: HTMLElement | null = null
   /** Enforcement walls dismissed this session (aggressive-mode circuit breaker). */
   private wallsSeen = 0
-  private breakerTripped = false
   /** True once the final "playback blocked" stage was seen on this page. */
   private hardBlockSeen = false
   /** True after the user dismisses the recovery panel — check() runs every
@@ -907,7 +896,9 @@ export class AdEngine {
     }
 
     this.wallsSeen++
-    void this.maybeTripAggressiveBreaker()
+    // Dismissible modal wall — same report, same single decision-maker as the
+    // hard block; the service worker dedupes across tabs and engine restarts.
+    void this.send({ type: 'skipSensei:wallSeen', walls: this.wallsSeen })
 
     document.querySelectorAll(POPUP_DIALOG).forEach((dialog) => {
       if (dialog.querySelector(ENFORCEMENT_MESSAGE)) dialog.remove()
@@ -932,19 +923,15 @@ export class AdEngine {
     if (!this.hardBlockSeen) {
       this.hardBlockSeen = true
       this.wallsSeen++
-      void this.maybeTripAggressiveBreaker()
-      // The breaker only records the backoff when it flips the aggressive
-      // setting; the popup notice must show even when it was already off.
-      void setYtBackoff(this.wallsSeen)
-      void recordActivity(
-        'Skip YouTube ads',
-        'YouTube blocked playback for this session — offered the cookie-clear fix',
-        'youtube.com',
-      )
+      // Report it and let the service worker decide. Every engine instance
+      // used to trip the breaker itself: two watch tabs (or an SPA navigation
+      // rebuilding the engine) each read aggressivePruning as still true,
+      // each disabled it, and each logged — which is why the activity log
+      // showed two "auto-disabled" entries inside the same second and why the
+      // wall counts were inflated. One writer, one decision, deduped there.
       void this.send({
-        type: 'skipSensei:event',
-        kind: 'yt_hard_block',
-        fields: { walls: String(this.wallsSeen) },
+        type: 'skipSensei:wallSeen',
+        walls: this.wallsSeen,
       })
       log('YouTube hard playback block detected — showing recovery panel')
     }
@@ -988,23 +975,25 @@ export class AdEngine {
         : ''
     body.textContent =
       'YouTube flagged this browser session for ad blocking, so it refuses to ' +
-      'play videos — reloading won’t help. Clearing its cookies lifts the flag.' +
+      'play videos — reloading won’t help. Clearing its cookies lifts the flag, ' +
+      'which signs you out of YouTube.' +
       resumeNote
 
-    // Stage one: drop only the visitor cookies. This may or may not lift the
-    // wall — that is genuinely unknown — but it costs nothing to try first,
-    // because the full wipe is still one click away and always works. Offering
-    // it in the other order would sign the user out of a session that a
-    // narrower clear might have saved.
-    const clear = document.createElement('button')
-    clear.className = 'hb-clear'
-    const KEEP_LABEL = 'Try it without signing me out'
-    const FULL_LABEL = 'Clear all cookies & reload (signs you out)'
-    clear.textContent = KEEP_LABEL
+    // Tested against a real flagged session (Jul 28): the visitor-only clear
+    // keeps the sign-in but does NOT lift the wall — the strike isn't in those
+    // cookies. So the full wipe leads, because it's the one that works, and
+    // the narrow clear stays as a labelled second option rather than a step
+    // everyone pays a reload for first.
+    const FULL_LABEL = 'Clear cookies & reload'
+    const KEEP_LABEL = 'Try without signing me out first'
 
     const full = document.createElement('button')
-    full.className = 'hb-secondary'
+    full.className = 'hb-clear'
     full.textContent = FULL_LABEL
+
+    const clear = document.createElement('button')
+    clear.className = 'hb-secondary'
+    clear.textContent = KEEP_LABEL
 
     const run = (
       scope: 'visitor' | 'all',
@@ -1049,8 +1038,6 @@ export class AdEngine {
         'does lift it, at the cost of signing you out of YouTube.' +
         resumeNote
       clear.remove()
-      full.className = 'hb-clear'
-      full.textContent = 'Clear all cookies & reload'
     })
 
     const dismiss = document.createElement('button')
@@ -1071,43 +1058,8 @@ export class AdEngine {
     sensei.textContent = 'SENSEI'
     brand.append(ad, sensei)
 
-    panel.append(title, body, clear, full, dismiss, brand)
+    panel.append(title, body, full, clear, dismiss, brand)
     host.appendChild(panel)
-  }
-
-  /**
-   * Aggressive-pruning circuit breaker: repeated enforcement walls mean
-   * YouTube has likely detected the response pruning. Auto-disable it —
-   * reactive skipping (this engine) keeps working — and say so in the
-   * activity log so the user knows why ads are visible-then-skipped again.
-   */
-  private async maybeTripAggressiveBreaker() {
-    if (this.breakerTripped || this.wallsSeen < WALLS_BEFORE_BREAKER) return
-    this.breakerTripped = true
-    try {
-      // The wall means YouTube detected the pruning and may have flagged the
-      // session. Back off: turn aggressive mode off (reactive skipping stays
-      // on) and drop a flag so the popup can tell the user how to clear the
-      // flag YouTube set (the setting toggling alone won't lift it).
-      if (!(await getSettings()).aggressivePruning) return
-      await updateSettings({ aggressivePruning: false })
-      await setYtBackoff(this.wallsSeen)
-      await recordActivity(
-        'First-party ad blocking',
-        'YouTube flagged the session — first-party ad blocking auto-disabled (reactive skipping still on)',
-        'youtube.com',
-      )
-      // Detection signal: how often aggressive pruning gets caught in the
-      // wild tells us whether it's worth keeping / how to harden it.
-      void this.send({
-        type: 'skipSensei:event',
-        kind: 'aggressive_breaker',
-        fields: { walls: String(this.wallsSeen) },
-      })
-      log('aggressive pruning auto-disabled — YouTube enforcement wall')
-    } catch {
-      // storage failure — leave the setting as-is
-    }
   }
 
   /**

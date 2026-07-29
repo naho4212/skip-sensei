@@ -51,6 +51,8 @@ import {
   recordCorrection,
   resetStats,
   setCachedAnalysis,
+  updateSettings,
+  setYtBackoff,
 } from './storage'
 import {
   ANALYSIS_VERSION,
@@ -470,6 +472,53 @@ function abandonAnalysis(videoId: string) {
   }
 }
 
+/**
+ * Aggressive-pruning circuit breaker. One enforcement wall is enough to back
+ * off: YouTube can flag the signed-in session on the FIRST wall, so waiting
+ * for more only prolongs the exposure. Reactive skipping keeps working.
+ *
+ * This lives in the service worker, not the content script, because it is a
+ * decision — and there must be exactly one of them. Every engine instance used
+ * to make it independently, so two watch tabs (or an SPA navigation rebuilding
+ * the engine) would each read `aggressivePruning` as still true, each write it
+ * false, and each log; the activity log showed two "auto-disabled" entries
+ * inside the same second and the wall counts were inflated accordingly.
+ */
+const WALL_DEDUPE_MS = 10_000
+
+async function handleWallSeen(walls: number) {
+  const last =
+    (await chrome.storage.session.get('lastWallAt')).lastWallAt ?? 0
+  const now = Date.now()
+  // Reports from several tabs about the same enforcement event collapse into
+  // one. A genuinely new wall is always more than a few seconds later — it
+  // takes a reload to get there.
+  if (now - last < WALL_DEDUPE_MS) return
+  await chrome.storage.session.set({ lastWallAt: now })
+
+  // The popup notice must show even when pruning was already off, so the
+  // backoff flag is recorded regardless of whether the breaker has anything
+  // left to disable.
+  await setYtBackoff(walls)
+  void recordActivity(
+    'Skip YouTube ads',
+    'YouTube blocked playback for this session — offered the cookie-clear fix',
+    'youtube.com',
+  )
+  void reportEvent('yt_hard_block', { walls: String(walls) })
+
+  if (!(await getSettings()).aggressivePruning) return
+  await updateSettings({ aggressivePruning: false })
+  void recordActivity(
+    'First-party ad blocking',
+    'YouTube flagged the session — first-party ad blocking auto-disabled (reactive skipping still on)',
+    'youtube.com',
+  )
+  // Detection signal: how often aggressive pruning gets caught in the wild
+  // tells us whether it's worth keeping / how to harden it.
+  void reportEvent('aggressive_breaker', { walls: String(walls) })
+}
+
 // ---------------------------------------------------------------------------
 // Message routing
 // ---------------------------------------------------------------------------
@@ -635,6 +684,9 @@ chrome.runtime.onMessage.addListener(
           }
         })()
         return true
+      case 'skipSensei:wallSeen':
+        void handleWallSeen(message.walls)
+        return false
       case 'skipSensei:getWallState':
         void (async () => {
           const id = sender.tab?.id
