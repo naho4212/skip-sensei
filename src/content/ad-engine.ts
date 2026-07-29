@@ -18,6 +18,7 @@ import {
   getHealedSelectors,
   getSettings,
   recordActivity,
+  recordSkipTiming,
   setHealedSelectors,
 } from '../storage'
 import type { AdSkipMethod } from '../types'
@@ -603,6 +604,11 @@ export class AdEngine {
       // quiet: the aggregated line above IS the activity entry; the message
       // only carries the per-ad counter bump.
       this.onSkip(primary, ads, true)
+    }
+    // Structured copy of the same numbers the activity line describes in prose,
+    // so Options can actually aggregate them (median / p90 / worst).
+    if (ads > 0) {
+      void recordSkipTiming({ s: Number(secs), m: label, ads })
     }
     void this.send({
       type: 'skipSensei:event',

@@ -403,6 +403,43 @@
           <p class="hint" id="stat-breakdown"></p>
 
           <section>
+            <h3>Skip performance</h3>
+            <p class="hint">
+              How long ad breaks actually take to clear, from the last 400
+              skips on this device. This is the number that decides whether
+              blocking YouTube's first-party ads is worth the ad-blocker
+              notices it provokes — under a couple of seconds and reactive
+              skipping costs you almost nothing.
+            </p>
+            <p class="hint" id="skip-perf-empty" hidden>
+              No skips recorded yet. Watch a few videos with ads and come back.
+            </p>
+            <div class="stat-grid" id="skip-perf-grid" hidden>
+              <div class="stat-card">
+                <span class="stat-label">Typical</span>
+                <span class="stat-num" id="skip-median">—</span>
+                <span class="stat-sub">median</span>
+              </div>
+              <div class="stat-card">
+                <span class="stat-label">Slow ones</span>
+                <span class="stat-num" id="skip-p90">—</span>
+                <span class="stat-sub">90th percentile</span>
+              </div>
+              <div class="stat-card">
+                <span class="stat-label">Worst</span>
+                <span class="stat-num" id="skip-max">—</span>
+                <span class="stat-sub">slowest recorded</span>
+              </div>
+              <div class="stat-card">
+                <span class="stat-label">Over 5s</span>
+                <span class="stat-num" id="skip-slow-share">—</span>
+                <span class="stat-sub"><b id="skip-count">0</b> skips measured</span>
+              </div>
+            </div>
+            <p class="hint" id="skip-perf-methods"></p>
+          </section>
+
+          <section>
             <h3>Reset</h3>
             <p class="hint">
               Zero the lifetime and this-session counters above (and in the

@@ -280,6 +280,55 @@ export async function clearYtBackoff(): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// How long ad skips actually take.
+//
+// This exists because the question "is a skip a flicker or five seconds?"
+// decides whether first-party pruning is worth the enforcement walls it
+// provokes — and it was unanswerable. The durations were only ever written
+// into free-text activity lines ("skipped 2 ads in 1.2s"), which can't be
+// aggregated without parsing prose, and into telemetry, which needs a key
+// nobody can read back on demand. So record them structurally, locally.
+// ---------------------------------------------------------------------------
+const SKIP_TIMINGS_KEY = 'skipSensei.skipTimings'
+/** Recent skips only — enough for a stable median and tail, cheap to store. */
+const SKIP_TIMINGS_MAX = 400
+
+export interface SkipTiming {
+  at: number
+  /** Seconds from ad-break start to cleared. */
+  s: number
+  /** Which mechanism did it: skip button, fast-forward, stuck recovery. */
+  m: string
+  /** Ads in the break (a pod counts as one entry). */
+  ads: number
+}
+
+let skipTimingChain: Promise<void> = Promise.resolve()
+
+export function recordSkipTiming(entry: Omit<SkipTiming, 'at'>): Promise<void> {
+  skipTimingChain = skipTimingChain
+    .then(async () => {
+      const result = await chrome.storage.local.get(SKIP_TIMINGS_KEY)
+      const list: SkipTiming[] = result[SKIP_TIMINGS_KEY] ?? []
+      list.push({ ...entry, at: Date.now() })
+      await chrome.storage.local.set({
+        [SKIP_TIMINGS_KEY]: list.slice(-SKIP_TIMINGS_MAX),
+      })
+    })
+    .catch(() => {})
+  return skipTimingChain
+}
+
+export async function getSkipTimings(): Promise<SkipTiming[]> {
+  const result = await chrome.storage.local.get(SKIP_TIMINGS_KEY)
+  return result[SKIP_TIMINGS_KEY] ?? []
+}
+
+export async function clearSkipTimings(): Promise<void> {
+  await chrome.storage.local.remove(SKIP_TIMINGS_KEY)
+}
+
+// ---------------------------------------------------------------------------
 // Playback positions, so a reload never costs the user their place — a manual
 // ⌘R, a crash, or the cookie clear the anti-adblock wall forces. YouTube only
 // restores position from watch history, which is exactly what a cookie clear

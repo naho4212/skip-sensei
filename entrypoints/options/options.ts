@@ -9,6 +9,7 @@ import {
   getCacheStats,
   getSettings,
   getSettingsLog,
+  getSkipTimings,
   getStats,
   resetApiUsage,
   resetSettingsToDefaults,
@@ -446,6 +447,54 @@ async function renderAnalytics() {
     `YouTube total breaks down into ${fmt(stats.allTimeAdSkips)} video ads skipped, ` +
     `${fmt(stats.allTimeSponsorSkips)} sponsor segments, and ` +
     `${fmt(stats.allTimeYtAdsHidden)} display ads hidden.`
+
+  await renderSkipPerformance()
+}
+
+/**
+ * Skip latency, aggregated. Percentiles rather than an average: skip time is
+ * long-tailed (a handful of formats defeat the seek and have to be burned
+ * through), so a mean hides exactly the cases the user notices.
+ */
+async function renderSkipPerformance() {
+  const timings = await getSkipTimings()
+  const empty = $('skip-perf-empty')
+  const grid = $('skip-perf-grid')
+  const methods = $('skip-perf-methods')
+  if (timings.length === 0) {
+    empty.hidden = false
+    grid.hidden = true
+    methods.textContent = ''
+    return
+  }
+  empty.hidden = true
+  grid.hidden = false
+
+  const secs = timings.map((t) => t.s).sort((a, b) => a - b)
+  const at = (p: number) => secs[Math.min(secs.length - 1, Math.floor((secs.length * p) / 100))]
+  const s = (v: number) => `${v.toFixed(1)}s`
+  $('skip-median').textContent = s(at(50))
+  $('skip-p90').textContent = s(at(90))
+  $('skip-max').textContent = s(secs[secs.length - 1])
+  const slow = secs.filter((v) => v > 5).length
+  $('skip-slow-share').textContent = `${Math.round((slow / secs.length) * 100)}%`
+  $('skip-count').textContent = String(secs.length)
+
+  // Per-method medians: a slow median under "skip button" means YouTube is
+  // gating the button; slow "fast-forward" means seeks are being reset.
+  const byMethod = new Map<string, number[]>()
+  for (const t of timings) {
+    const list = byMethod.get(t.m) ?? []
+    list.push(t.s)
+    byMethod.set(t.m, list)
+  }
+  methods.textContent = [...byMethod.entries()]
+    .sort((a, b) => b[1].length - a[1].length)
+    .map(([method, list]) => {
+      const sorted = [...list].sort((a, b) => a - b)
+      return `${method}: ${sorted.length} skips, median ${s(sorted[Math.floor(sorted.length / 2)])}`
+    })
+    .join(' · ')
 }
 
 // --- Activity & logs panel (merged from the former standalone log page) -----
