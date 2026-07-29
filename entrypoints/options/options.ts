@@ -477,6 +477,7 @@ const SETTING_LABELS: Record<string, string> = {
   showSkipToast: 'Skip toast',
   aiEnhancements: 'AI enhancements',
   aggressivePruning: "Block YouTube's first-party video ads",
+  resumePlayback: 'Resume videos where you left off',
   debugLogging: 'Debug logging',
   telemetryEnabled: 'Anonymous error reports',
   localOnlyMode: 'Local-only mode',
@@ -1071,6 +1072,7 @@ async function main() {
   // Web-ads master) live in the "Filter rulesets" panel — see renderRulesets.
   const extraLists: [string, keyof Settings][] = [
     ['aggressive-pruning', 'aggressivePruning'],
+    ['resume-playback', 'resumePlayback'],
     ['yt-hide-shorts', 'ytHideShorts'],
     ['yt-disable-endcards', 'ytDisableEndCards'],
     ['yt-dismiss-stillwatching', 'ytDismissStillWatching'],

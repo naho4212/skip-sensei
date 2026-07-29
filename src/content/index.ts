@@ -8,6 +8,7 @@ import type {
   TabMessage,
 } from '../types'
 import { AdEngine } from './ad-engine'
+import { ResumePositionTracker } from './resume-position'
 import { SponsorEngine } from './sponsor-engine'
 import { initYouTubeAnnoyances } from './youtube-annoyances'
 
@@ -20,6 +21,7 @@ import { initYouTubeAnnoyances } from './youtube-annoyances'
 let settings: Settings | null = null
 let adEngine: AdEngine | null = null
 let sponsorEngine: SponsorEngine | null = null
+let resumeTracker: ResumePositionTracker | null = null
 
 function isWatchPage(): boolean {
   return location.pathname === '/watch'
@@ -60,6 +62,21 @@ function syncEngines() {
     adEngine = null
   }
 
+  // Position memory is independent of the ad engine — someone who only wants
+  // sponsor skipping (or neither) still shouldn't lose their place on reload.
+  const resumeShouldRun =
+    onWatchPage &&
+    videoId !== null &&
+    settings.masterEnabled &&
+    settings.resumePlayback
+  if (resumeShouldRun && !resumeTracker) {
+    resumeTracker = new ResumePositionTracker(videoId!)
+    resumeTracker.start()
+  } else if (!resumeShouldRun && resumeTracker) {
+    resumeTracker.stop()
+    resumeTracker = null
+  }
+
   const sponsorShouldRun =
     onWatchPage &&
     videoId !== null &&
@@ -81,6 +98,9 @@ function onNavigate() {
   adEngine = null
   sponsorEngine?.stop()
   sponsorEngine = null
+  // stop() flushes the final position before the videoId changes.
+  resumeTracker?.stop()
+  resumeTracker = null
   syncEngines()
 }
 

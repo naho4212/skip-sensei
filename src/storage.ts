@@ -280,6 +280,65 @@ export async function clearYtBackoff(): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// Playback positions, so a reload never costs the user their place — a manual
+// ⌘R, a crash, or the cookie clear the anti-adblock wall forces. YouTube only
+// restores position from watch history, which is exactly what a cookie clear
+// destroys, so we keep our own copy locally.
+// ---------------------------------------------------------------------------
+const RESUME_KEY = 'skipSensei.resumePositions'
+/** Positions older than this are stale — you've moved on. */
+const RESUME_MAX_AGE_MS = 12 * 60 * 60 * 1000
+/** Cap the map so a heavy YouTube user's storage doesn't grow without bound. */
+const RESUME_MAX_ENTRIES = 60
+
+interface ResumeEntry {
+  /** Seconds into the video. */
+  t: number
+  /** When it was recorded. */
+  at: number
+}
+
+/** Writes are serialized: two watch tabs saving at once would otherwise
+ * read-modify-write the shared map and silently drop each other's entry. */
+let resumeChain: Promise<void> = Promise.resolve()
+
+export function recordResumePosition(
+  videoId: string,
+  seconds: number,
+): Promise<void> {
+  resumeChain = resumeChain
+    .then(async () => {
+      const result = await chrome.storage.local.get(RESUME_KEY)
+      const map: Record<string, ResumeEntry> = result[RESUME_KEY] ?? {}
+      map[videoId] = { t: seconds, at: Date.now() }
+      const fresh = Object.entries(map)
+        .filter(([, e]) => Date.now() - e.at < RESUME_MAX_AGE_MS)
+        .sort((a, b) => b[1].at - a[1].at)
+        .slice(0, RESUME_MAX_ENTRIES)
+      await chrome.storage.local.set({ [RESUME_KEY]: Object.fromEntries(fresh) })
+    })
+    .catch(() => {})
+  return resumeChain
+}
+
+/** Stored position for a video, or null when there's nothing worth restoring. */
+export async function getResumePosition(videoId: string): Promise<number | null> {
+  const result = await chrome.storage.local.get(RESUME_KEY)
+  const entry: ResumeEntry | undefined = (result[RESUME_KEY] ?? {})[videoId]
+  if (!entry) return null
+  if (Date.now() - entry.at >= RESUME_MAX_AGE_MS) return null
+  return entry.t
+}
+
+export async function forgetResumePosition(videoId: string): Promise<void> {
+  const result = await chrome.storage.local.get(RESUME_KEY)
+  const map: Record<string, ResumeEntry> = result[RESUME_KEY] ?? {}
+  if (!(videoId in map)) return
+  delete map[videoId]
+  await chrome.storage.local.set({ [RESUME_KEY]: map })
+}
+
+// ---------------------------------------------------------------------------
 // "Remind me later" from onboarding's Gemini-key step: the popup shows a
 // one-time banner while this flag is set. Cleared on dismiss, on opening
 // settings from the banner, or silently once a key/provider is configured.

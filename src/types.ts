@@ -66,6 +66,15 @@ export interface Settings {
    * Needs broad host access, so it's requested as an optional permission when
    * enabled. Off by default. */
   blockUrlTracking: boolean
+  /**
+   * Remember where you were in a video and restore it on the next load of the
+   * same one — a manual reload, a crash, or the cookie clear the anti-adblock
+   * wall forces (which destroys the watch history YouTube would have resumed
+   * from). On by default: it matches what YouTube does for a signed-in viewer.
+   * The cost is that a deliberate reload no longer restarts the video; an
+   * explicit `&t=` in the URL always wins.
+   */
+  resumePlayback: boolean
   /** YouTube annoyance removers (cosmetic). All off by default. */
   ytHideShorts: boolean
   ytDismissStillWatching: boolean
@@ -172,6 +181,7 @@ export const DEFAULT_SETTINGS: Settings = {
   showSkipToast: true,
   aiEnhancements: true,
   aggressivePruning: false,
+  resumePlayback: true,
   defuseAntiAdblock: true,
   blockUrlTracking: false,
   ytHideShorts: false,
