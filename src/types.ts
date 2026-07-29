@@ -54,15 +54,6 @@ export interface Settings {
    */
   aggressivePruning: boolean
   /**
-   * Rotate YouTube's visitor cookies on watch-page load, so the ad-blocker
-   * strike YouTube attaches to a visitor never accumulates. Only the visitor
-   * set is dropped (see YT_VISITOR_COOKIES) — the login survives. Throttled,
-   * and needs the optional `cookies` permission. Off by default: it's a
-   * mitigation for aggressivePruning's detection, not something a reactive-skip
-   * user needs, and rotating identity too eagerly is its own bot signal.
-   */
-  rotateYtVisitorCookies: boolean
-  /**
    * Anti-adblock defusing: inject MAIN-world scriptlets (set-constant,
    * spoof-css, abort-on-property-read, prevent-setTimeout/addEventListener) to
    * neutralize adblock-detection and ad-reinsertion on general sites. Part of
@@ -181,7 +172,6 @@ export const DEFAULT_SETTINGS: Settings = {
   showSkipToast: true,
   aiEnhancements: true,
   aggressivePruning: false,
-  rotateYtVisitorCookies: false,
   defuseAntiAdblock: true,
   blockUrlTracking: false,
   ytHideShorts: false,
@@ -403,8 +393,6 @@ export type Message =
   // → { ok: boolean }; clears youtube.com cookies + the backoff flag, then reloads the
   // sender tab — resuming at `resumeSeconds` when the wall interrupted playback part-way
   | { type: 'skipSensei:clearYtCookies'; resumeSeconds?: number }
-  // → { rotated: number }; drops YouTube's visitor cookies (login untouched), throttled
-  | { type: 'skipSensei:rotateYtVisitorCookies' }
   | { type: 'skipSensei:tabNeedsReload'; needsReload: boolean } // badges the icon for the sender tab
   | { type: 'skipSensei:getTabBlocked'; tabId: number } // → BlockBreakdown (per-type blocks on that tab)
   | {

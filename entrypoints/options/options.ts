@@ -477,7 +477,6 @@ const SETTING_LABELS: Record<string, string> = {
   showSkipToast: 'Skip toast',
   aiEnhancements: 'AI enhancements',
   aggressivePruning: "Block YouTube's first-party video ads",
-  rotateYtVisitorCookies: "Rotate YouTube's visitor ID",
   debugLogging: 'Debug logging',
   telemetryEnabled: 'Anonymous error reports',
   localOnlyMode: 'Local-only mode',
@@ -492,49 +491,89 @@ function cell(text: string, className?: string): HTMLTableCellElement {
   return td
 }
 
+/** The three tables under Activity & logs, each its own sub-tab. */
+const LOG_VIEWS = ['activity', 'settings', 'cache'] as const
+type LogView = (typeof LOG_VIEWS)[number]
+
+/** Rows shown before the reader asks for more. */
+const LOG_PAGE = 20
+
+/** Newest-first rows per view, and how many of them are currently painted. */
+const logRows: Record<LogView, HTMLTableRowElement[]> = {
+  activity: [],
+  settings: [],
+  cache: [],
+}
+const logShown: Record<LogView, number> = {
+  activity: LOG_PAGE,
+  settings: LOG_PAGE,
+  cache: LOG_PAGE,
+}
+
+/** Paint the first `logShown[view]` rows and update the footer + tab count. */
+function paintLogView(view: LogView) {
+  const rows = logRows[view]
+  const total = rows.length
+  const shown = Math.min(logShown[view], total)
+
+  $(`${view}-empty`).hidden = total > 0
+  // Hide the framed scroll box entirely when empty, not just the table —
+  // an empty bordered rectangle reads as a broken table.
+  const wrap = $(`${view}-table`).closest<HTMLElement>('.table-wrap')
+  if (wrap) wrap.hidden = total === 0
+  $<HTMLTableSectionElement>(`${view}-body`).replaceChildren(
+    ...rows.slice(0, shown),
+  )
+  $(`count-${view}`).textContent = fmt(total)
+
+  const footer = $(`more-${view}`)
+  footer.hidden = total <= LOG_PAGE
+  if (footer.hidden) return
+  $(`shown-${view}`).textContent = `Showing ${fmt(shown)} of ${fmt(total)}`
+  const moreBtn = $(`more-btn-${view}`)
+  const remaining = total - shown
+  moreBtn.hidden = remaining === 0
+  moreBtn.textContent = `Show ${Math.min(LOG_PAGE, remaining)} more`
+  // "Show all" only earns its space while it does something "show more" can't.
+  $(`all-btn-${view}`).hidden = remaining <= LOG_PAGE
+  $(`less-btn-${view}`).hidden = remaining > 0
+}
+
 async function renderActivity() {
   const entries = await getActivityLog()
-  const body = $<HTMLTableSectionElement>('activity-body')
-  $('activity-empty').hidden = entries.length > 0
-  $('activity-table').hidden = entries.length === 0
-  body.replaceChildren(
-    ...[...entries].reverse().map((entry) => {
-      const tr = document.createElement('tr')
-      tr.append(
-        cell(fmtWhen(entry.at), 'when'),
-        cell(entry.feature),
-        cell(entry.action),
-        cell(entry.site ?? '—', 'site'),
-      )
-      return tr
-    }),
-  )
+  logRows.activity = [...entries].reverse().map((entry) => {
+    const tr = document.createElement('tr')
+    tr.append(
+      cell(fmtWhen(entry.at), 'when'),
+      cell(entry.feature),
+      cell(entry.action),
+      cell(entry.site ?? '—', 'site'),
+    )
+    return tr
+  })
+  paintLogView('activity')
 }
 
 async function renderSettingsHistory() {
   const log = await getSettingsLog()
-  const body = $<HTMLTableSectionElement>('settings-body')
-  $('settings-empty').hidden = log.length > 0
-  $('settings-table').hidden = log.length === 0
-  body.replaceChildren(
-    ...[...log].reverse().map((entry) => {
-      const tr = document.createElement('tr')
-      tr.append(
-        cell(fmtWhen(entry.at), 'when'),
-        cell(SETTING_LABELS[entry.key] ?? entry.key),
-      )
-      const change = document.createElement('td')
-      change.className = 'change'
-      const from = document.createElement('span')
-      from.className = 'from'
-      from.textContent = entry.from
-      const to = document.createElement('b')
-      to.textContent = entry.to
-      change.append(from, ' → ', to)
-      tr.append(change)
-      return tr
-    }),
-  )
+  logRows.settings = [...log].reverse().map((entry) => {
+    const tr = document.createElement('tr')
+    tr.append(
+      cell(fmtWhen(entry.at), 'when'),
+      cell(SETTING_LABELS[entry.key] ?? entry.key),
+    )
+    const change = document.createElement('td')
+    change.className = 'change'
+    const from = document.createElement('span')
+    from.className = 'from'
+    from.textContent = entry.from
+    const to = document.createElement('b')
+    to.textContent = entry.to
+    change.append(from, ' → ', to)
+    tr.append(change)
+    return tr
+  })
+  paintLogView('settings')
 }
 
 async function renderCacheTable() {
@@ -543,33 +582,74 @@ async function renderCacheTable() {
     `Analysis cache: <b>${fmtBytes(cacheBytes)}</b> across ` +
     `<b>${entries.length}</b> ${entries.length === 1 ? 'video' : 'videos'} · ` +
     `all extension storage: <b>${fmtBytes(totalBytes)}</b>`
-  const body = $<HTMLTableSectionElement>('cache-body')
-  $('cache-empty').hidden = entries.length > 0
-  $('cache-table').hidden = entries.length === 0
-  body.replaceChildren(
-    ...entries.map((entry) => {
-      const tr = document.createElement('tr')
-      tr.append(cell(fmtWhen(entry.analyzedAt), 'when'))
-      const video = document.createElement('td')
-      const link = document.createElement('a')
-      link.href = `https://www.youtube.com/watch?v=${entry.videoId}`
-      link.target = '_blank'
-      link.rel = 'noopener'
-      link.textContent = entry.videoId
-      video.append(link)
-      tr.append(
-        video,
-        cell(entry.status),
-        cell(String(entry.segments), 'num'),
-        cell(entry.provider ?? '—'),
-        cell(fmtBytes(entry.bytes), 'num'),
-      )
-      return tr
-    }),
-  )
+  logRows.cache = entries.map((entry) => {
+    const tr = document.createElement('tr')
+    tr.append(cell(fmtWhen(entry.analyzedAt), 'when'))
+    const video = document.createElement('td')
+    const link = document.createElement('a')
+    link.href = `https://www.youtube.com/watch?v=${entry.videoId}`
+    link.target = '_blank'
+    link.rel = 'noopener'
+    link.textContent = entry.videoId
+    video.append(link)
+    tr.append(
+      video,
+      cell(entry.status),
+      cell(String(entry.segments), 'num'),
+      cell(entry.provider ?? '—'),
+      cell(fmtBytes(entry.bytes), 'num'),
+    )
+    return tr
+  })
+  paintLogView('cache')
+}
+
+function showLogView(view: LogView) {
+  for (const v of LOG_VIEWS) {
+    const tab = $<HTMLButtonElement>(`subtab-${v}`)
+    const active = v === view
+    tab.classList.toggle('active', active)
+    tab.setAttribute('aria-selected', String(active))
+    tab.tabIndex = active ? 0 : -1
+    $(`log-${v}`).hidden = !active
+  }
+}
+
+function setupLogTabs() {
+  const tabs = LOG_VIEWS.map((v) => $<HTMLButtonElement>(`subtab-${v}`))
+  tabs.forEach((tab, i) => {
+    tab.addEventListener('click', () => showLogView(LOG_VIEWS[i]))
+    // Arrow keys move between tabs, the way a tablist is expected to behave.
+    tab.addEventListener('keydown', (e) => {
+      const step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0
+      if (!step) return
+      e.preventDefault()
+      const next = (i + step + tabs.length) % tabs.length
+      showLogView(LOG_VIEWS[next])
+      tabs[next].focus()
+    })
+  })
+
+  for (const view of LOG_VIEWS) {
+    $(`more-btn-${view}`).addEventListener('click', () => {
+      logShown[view] += LOG_PAGE
+      paintLogView(view)
+    })
+    $(`all-btn-${view}`).addEventListener('click', () => {
+      logShown[view] = logRows[view].length
+      paintLogView(view)
+    })
+    $(`less-btn-${view}`).addEventListener('click', () => {
+      logShown[view] = LOG_PAGE
+      paintLogView(view)
+      $(`log-${view}`).scrollIntoView({ block: 'nearest' })
+    })
+  }
 }
 
 function renderLogs() {
+  // A fresh read starts each table back at its first page.
+  for (const v of LOG_VIEWS) logShown[v] = LOG_PAGE
   void renderActivity()
   void renderSettingsHistory()
   void renderCacheTable()
@@ -1005,25 +1085,6 @@ async function main() {
     el.addEventListener('change', () => save({ [key]: el.checked }))
   }
 
-  // Visitor-ID rotation needs the optional `cookies` permission, so it can't
-  // ride the generic loop above: request on the enabling click (a valid user
-  // gesture) and snap the box back if the prompt is declined, rather than
-  // storing a setting that would silently do nothing.
-  const rotateEl = $<HTMLInputElement>('rotate-yt-visitor')
-  rotateEl.checked = loaded.rotateYtVisitorCookies
-  rotateEl.addEventListener('change', async () => {
-    if (rotateEl.checked) {
-      const granted = await chrome.permissions
-        .request({ permissions: ['cookies'] })
-        .catch(() => false)
-      if (!granted) {
-        rotateEl.checked = false
-        return
-      }
-    }
-    void save({ rotateYtVisitorCookies: rotateEl.checked })
-  })
-
   const aiEnhancementsEl = $<HTMLInputElement>('ai-enhancements')
   aiEnhancementsEl.checked = (await getSettings()).aiEnhancements
   aiEnhancementsEl.addEventListener('change', () =>
@@ -1223,13 +1284,16 @@ async function main() {
   })
 
   // Activity & logs panel.
+  setupLogTabs()
   $<HTMLButtonElement>('logs-reload').addEventListener('click', renderLogs)
   $<HTMLButtonElement>('clear-activity').addEventListener('click', async () => {
     await clearActivityLog()
+    logShown.activity = LOG_PAGE
     void renderActivity()
   })
   $<HTMLButtonElement>('clear-log').addEventListener('click', async () => {
     await clearSettingsLog()
+    logShown.settings = LOG_PAGE
     void renderSettingsHistory()
   })
   const clearCacheEl = $<HTMLButtonElement>('clear-cache')
@@ -1237,6 +1301,7 @@ async function main() {
     clearCacheEl.disabled = true
     await clearAnalysisCache()
     clearCacheEl.disabled = false
+    logShown.cache = LOG_PAGE
     void renderCacheTable()
   })
 

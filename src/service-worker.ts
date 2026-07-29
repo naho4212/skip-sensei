@@ -35,7 +35,7 @@ import {
   initScriptletRegistration,
   syncScriptletRegistration,
 } from './scriptlet-register'
-import { clearCookiesFor, rotateYtVisitorCookies } from './cookies'
+import { clearCookiesFor } from './cookies'
 import { withResumeTime } from './resume'
 import { isColdStart, runColdStart } from './lifecycle'
 import { fetchSponsorBlockSegments } from './sponsorblock'
@@ -470,38 +470,6 @@ function abandonAnalysis(videoId: string) {
   }
 }
 
-/**
- * Minimum gap between visitor-cookie rotations. Rotating on literally every
- * watch-page load would hand YouTube a different visitor every few minutes
- * from one account and IP, which is its own "this isn't a human" signal — the
- * point is to keep a strike from accumulating, not to churn identity. One
- * rotation per this window is enough for that.
- */
-const ROTATE_THROTTLE_MS = 15 * 60 * 1000
-
-/** Survives SW dormancy (a plain module variable would not). */
-async function maybeRotateYtVisitor(): Promise<number> {
-  const settings = await getSettings()
-  if (!settings.rotateYtVisitorCookies) return 0
-  const { ytVisitorRotatedAt = 0 } = await chrome.storage.session.get(
-    'ytVisitorRotatedAt',
-  )
-  const now = Date.now()
-  if (now - ytVisitorRotatedAt < ROTATE_THROTTLE_MS) return 0
-  // Stamp BEFORE awaiting the removal: two watch tabs opening together would
-  // otherwise both pass the check and rotate twice.
-  await chrome.storage.session.set({ ytVisitorRotatedAt: now })
-  const rotated = await rotateYtVisitorCookies()
-  if (rotated > 0) {
-    void recordActivity(
-      'Skip YouTube ads',
-      `Rotated ${rotated} YouTube visitor cookie${rotated === 1 ? '' : 's'} — sign-in kept`,
-      'youtube.com',
-    )
-  }
-  return rotated
-}
-
 // ---------------------------------------------------------------------------
 // Message routing
 // ---------------------------------------------------------------------------
@@ -645,11 +613,6 @@ chrome.runtime.onMessage.addListener(
           } catch {
             sendResponse({ ok: false })
           }
-        })()
-        return true
-      case 'skipSensei:rotateYtVisitorCookies':
-        void (async () => {
-          sendResponse({ rotated: await maybeRotateYtVisitor() })
         })()
         return true
       case 'skipSensei:tabNeedsReload':

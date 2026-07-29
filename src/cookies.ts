@@ -11,25 +11,14 @@
  * partitioned copy.
  */
 /**
- * The cookies that carry YouTube's *visitor* identity — and with it the
- * ad-blocker strike that produces the enforcement wall. Deliberately excludes
- * the Google auth set (SID/HSID/SSID/APISID/SAPISID/__Secure-*PSID), which
- * lives on .youtube.com too: dropping those is what signs you out. Rotating
- * only these resets the visitor the strike is attached to while the session
- * stays logged in.
- *
- * Caveat worth keeping honest: the full-wipe remedy proved the flag dies with
- * SOME youtube.com cookie, not specifically with these. If YouTube also parks
- * the strike somewhere outside this list, rotation quietly stops working — so
- * the wall path still falls back to clearing everything.
+ * Rotating ONLY the visitor cookies (VISITOR_INFO1_LIVE, YSC, …) while keeping
+ * the Google auth set was tried in v0.3.2 and reverted in v0.3.3: verified
+ * against a real signed-in account, it signs the user out anyway. The deletion
+ * is genuinely name-scoped — no auth cookie is ever touched — but YouTube
+ * invalidates a session whose visitor identity has vanished underneath it. A
+ * sandbox can't show this (no account to lose), so don't re-derive it from
+ * "the removal only names visitor cookies" and try again.
  */
-export const YT_VISITOR_COOKIES = [
-  'VISITOR_INFO1_LIVE',
-  'VISITOR_PRIVACY_METADATA',
-  'YSC',
-  '__Secure-YEC',
-  'GPS',
-]
 
 /** The `cookies` permission is optional (requested from the popup on demand). */
 export async function hasCookiesPermission(): Promise<boolean> {
@@ -40,30 +29,15 @@ export async function hasCookiesPermission(): Promise<boolean> {
   }
 }
 
-/**
- * Drop just the visitor cookies, leaving the login untouched. Returns how many
- * were removed (0 when the optional `cookies` permission isn't granted).
- */
-export async function rotateYtVisitorCookies(): Promise<number> {
-  return clearCookiesFor({ domain: 'youtube.com' }, YT_VISITOR_COOKIES)
-}
-
-export async function clearCookiesFor(
-  filter: {
-    domain?: string
-    url?: string
-  },
-  /** When given, only cookies with these exact names are removed. */
-  onlyNames?: string[],
-): Promise<number> {
+export async function clearCookiesFor(filter: {
+  domain?: string
+  url?: string
+}): Promise<number> {
   // Optional permission: if it was never granted (e.g. the in-player recovery
   // panel path, which has no user gesture to request one), do nothing rather
   // than throw. The popup buttons request it before calling.
   if (!(await hasCookiesPermission())) return 0
-  const all = await chrome.cookies.getAll({ ...filter, partitionKey: {} })
-  const cookies = onlyNames
-    ? all.filter((c) => onlyNames.includes(c.name))
-    : all
+  const cookies = await chrome.cookies.getAll({ ...filter, partitionKey: {} })
   await Promise.all(
     cookies.map((c) => {
       const url = `http${c.secure ? 's' : ''}://${c.domain.replace(/^\./, '')}${c.path}`

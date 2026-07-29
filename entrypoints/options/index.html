@@ -140,18 +140,6 @@
               >
             </label>
             <label class="field checkbox">
-              <input type="checkbox" id="rotate-yt-visitor" />
-              <span
-                >Rotate YouTube's visitor ID to avoid ad-blocker notices
-                <em class="beta-tag">beta</em><span
-                  class="info"
-                  tabindex="0"
-                  data-tip="YouTube pins its &quot;ad blocker detected&quot; strike to the visitor cookies it gives your browser. This drops just those (at most once every 15 minutes, on a watch page) so the strike never builds up. You stay signed in — your login cookies aren't touched. Mainly useful alongside first-party ad blocking, which is what provokes the notices. Needs cookie access."
-                  >ⓘ</span
-                ></span
-              >
-            </label>
-            <label class="field checkbox">
               <input type="checkbox" id="debug-logging" />
               <span
                 >Debug logging<span
@@ -421,21 +409,63 @@
             <button id="logs-reload" class="ghost-btn" type="button" title="Reload data">↻</button>
           </h2>
 
-          <section>
-            <h3>Storage overview</h3>
-            <div class="totals" id="totals">Measuring…</div>
-          </section>
+          <p class="totals" id="totals">Measuring…</p>
 
-          <section>
+          <div class="subtabs" role="tablist" aria-label="Log sections">
+            <button
+              class="subtab active"
+              type="button"
+              role="tab"
+              id="subtab-activity"
+              data-log="activity"
+              aria-controls="log-activity"
+              aria-selected="true"
+            >
+              Feature activity
+              <span class="subtab-count" id="count-activity">0</span>
+            </button>
+            <button
+              class="subtab"
+              type="button"
+              role="tab"
+              id="subtab-settings"
+              data-log="settings"
+              aria-controls="log-settings"
+              aria-selected="false"
+              tabindex="-1"
+            >
+              Settings history
+              <span class="subtab-count" id="count-settings">0</span>
+            </button>
+            <button
+              class="subtab"
+              type="button"
+              role="tab"
+              id="subtab-cache"
+              data-log="cache"
+              aria-controls="log-cache"
+              aria-selected="false"
+              tabindex="-1"
+            >
+              Analysis cache
+              <span class="subtab-count" id="count-cache">0</span>
+            </button>
+          </div>
+
+          <div
+            class="log-view"
+            id="log-activity"
+            role="tabpanel"
+            aria-labelledby="subtab-activity"
+          >
             <div class="section-head">
-              <h3>Feature activity</h3>
+              <p class="hint">
+                What the features actually did — ads skipped, popups reviewed,
+                cookie banners answered, selectors self-healed, videos analyzed.
+                Newest first, last 300 events, stored only in this browser.
+              </p>
               <button id="clear-activity" type="button">Clear activity</button>
             </div>
-            <p class="hint">
-              What the features actually did — ads skipped, popups reviewed,
-              cookie banners answered, selectors self-healed, videos analyzed.
-              Newest first, last 300 events, stored only in this browser.
-            </p>
             <div class="table-wrap">
               <table class="log-table" id="activity-table">
                 <thead>
@@ -444,20 +474,34 @@
                 <tbody id="activity-body"></tbody>
               </table>
             </div>
+            <div class="table-more" id="more-activity" hidden>
+              <span class="table-more-count" id="shown-activity"></span>
+              <span class="table-more-actions">
+                <button class="more-btn" type="button" id="more-btn-activity"></button>
+                <button class="more-btn quiet" type="button" id="all-btn-activity">Show all</button>
+                <button class="more-btn quiet" type="button" id="less-btn-activity" hidden>Show fewer</button>
+              </span>
+            </div>
             <p class="hint empty" id="activity-empty" hidden>
               Nothing yet — events appear here as the features act.
             </p>
-          </section>
+          </div>
 
-          <section>
+          <div
+            class="log-view"
+            id="log-settings"
+            role="tabpanel"
+            aria-labelledby="subtab-settings"
+            hidden
+          >
             <div class="section-head">
-              <h3>Settings history</h3>
+              <p class="hint">
+                Every change made in the popup or settings, newest first. Stored
+                only in this browser (last 500 changes; API keys are never
+                recorded).
+              </p>
               <button id="clear-log" type="button">Clear history</button>
             </div>
-            <p class="hint">
-              Every change made in the popup or settings, newest first. Stored
-              only in this browser (last 500 changes; API keys are never recorded).
-            </p>
             <div class="table-wrap">
               <table class="log-table" id="settings-table">
                 <thead>
@@ -466,20 +510,33 @@
                 <tbody id="settings-body"></tbody>
               </table>
             </div>
+            <div class="table-more" id="more-settings" hidden>
+              <span class="table-more-count" id="shown-settings"></span>
+              <span class="table-more-actions">
+                <button class="more-btn" type="button" id="more-btn-settings"></button>
+                <button class="more-btn quiet" type="button" id="all-btn-settings">Show all</button>
+                <button class="more-btn quiet" type="button" id="less-btn-settings" hidden>Show fewer</button>
+              </span>
+            </div>
             <p class="hint empty" id="settings-empty" hidden>
               No settings changes recorded yet.
             </p>
-          </section>
+          </div>
 
-          <section>
+          <div
+            class="log-view"
+            id="log-cache"
+            role="tabpanel"
+            aria-labelledby="subtab-cache"
+            hidden
+          >
             <div class="section-head">
-              <h3>Analysis cache</h3>
+              <p class="hint">
+                One entry per analyzed video, newest first, with its size in
+                extension storage. The cache keeps the most recent 200 videos.
+              </p>
               <button id="clear-cache" type="button">Clear cache</button>
             </div>
-            <p class="hint">
-              One entry per analyzed video, newest first, with its size in
-              extension storage. The cache keeps the most recent 200 videos.
-            </p>
             <div class="table-wrap">
               <table class="log-table" id="cache-table">
                 <thead>
@@ -488,8 +545,16 @@
                 <tbody id="cache-body"></tbody>
               </table>
             </div>
+            <div class="table-more" id="more-cache" hidden>
+              <span class="table-more-count" id="shown-cache"></span>
+              <span class="table-more-actions">
+                <button class="more-btn" type="button" id="more-btn-cache"></button>
+                <button class="more-btn quiet" type="button" id="all-btn-cache">Show all</button>
+                <button class="more-btn quiet" type="button" id="less-btn-cache" hidden>Show fewer</button>
+              </span>
+            </div>
             <p class="hint empty" id="cache-empty" hidden>No cached analyses yet.</p>
-          </section>
+          </div>
         </div>
 
         <!-- ═══════════════════════  About  ═══════════════════════ -->
