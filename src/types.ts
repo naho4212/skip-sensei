@@ -391,8 +391,17 @@ export type Message =
   | { type: 'skipSensei:refreshModels'; provider: LlmProvider }
   | { type: 'skipSensei:adblockWall'; hostname: string } // site is showing an ad-blocker wall
   // → { ok: boolean }; clears youtube.com cookies + the backoff flag, then reloads the
-  // sender tab — resuming at `resumeSeconds` when the wall interrupted playback part-way
-  | { type: 'skipSensei:clearYtCookies'; resumeSeconds?: number }
+  // sender tab — resuming at `resumeSeconds` when the wall interrupted playback part-way.
+  // scope 'visitor' drops only YT_VISITOR_COOKIES (login survives, may not lift the
+  // wall); 'all' is the full wipe that definitely lifts it and definitely signs you out.
+  | {
+      type: 'skipSensei:clearYtCookies'
+      resumeSeconds?: number
+      scope?: 'visitor' | 'all'
+    }
+  // → { triedVisitorClear: boolean }; did a visitor-only clear just happen on this
+  // tab? Drives the panel's escalation copy when the wall survives stage one.
+  | { type: 'skipSensei:getWallState' }
   | { type: 'skipSensei:tabNeedsReload'; needsReload: boolean } // badges the icon for the sender tab
   | { type: 'skipSensei:getTabBlocked'; tabId: number } // → BlockBreakdown (per-type blocks on that tab)
   | {

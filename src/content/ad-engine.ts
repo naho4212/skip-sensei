@@ -228,6 +228,16 @@ const HARD_BLOCK_CSS = `
 }
 #${HARD_BLOCK_ID} .hb-clear:hover { background: #8b5cf6; }
 #${HARD_BLOCK_ID} .hb-clear:disabled { opacity: 0.6; cursor: default; }
+/* The escape hatch that always works, but costs the sign-in: outlined so it
+ * reads as a real choice next to the primary action, not as fine print like
+ * the dismiss link below it. */
+#${HARD_BLOCK_ID} .hb-secondary {
+  padding: 9px 18px; border: 1px solid #3f3f3f; border-radius: 18px;
+  background: transparent; color: #d0d0d0;
+  font: 400 13px Roboto, Arial, sans-serif; cursor: pointer;
+}
+#${HARD_BLOCK_ID} .hb-secondary:hover { border-color: #6a6a6a; color: #ffffff; }
+#${HARD_BLOCK_ID} .hb-secondary:disabled { opacity: 0.6; cursor: default; }
 #${HARD_BLOCK_ID} .hb-dismiss {
   padding: 6px 12px; border: none; border-radius: 14px;
   background: transparent; color: #6a6a6a;
@@ -972,22 +982,41 @@ export class AdEngine {
     const body = document.createElement('div')
     body.className = 'hb-body'
     const resumeAt = this.lastContentTime
+    const resumeNote =
+      resumeAt >= MIN_RESUME_SECONDS
+        ? ` Either way we’ll pick the video back up at ${formatClock(resumeAt)}.`
+        : ''
     body.textContent =
       'YouTube flagged this browser session for ad blocking, so it refuses to ' +
-      'play videos — reloading won’t help. Clearing YouTube’s cookies lifts ' +
-      'the flag. You’ll be signed out of YouTube and may need to sign back in.' +
-      (resumeAt >= MIN_RESUME_SECONDS
-        ? ` We’ll pick the video back up at ${formatClock(resumeAt)}.`
-        : '')
+      'play videos — reloading won’t help. Clearing its cookies lifts the flag.' +
+      resumeNote
 
+    // Stage one: drop only the visitor cookies. This may or may not lift the
+    // wall — that is genuinely unknown — but it costs nothing to try first,
+    // because the full wipe is still one click away and always works. Offering
+    // it in the other order would sign the user out of a session that a
+    // narrower clear might have saved.
     const clear = document.createElement('button')
     clear.className = 'hb-clear'
-    clear.textContent = 'Clear YouTube cookies & reload'
-    clear.addEventListener('click', () => {
-      clear.disabled = true
-      clear.textContent = 'Clearing…'
+    const KEEP_LABEL = 'Try it without signing me out'
+    const FULL_LABEL = 'Clear all cookies & reload (signs you out)'
+    clear.textContent = KEEP_LABEL
+
+    const full = document.createElement('button')
+    full.className = 'hb-secondary'
+    full.textContent = FULL_LABEL
+
+    const run = (
+      scope: 'visitor' | 'all',
+      btn: HTMLButtonElement,
+      label: string,
+    ) => {
+      btn.disabled = true
+      const original = btn.textContent
+      btn.textContent = 'Clearing…'
       void this.send<{ ok: boolean } | null>({
         type: 'skipSensei:clearYtCookies',
+        scope,
         // Carry the playback position across the reload — clearing cookies
         // also clears YouTube's own resume state, so without this the video
         // restarts from 0:00.
@@ -996,13 +1025,32 @@ export class AdEngine {
         // On success the service worker reloads this tab; only a failure
         // needs handling here.
         if (!res?.ok) {
-          clear.disabled = false
-          clear.textContent = 'Clear YouTube cookies & reload'
+          btn.disabled = false
+          btn.textContent = original ?? label
           body.textContent =
             'Clearing failed — you can clear cookies for youtube.com from ' +
             'the browser’s site settings instead, then reload.'
         }
       })
+    }
+    clear.addEventListener('click', () => run('visitor', clear, KEEP_LABEL))
+    full.addEventListener('click', () => run('all', full, FULL_LABEL))
+
+    // If stage one already ran on this tab and we're looking at the wall
+    // again, say so and lead with the wipe that works — repeating a clear
+    // that just failed would only waste another reload.
+    void this.send<{ triedVisitorClear: boolean } | null>({
+      type: 'skipSensei:getWallState',
+    }).then((state) => {
+      if (!state?.triedVisitorClear || !panel.isConnected) return
+      body.textContent =
+        'Still blocked after clearing the visitor cookies — YouTube is holding ' +
+        'the flag somewhere that survives a partial clear. Clearing everything ' +
+        'does lift it, at the cost of signing you out of YouTube.' +
+        resumeNote
+      clear.remove()
+      full.className = 'hb-clear'
+      full.textContent = 'Clear all cookies & reload'
     })
 
     const dismiss = document.createElement('button')
@@ -1023,7 +1071,7 @@ export class AdEngine {
     sensei.textContent = 'SENSEI'
     brand.append(ad, sensei)
 
-    panel.append(title, body, clear, dismiss, brand)
+    panel.append(title, body, clear, full, dismiss, brand)
     host.appendChild(panel)
   }
 

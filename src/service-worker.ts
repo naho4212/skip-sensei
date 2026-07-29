@@ -35,7 +35,7 @@ import {
   initScriptletRegistration,
   syncScriptletRegistration,
 } from './scriptlet-register'
-import { clearCookiesFor } from './cookies'
+import { clearCookiesFor, clearYtVisitorCookies } from './cookies'
 import { withResumeTime } from './resume'
 import { isColdStart, runColdStart } from './lifecycle'
 import { fetchSponsorBlockSegments } from './sponsorblock'
@@ -592,8 +592,28 @@ chrome.runtime.onMessage.addListener(
         // Respond BEFORE reloading — the reload destroys the sender's context.
         void (async () => {
           try {
-            await clearCookiesFor({ domain: 'youtube.com' })
+            const visitorOnly = message.scope === 'visitor'
+            const cleared = visitorOnly
+              ? await clearYtVisitorCookies()
+              : await clearCookiesFor({ domain: 'youtube.com' })
             await clearYtBackoff()
+            // Remember a stage-one attempt so the panel can escalate if the
+            // wall survives the reload. Tab-scoped and short-lived: a wall an
+            // hour later is a fresh problem, not a failed visitor clear.
+            if (sender.tab?.id !== undefined) {
+              await chrome.storage.session.set({
+                [`ytVisitorClear.${sender.tab.id}`]: visitorOnly
+                  ? Date.now()
+                  : 0,
+              })
+            }
+            void recordActivity(
+              'Skip YouTube ads',
+              visitorOnly
+                ? `Cleared ${cleared} YouTube visitor cookie(s), kept the sign-in — testing whether the wall lifts`
+                : `Cleared all ${cleared} youtube.com cookie(s) — signs the user out`,
+              'youtube.com',
+            )
             sendResponse({ ok: true })
             if (sender.tab?.id !== undefined) {
               // Clearing cookies also wipes YouTube's own resume state, so a
@@ -613,6 +633,17 @@ chrome.runtime.onMessage.addListener(
           } catch {
             sendResponse({ ok: false })
           }
+        })()
+        return true
+      case 'skipSensei:getWallState':
+        void (async () => {
+          const id = sender.tab?.id
+          if (id === undefined) return sendResponse({ triedVisitorClear: false })
+          const key = `ytVisitorClear.${id}`
+          const at = (await chrome.storage.session.get(key))[key] ?? 0
+          // Five minutes covers the clear + reload + player boot with room to
+          // spare, without a stale marker mislabelling a later wall.
+          sendResponse({ triedVisitorClear: Date.now() - at < 5 * 60_000 })
         })()
         return true
       case 'skipSensei:tabNeedsReload':
