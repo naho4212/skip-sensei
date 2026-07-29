@@ -15,6 +15,18 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.3.12',
+    date: '2026-07-29',
+    items: [
+      'YouTube is now exempt from network blocking under every filter rule — a handful of high-priority list rules could previously slip past the exemption, which is exactly what provokes YouTube’s “ad blocker detected” wall',
+      'Fewer wrongly-hidden page elements: ad detection now matches whole words only, re-checks the page as soon as it loads instead of waiting for images, and un-hides a slot that turns out to hold real content',
+      'Webmail, chat and docs sites are left completely alone by the filter lists, not just by the AI',
+      'Resetting feature settings no longer switches diagnostics back on or turns off Local-only mode',
+      'Paused-sites entries are checked as you add them, and international domains now match properly',
+      'Popup and settings are keyboard- and screen-reader-friendly: real tabs, labelled switches, readable tooltips',
+    ],
+  },
+  {
     version: '0.3.4',
     date: '2026-07-28',
     items: [
