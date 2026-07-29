@@ -45,7 +45,7 @@ async function fetchEvents() {
       const body = await res.json()
       const items = Array.isArray(body)
         ? body
-        : (body.events ?? body.items ?? body.errors ?? [])
+        : (body.reports ?? body.events ?? body.items ?? body.errors ?? [])
       return { host, items }
     } catch (error) {
       lastError = `${host} → ${error.message}`
@@ -80,7 +80,7 @@ const pctShare = (a, b) => (b ? `${Math.round((a / b) * 100)}%` : '—')
 function report({ host, items }) {
   const since = Date.now() - DAYS * 86400_000
   const recent = items.filter((e) => {
-    const t = Date.parse(e.timestamp ?? e.at ?? 0)
+    const t = Date.parse(e.timestamp ?? e.received_at ?? e.at ?? 0)
     return Number.isFinite(t) ? t >= since : true
   })
   const rollups = recent.filter((e) => e.kind === 'daily_rollup')
