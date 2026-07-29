@@ -266,18 +266,29 @@ place. If the origin ever moves, all three must move together.
    the optional all-sites permission AND enables `defuseAntiAdblock`, so a
    reviewer's default test install never activates it.
 
-2. **Differential filter-list updates** (`src/filter-updates.ts`) — the
+2. **Always-on YouTube network exemption** (`yt_exempt`, the one ruleset that
+   ships enabled) — a single `allowAllRequests` rule for youtube.com, present
+   from install time. A reviewer may ask why an ad blocker whitelists
+   YouTube's network requests: network-blocking YouTube trips its anti-adblock
+   enforcement walls, so it is a hard project constraint that YouTube is never
+   blocked at the network layer. All YouTube ad handling is response-side
+   pruning, cosmetic hiding, and reactive skipping — the exemption just makes
+   the constraint structural (no runtime ordering, no dynamic-rule race). It
+   allows requests; it never reads or modifies them.
+3. **Differential filter-list updates** (`src/filter-updates.ts`) — the
    extension periodically fetches refreshed cosmetic-filter DATA (a manifest +
    `domain -> css-selector[]` shards) from `www.singlefinmedia.com/ad-sensei`.
    This is the store-sanctioned remote-*data* / configuration path that every
    filter-list blocker uses, NOT remote code: no script is ever fetched or run.
-   Each payload is SHA-256-verified against the manifest, sanitized (universal/
-   structural selectors stripped), and validated via `querySelector` before it
-   can only ever become `selector{display:none}` CSS — fetched data cannot reach
-   the scriptlet engine or any code path. On by default, toggleable, off in
-   Local-only mode; disclosed in the privacy policy (§4). Static network (DNR)
-   rulesets stay bundled and update only with releases.
-3. **Domain collection in diagnostics is certified, and default-on.** The
+   Each payload is SHA-256-verified against the manifest, sanitized
+   per-comma-part (universal/structural selectors stripped), validated via
+   `querySelector`, and rejected if older than the last-applied payload
+   (`generatedAt` replay floor) before it can only ever become
+   `selector{display:none}` CSS — fetched data cannot reach the scriptlet
+   engine or any code path. On by default, toggleable, off in Local-only mode;
+   disclosed in the privacy policy (§4). Static network (DNR) rulesets stay
+   bundled and update only with releases.
+4. **Domain collection in diagnostics is certified, and default-on.** The
    `host`/`domain` fields (see the Web history disclosure above) are the one
    piece of browsing-related data that leaves the browser. Disclosed in four
    places that must stay in sync with the code: privacy policy §3 + §5, the
@@ -288,10 +299,10 @@ place. If the origin ever moves, all three must move together.
    disclosure is prominent (first-run card, not buried), which is why on-by-
    default is defensible — but if a reviewer objects, the cheap fix is shipping
    the onboarding checkbox unchecked rather than removing the field.
-4. **Obfuscation is banned** — do NOT minify-to-conceal or obfuscate to hide the
+5. **Obfuscation is banned** — do NOT minify-to-conceal or obfuscate to hide the
    above; that is a separate, account-level violation. Compliance = not shipping
    the code, not hiding it.
-5. **Single purpose** — keep the listing framed as "block ads and
+6. **Single purpose** — keep the listing framed as "block ads and
    interruptions," not a feature grab-bag.
-6. Ad blockers from new publishers get extra manual review; verify the
+7. Ad blockers from new publishers get extra manual review; verify the
    publisher and expect a longer first review.
