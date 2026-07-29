@@ -23,6 +23,7 @@ import {
   updateSettings,
 } from '../storage'
 import type { AdSkipMethod } from '../types'
+import { MIN_RESUME_SECONDS } from '../resume'
 
 /**
  * Guard against over-generic AI-healed selectors: the LLM once answered with
@@ -38,6 +39,15 @@ function isSaneHealedSelector(selector: string): boolean {
 function looksLikeSkipControl(el: HTMLElement): boolean {
   const text = `${el.textContent ?? ''} ${el.getAttribute('aria-label') ?? ''}`
   return /skip/i.test(text)
+}
+
+/** Seconds → m:ss (h:mm:ss past an hour), for the recovery panel's copy. */
+function formatClock(seconds: number): string {
+  const total = Math.max(0, Math.floor(seconds))
+  const s = String(total % 60).padStart(2, '0')
+  const m = Math.floor(total / 60) % 60
+  const h = Math.floor(total / 3600)
+  return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${s}` : `${m}:${s}`
 }
 
 /** Playback rate for burning through un-skippable ads. */
@@ -282,6 +292,10 @@ export class AdEngine {
   /** AI-healed selectors for the anti-adblock enforcement modal. */
   private wallSelectors: string[] = []
   private wallHealInFlight = false
+  /** Last observed position of the CONTENT video (sampled only while no ad is
+   * showing — during an ad the <video> reports the ad's own timeline). Carried
+   * across the cookie-clear reload so the user doesn't lose their place. */
+  private lastContentTime = 0
   /** Wall-clock when the current ad started showing (for the heal timer). */
   private adShowingSince: number | null = null
   private healInFlight = false
@@ -408,6 +422,7 @@ export class AdEngine {
 
     const adShowing = this.adIsShowing()
     if (!adShowing) {
+      this.sampleContentTime()
       // Ad break just ended → report it as ONE aggregated entry (read the
       // tallies BEFORE endFastForward resets the flags). Ignore sub-0.3s
       // flickers.
@@ -448,6 +463,23 @@ export class AdEngine {
       void this.trySelfHeal()
     }
     this.fastForwardAd()
+  }
+
+  /**
+   * Remember where the content video is, so the cookie-clear reload can come
+   * back to it. Only called with no ad showing; a hard block also freezes the
+   * video at 0, so keep the last non-zero reading rather than overwriting it.
+   */
+  private sampleContentTime() {
+    const video = document.querySelector<HTMLVideoElement>(VIDEO)
+    const t = video?.currentTime ?? 0
+    if (Number.isFinite(t) && t > 0) this.lastContentTime = t
+  }
+
+  /** Where playback had reached before the wall, for the resume-after-reload
+   * path (0 when nothing worth restoring was seen). */
+  resumeSeconds(): number {
+    return this.lastContentTime
   }
 
   /**
@@ -939,10 +971,14 @@ export class AdEngine {
 
     const body = document.createElement('div')
     body.className = 'hb-body'
+    const resumeAt = this.lastContentTime
     body.textContent =
       'YouTube flagged this browser session for ad blocking, so it refuses to ' +
       'play videos — reloading won’t help. Clearing YouTube’s cookies lifts ' +
-      'the flag. You’ll be signed out of YouTube and may need to sign back in.'
+      'the flag. You’ll be signed out of YouTube and may need to sign back in.' +
+      (resumeAt >= MIN_RESUME_SECONDS
+        ? ` We’ll pick the video back up at ${formatClock(resumeAt)}.`
+        : '')
 
     const clear = document.createElement('button')
     clear.className = 'hb-clear'
@@ -952,6 +988,10 @@ export class AdEngine {
       clear.textContent = 'Clearing…'
       void this.send<{ ok: boolean } | null>({
         type: 'skipSensei:clearYtCookies',
+        // Carry the playback position across the reload — clearing cookies
+        // also clears YouTube's own resume state, so without this the video
+        // restarts from 0:00.
+        resumeSeconds: this.lastContentTime,
       }).then((res) => {
         // On success the service worker reloads this tab; only a failure
         // needs handling here.

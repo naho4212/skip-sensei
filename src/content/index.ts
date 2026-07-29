@@ -122,6 +122,11 @@ async function main() {
     (message: TabMessage, _sender, sendResponse) => {
       if (message?.type === 'skipSensei:getPageStatus') {
         sendResponse(getPageStatus())
+      } else if (message?.type === 'skipSensei:getResumePosition') {
+        // Popup's cookie-clear button: where to pick the video back up after
+        // the reload (0 when the engine is off or nothing has played yet, in
+        // which case the popup just reloads).
+        sendResponse(adEngine?.resumeSeconds() ?? 0)
       } else if (message?.type === 'skipSensei:analysisProgress') {
         log(`analyzing chunk ${message.done}/${message.total}`)
         sponsorEngine?.noteProgress(message.videoId, message.done, message.total)

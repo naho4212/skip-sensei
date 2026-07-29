@@ -36,6 +36,7 @@ import {
   syncScriptletRegistration,
 } from './scriptlet-register'
 import { clearCookiesFor } from './cookies'
+import { withResumeTime } from './resume'
 import { isColdStart, runColdStart } from './lifecycle'
 import { fetchSponsorBlockSegments } from './sponsorblock'
 import { initErrorReporting, reportError, reportEvent } from './error-reporting'
@@ -595,7 +596,19 @@ chrome.runtime.onMessage.addListener(
             await clearYtBackoff()
             sendResponse({ ok: true })
             if (sender.tab?.id !== undefined) {
-              await chrome.tabs.reload(sender.tab.id)
+              // Clearing cookies also wipes YouTube's own resume state, so a
+              // plain reload restarts the video at 0:00. Navigate to the same
+              // watch URL with `t=` instead when the engine saw real playback;
+              // withResumeTime returns null when there's nothing to restore.
+              const resumeUrl = withResumeTime(
+                sender.tab.url ?? '',
+                message.resumeSeconds ?? 0,
+              )
+              if (resumeUrl) {
+                await chrome.tabs.update(sender.tab.id, { url: resumeUrl })
+              } else {
+                await chrome.tabs.reload(sender.tab.id)
+              }
             }
           } catch {
             sendResponse({ ok: false })

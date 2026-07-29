@@ -390,8 +390,9 @@ export type Message =
   // → ModelCatalogResult; fetches the provider's live model list (options "Refresh models")
   | { type: 'skipSensei:refreshModels'; provider: LlmProvider }
   | { type: 'skipSensei:adblockWall'; hostname: string } // site is showing an ad-blocker wall
-  // → { ok: boolean }; clears youtube.com cookies + the backoff flag, then reloads the sender tab
-  | { type: 'skipSensei:clearYtCookies' }
+  // → { ok: boolean }; clears youtube.com cookies + the backoff flag, then reloads the
+  // sender tab — resuming at `resumeSeconds` when the wall interrupted playback part-way
+  | { type: 'skipSensei:clearYtCookies'; resumeSeconds?: number }
   | { type: 'skipSensei:tabNeedsReload'; needsReload: boolean } // badges the icon for the sender tab
   | { type: 'skipSensei:getTabBlocked'; tabId: number } // → BlockBreakdown (per-type blocks on that tab)
   | {
@@ -420,6 +421,8 @@ export type Message =
 export type TabMessage =
   | { type: 'skipSensei:getPageStatus' }
   | { type: 'skipSensei:hasYouTubeEmbed' } // → boolean (page embeds a YT video)
+  // → number: content-video position to restore after a cookie-clear reload (0 = none)
+  | { type: 'skipSensei:getResumePosition' }
   | { type: 'skipSensei:reanalyzeSponsors' } // re-run this video's sponsor analysis, bypassing the cache
   | {
       type: 'skipSensei:analysisProgress'

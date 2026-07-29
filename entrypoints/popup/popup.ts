@@ -1,5 +1,6 @@
 import { changesSince } from '../../src/changelog'
 import { clearCookiesFor } from '../../src/cookies'
+import { withResumeTime } from '../../src/resume'
 import {
   clearAdblockWall,
   clearYtBackoff,
@@ -735,6 +736,22 @@ async function renderYtBackoff() {
   if (!fresh && backoff) void clearYtBackoff()
 }
 
+// Where the ad engine last saw the content video, for the resume-after-reload
+// path. 0 whenever the content script isn't there to answer.
+async function tabResumeSeconds(tabId: number): Promise<number> {
+  try {
+    return (
+      (await chrome.tabs.sendMessage(
+        tabId,
+        { type: 'skipSensei:getResumePosition' },
+        TOP_FRAME,
+      )) ?? 0
+    )
+  } catch {
+    return 0
+  }
+}
+
 // Clear youtube.com cookies to lift YouTube's ad-blocker-detection flag, then
 // reload the active tab if it's YouTube. Cookies are scoped to youtube.com,
 // which we already hold host permission for — nothing else is touched.
@@ -759,7 +776,14 @@ async function clearYouTubeCookiesAndReload(btn: HTMLButtonElement) {
     } catch {
       onYouTube = false
     }
-    if (tab?.id !== undefined && onYouTube) await chrome.tabs.reload(tab.id)
+    if (tab?.id !== undefined && onYouTube) {
+      // Clearing cookies wipes YouTube's own resume state, so a plain reload
+      // restarts the video at 0:00. Ask the content script where playback had
+      // reached and navigate back to that point instead.
+      const resumeUrl = withResumeTime(tab.url ?? '', await tabResumeSeconds(tab.id))
+      if (resumeUrl) await chrome.tabs.update(tab.id, { url: resumeUrl })
+      else await chrome.tabs.reload(tab.id)
+    }
     window.close()
   } catch {
     // Best effort — restore the button so the user can retry or act manually.
