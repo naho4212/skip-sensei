@@ -12,12 +12,13 @@
  */
 /**
  * Rotating ONLY the visitor cookies (VISITOR_INFO1_LIVE, YSC, …) while keeping
- * the Google auth set was tried in v0.3.2 and reverted in v0.3.3: verified
- * against a real signed-in account, it signs the user out anyway. The deletion
- * is genuinely name-scoped — no auth cookie is ever touched — but YouTube
- * invalidates a session whose visitor identity has vanished underneath it. A
- * sandbox can't show this (no account to lose), so don't re-derive it from
- * "the removal only names visitor cookies" and try again.
+ * the Google auth set shipped in v0.3.2 and was pulled in v0.3.3. It was pulled
+ * because its core claim — that the login survives — was never tested, NOT
+ * because it was shown to break anything: extension-storage forensics found the
+ * setting never enabled and no rotation ever executed. Whatever signs a user out
+ * here is the full cookie wipe behind the wall panel, which takes auth by design.
+ * If this is revisited, the mechanism is sound (fires at document_start,
+ * name-scoped, throttled) and only the login consequence needs a real account.
  */
 
 /** The `cookies` permission is optional (requested from the popup on demand). */
