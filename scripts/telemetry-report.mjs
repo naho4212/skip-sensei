@@ -6,11 +6,15 @@
  * `ruleset_enable_failed` alarms. Everything below aggregates ACROSS installs;
  * a single machine's numbers are an anecdote.
  *
- *   ERROR_LOG_READ_KEY=… node scripts/telemetry-report.mjs [--days 14] [--json]
+ *   node scripts/telemetry-report.mjs [--days 14] [--json]
  *
- * The key is an Encrypted Vercel env var that `vercel env pull` returns empty,
- * so it has to be passed in. Never commit it.
+ * The key comes from .env.local (gitignored) or ERROR_LOG_READ_KEY in the
+ * environment. It's an Encrypted Vercel var that `vercel env pull` returns
+ * EMPTY, so .env.local is the only durable copy. Never commit it.
  */
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+
 const HOSTS = [
   'https://landing-beta-three-23.vercel.app',
   'https://www.singlefinmedia.com/ad-sensei',
@@ -24,10 +28,39 @@ const flag = (name, fallback) => {
 const DAYS = Number(flag('days', 14))
 const AS_JSON = args.includes('--json')
 
-const KEY = process.env.ERROR_LOG_READ_KEY
+/**
+ * Key resolution: the environment wins, then .env.local. That file is the only
+ * durable copy — the Vercel var is Encrypted and `vercel env pull` hands back
+ * an empty string rather than the value, so losing it means rotating again and
+ * redeploying landing for the new one to take effect.
+ */
+function readKey() {
+  if (process.env.ERROR_LOG_READ_KEY) return process.env.ERROR_LOG_READ_KEY
+  const here = new URL('..', import.meta.url).pathname
+  for (const file of ['.env.local', '.env']) {
+    try {
+      const text = readFileSync(join(here, file), 'utf8')
+      const line = text
+        .split('\n')
+        .find((l) => l.trim().startsWith('ERROR_LOG_READ_KEY='))
+      if (line) {
+        const value = line.slice(line.indexOf('=') + 1).trim().replace(/^["']|["']$/g, '')
+        if (value) return value
+      }
+    } catch {
+      // next candidate
+    }
+  }
+  return null
+}
+
+const KEY = readKey()
 if (!KEY) {
   console.error(
-    'Set ERROR_LOG_READ_KEY (Vercel → singlefin/landing → Settings → Environment Variables).',
+    'No ERROR_LOG_READ_KEY. Put it in .env.local (gitignored) or pass it in the\n' +
+      'environment. It is an Encrypted Vercel var that cannot be pulled back —\n' +
+      'Vercel → singlefin/landing → Settings → Environment Variables, or rotate it\n' +
+      'with `vercel env rm/add` followed by a production deploy of landing.',
   )
   process.exit(1)
 }

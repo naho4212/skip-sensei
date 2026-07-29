@@ -8,3 +8,12 @@ public/cosmetic/
 public/scriptlets/
 .vercel
 filter-payload/
+
+# Secrets. ERROR_LOG_READ_KEY (telemetry read-back) lives in .env.local — it's
+# an Encrypted Vercel var that `vercel env pull` returns EMPTY, so this file is
+# the only durable copy outside the dashboard. `vercel env pull` also writes
+# BLOB_READ_WRITE_TOKEN into whatever file you name, so ignore the pattern, not
+# one filename.
+.env
+.env.*
+!.env.example
