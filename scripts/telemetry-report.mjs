@@ -68,9 +68,13 @@ if (!KEY) {
 async function fetchEvents() {
   let lastError
   for (const host of HOSTS) {
-    const url = `${host}/api/errors?type=events&key=${encodeURIComponent(KEY)}&limit=1000`
+    // Key travels in the Authorization header, not the query string — query
+    // params land in Vercel access logs; headers don't.
+    const url = `${host}/api/errors?type=events&limit=1000`
     try {
-      const res = await fetch(url)
+      const res = await fetch(url, {
+        headers: { authorization: `Bearer ${KEY}` },
+      })
       if (!res.ok) {
         lastError = `${host} → HTTP ${res.status}`
         continue

@@ -75,6 +75,8 @@ interface UpdateMeta {
   lastCheck: number | null
   lastSuccess: number | null
   lastError: string | null
+  /** generatedAt of the newest manifest ever applied — replay floor. */
+  appliedGeneratedAt?: string | null
 }
 
 interface Manifest {
@@ -166,19 +168,33 @@ function isValidManifest(obj: unknown): obj is Manifest {
   for (const [k, v] of Object.entries(shards)) {
     const i = Number(k)
     if (!Number.isInteger(i) || i < 0 || i >= SHARD_COUNT) return false
+    // Canonical key form only: "07" and "7" would both map to override 7 with
+    // separate bookkeeping entries — reject the ambiguity outright.
+    if (String(i) !== k) return false
     if (typeof v !== 'string' || !/^[0-9a-f]{64}$/.test(v)) return false
   }
   return true
 }
 
 /** A selector we refuse to apply from remote data no matter its source — one
- * of these hides most of a page and can't be a legitimate ad rule. */
+ * of these hides most of a page and can't be a legitimate ad rule. Checked
+ * per comma-part, since one string can carry a whole comma-joined list (which
+ * is also why MAX_SELECTORS_PER_DOMAIN alone isn't a real cap). */
 function isDangerousSelector(sel: string): boolean {
   const s = sel.trim().toLowerCase()
   if (!s) return true
-  if (s === '*' || s === 'html' || s === 'body' || s === ':root') return true
-  // A comma-joined rule containing a bare universal/structural term.
-  return /(^|,)\s*(\*|html|body|:root)\s*(,|$)/.test(s)
+  if (s.length > 1000) return true // no legitimate cosmetic rule is this long
+  for (const part of s.split(',')) {
+    const p = part.trim()
+    if (p === '*' || p === ':root') return true
+    // A bare STANDARD tag name (div, a, img, …) with no qualifier hides every
+    // such element on the domain — page-breaking, never a real ad rule.
+    // Hyphenated bare tags stay allowed: custom elements must contain a
+    // hyphen by spec, and ad-only elements (shreddit-ad-post, amp-ad,
+    // ytd-ad-slot-renderer) are exactly the legit whole-tag hide rules.
+    if (/^[a-z][a-z0-9]*$/.test(p)) return true
+  }
+  return false
 }
 
 /** Validate + sanitize a downloaded shard into the {hide,unhide} shape the
@@ -239,6 +255,36 @@ export async function checkForUpdates(force = false): Promise<FilterUpdateStatus
       await setMeta(meta)
       return toStatus(meta, true)
     }
+    // Replay floor: never move BACKWARD from an applied manifest. There's no
+    // signing key here — TLS + the host are the trust root, and the SHA-256s
+    // only bind shards to the manifest that lists them — so an old-but-valid
+    // manifest (stale CDN copy, or replayed at the host) would otherwise roll
+    // every install back to older rules and hold them there. ISO-8601
+    // generatedAt strings compare correctly as strings.
+    if (
+      meta.appliedGeneratedAt &&
+      manifest.generatedAt < meta.appliedGeneratedAt
+    ) {
+      meta.lastError = `stale manifest (${manifest.generatedAt} < applied ${meta.appliedGeneratedAt})`
+      await setMeta(meta)
+      return toStatus(meta, true)
+    }
+
+    // Prune overrides for shards the manifest no longer lists: a shard whose
+    // rules were all removed upstream should fall back to the BUNDLED data,
+    // not keep serving a stale override forever (appliedHashes previously
+    // only ever grew, so a withdrawn shard was pinned until reinstall).
+    const listed = new Set(Object.keys(manifest.cosmetic.shards))
+    const orphaned = Object.keys(meta.appliedHashes).filter(
+      (i) => !listed.has(i),
+    )
+    if (orphaned.length > 0) {
+      await chrome.storage.local.remove(
+        orphaned.map((i) => cosmeticOverrideKey(Number(i))),
+      )
+      for (const i of orphaned) delete meta.appliedHashes[i]
+      invalidateShardCache(orphaned.map(Number))
+    }
 
     // Download only shards whose hash differs from what we've applied. Keying
     // off appliedHashes (not listVersion) means a shard skipped last time — a
@@ -251,6 +297,7 @@ export async function checkForUpdates(force = false): Promise<FilterUpdateStatus
       // Everything the manifest lists is already applied — the differential no-op.
       meta.listVersion = manifest.listVersion
       meta.generatedAt = manifest.generatedAt
+      meta.appliedGeneratedAt = manifest.generatedAt
       meta.lastError = null
       meta.lastSuccess = now
       await setMeta(meta)
@@ -278,6 +325,7 @@ export async function checkForUpdates(force = false): Promise<FilterUpdateStatus
 
     meta.listVersion = manifest.listVersion
     meta.generatedAt = manifest.generatedAt
+    meta.appliedGeneratedAt = manifest.generatedAt
     meta.lastSuccess = now
     meta.lastError = applied.length < changed.length ? `${changed.length - applied.length} shard(s) skipped` : null
     await setMeta(meta)

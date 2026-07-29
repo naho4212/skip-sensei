@@ -117,6 +117,10 @@ const SELECTORS = [
   // Feed cards the global sponsored-card scanner tags by their disclosure
   // label (see scanSponsoredCards).
   '.skip-sensei-sponsored-card',
+  // Overlays the AI popup reviewer judged intrusive (see popup-reviewer.ts).
+  // Hidden through the stylesheet so they're reviewable/undoable like every
+  // other hide; a 👎 filters this selector out via the rejected list.
+  '.skip-sensei-popup-hidden',
 ]
 
 /**
@@ -1445,13 +1449,15 @@ async function rejectHiddenSelector(selector: string) {
   if (
     selector === `.${EMPTY_SLOT_CLASS}` ||
     selector === `.${BRANDED_SLOT_CLASS}` ||
-    selector === `.${SPONSORED_CARD_CLASS}`
+    selector === `.${SPONSORED_CARD_CLASS}` ||
+    selector === '.skip-sensei-popup-hidden'
   ) {
     for (const el of document.querySelectorAll(selector)) {
       el.classList.remove(
         EMPTY_SLOT_CLASS,
         BRANDED_SLOT_CLASS,
         SPONSORED_CARD_CLASS,
+        'skip-sensei-popup-hidden',
       )
       el.querySelector(`:scope > .${SLOT_BRAND_CLASS}`)?.remove()
     }

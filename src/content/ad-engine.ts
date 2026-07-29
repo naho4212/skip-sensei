@@ -38,6 +38,24 @@ function looksLikeSkipControl(el: HTMLElement): boolean {
   return /skip/i.test(text)
 }
 
+/**
+ * The same content test for healed ENFORCEMENT-WALL selectors — and this one
+ * matters more, because a wall match gets `.remove()`d (plus its
+ * ytd-popup-container ancestor) and the selector is cached and re-applied on
+ * every check of every future video. `isSaneHealedSelector` alone would pass
+ * `#content`: an AI answer like that used to mean "delete a page section
+ * forever". A real wall always says something about an ad blocker.
+ */
+function looksLikeEnforcementWall(el: Element): boolean {
+  const text = (el.textContent ?? '').slice(0, 600)
+  return (
+    /ad ?blocker?|ad[-\s]?block/i.test(text) &&
+    /allow|disable|turn off|violates|terms of service|not allowed|blocked/i.test(
+      text,
+    )
+  )
+}
+
 /** Seconds → m:ss (h:mm:ss past an hour), for the recovery panel's copy. */
 function formatClock(seconds: number): string {
   const total = Math.max(0, Math.floor(seconds))
@@ -905,12 +923,19 @@ export class AdEngine {
     let message = document.querySelector(ENFORCEMENT_MESSAGE)
     if (!message) {
       for (const selector of this.wallSelectors) {
+        let candidate: Element | null = null
         try {
-          message = document.querySelector(selector)
+          candidate = document.querySelector(selector)
         } catch {
           continue
         }
-        if (message) break
+        // Re-validate at USE time, not just when healed: YouTube's DOM moves,
+        // and a cached selector that now matches something else must not get
+        // that element removed.
+        if (candidate && looksLikeEnforcementWall(candidate)) {
+          message = candidate
+          break
+        }
       }
     }
 
@@ -1137,12 +1162,18 @@ export class AdEngine {
       } catch {
         return
       }
-      if (el) {
+      // Content-validated before it's trusted: the matched element is about to
+      // be removed from the page and the selector cached for every future
+      // video, so "the AI returned a selector that matches something" is not
+      // enough — it must read like YouTube's enforcement copy.
+      if (el && looksLikeEnforcementWall(el)) {
         log('self-healed enforcement wall selector:', selector)
         if (!this.wallSelectors.includes(selector)) this.wallSelectors.push(selector)
         await addHealedSelector('enforcementWall', selector)
         this.recordHeal('enforcementWall', selector)
         this.dismissEnforcementWall() // dismiss it now via the healed selector
+      } else if (el) {
+        log('rejected healed wall selector — does not read as enforcement copy:', selector)
       }
     } catch {
       // nothing to do

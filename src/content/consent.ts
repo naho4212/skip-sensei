@@ -33,7 +33,8 @@ const CONSENT_HINTS = [
   '[data-testid*="cookie" i]',
 ]
 
-const ACCEPT_RE = /\b(accept|agree|allow all|got it|ok|okay|continue|i understand)\b/i
+const ACCEPT_RE =
+  /\b(accept|agree|allow all|got it|ok|okay|continue|i understand|subscribe|sign ?up)\b/i
 let handled = false
 
 function findBanner(): HTMLElement | null {
@@ -52,11 +53,24 @@ function findBanner(): HTMLElement | null {
 function clickReject(banner: HTMLElement, selector: string): boolean {
   let btn: HTMLElement | null = null
   try {
-    btn = banner.querySelector<HTMLElement>(selector) ?? document.querySelector<HTMLElement>(selector)
+    // BANNER-SCOPED ONLY. The selector is AI-supplied; a document-wide
+    // fallback meant a bad answer (or a page steering the model) could click
+    // ANY element on the page whose text doesn't read as "accept" —
+    // "Delete", "Buy now", whatever. Inside the banner the worst wrong click
+    // is a consent button.
+    btn = banner.querySelector<HTMLElement>(selector)
   } catch {
     return false
   }
   if (!btn || btn.offsetParent === null) return false
+  // Only click things shaped like controls — a consent choice is always a
+  // button/link, never a bare div deep in banner copy.
+  if (
+    !btn.matches(
+      'button, a, input[type="button"], input[type="submit"], [role="button"]',
+    )
+  )
+    return false
   // Never click something that reads as "accept".
   if (ACCEPT_RE.test((btn.textContent ?? '').trim())) return false
   btn.click()

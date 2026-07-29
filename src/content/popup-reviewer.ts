@@ -17,6 +17,13 @@ import { getSettings } from '../storage'
 const REVIEWED = new WeakSet<Element>()
 let observer: MutationObserver | null = null
 
+/** Hides ride the cosmetic stylesheet via this class (see cosmetic.ts), not
+ * an inline display:none — so an AI-hidden popup shows up in the popup's
+ * "Hidden ads here" review and a 👎 can undo it. An inline style was
+ * invisible to that whole recovery path: a wrong hide (a functional overlay
+ * misjudged) was permanent until the feature was switched off. */
+export const POPUP_HIDDEN_CLASS = 'skip-sensei-popup-hidden'
+
 /** Auth/functional signals — if an overlay has any, keep it without asking the AI. */
 function isFunctional(el: Element): boolean {
   if (el.querySelector('input[type="password"], input[type="email"], form')) {
@@ -79,7 +86,7 @@ async function review(el: Element) {
     .sendMessage({ type: 'skipSensei:reviewPopup', html, desc })
     .catch(() => null)
   if (hide && el.isConnected) {
-    ;(el as HTMLElement).style.setProperty('display', 'none', 'important')
+    el.classList.add(POPUP_HIDDEN_CLASS)
     log('AI hid an intrusive popup', desc)
   }
 }

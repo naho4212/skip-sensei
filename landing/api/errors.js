@@ -10,12 +10,24 @@
 
 const MAX_LIMIT = 200
 
+const { createHash, timingSafeEqual } = require('node:crypto')
+
+/** Constant-time key check (compare SHA-256s so lengths always match —
+ * timingSafeEqual throws on unequal-length inputs). */
+const keyMatches = (given, expected) =>
+  Boolean(expected) &&
+  timingSafeEqual(
+    createHash('sha256').update(String(given ?? '')).digest(),
+    createHash('sha256').update(expected).digest(),
+  )
+
 module.exports = async (req, res) => {
   const expected = process.env.ERROR_LOG_READ_KEY
+  // Prefer the Authorization header — query-string keys land in access logs.
   const given =
-    req.query.key ??
-    (req.headers.authorization ?? '').replace(/^Bearer\s+/i, '')
-  if (!expected || given !== expected) return res.status(401).end()
+    (req.headers.authorization ?? '').replace(/^Bearer\s+/i, '') ||
+    req.query.key
+  if (!keyMatches(given, expected)) return res.status(401).end()
 
   const limit = Math.min(
     parseInt(String(req.query.limit ?? '50'), 10) || 50,
