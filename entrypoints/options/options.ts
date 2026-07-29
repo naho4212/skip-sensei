@@ -477,6 +477,7 @@ const SETTING_LABELS: Record<string, string> = {
   showSkipToast: 'Skip toast',
   aiEnhancements: 'AI enhancements',
   aggressivePruning: "Block YouTube's first-party video ads",
+  rotateYtVisitorCookies: "Rotate YouTube's visitor ID",
   debugLogging: 'Debug logging',
   telemetryEnabled: 'Anonymous error reports',
   localOnlyMode: 'Local-only mode',
@@ -1003,6 +1004,25 @@ async function main() {
     el.checked = loaded[key] as boolean
     el.addEventListener('change', () => save({ [key]: el.checked }))
   }
+
+  // Visitor-ID rotation needs the optional `cookies` permission, so it can't
+  // ride the generic loop above: request on the enabling click (a valid user
+  // gesture) and snap the box back if the prompt is declined, rather than
+  // storing a setting that would silently do nothing.
+  const rotateEl = $<HTMLInputElement>('rotate-yt-visitor')
+  rotateEl.checked = loaded.rotateYtVisitorCookies
+  rotateEl.addEventListener('change', async () => {
+    if (rotateEl.checked) {
+      const granted = await chrome.permissions
+        .request({ permissions: ['cookies'] })
+        .catch(() => false)
+      if (!granted) {
+        rotateEl.checked = false
+        return
+      }
+    }
+    void save({ rotateYtVisitorCookies: rotateEl.checked })
+  })
 
   const aiEnhancementsEl = $<HTMLInputElement>('ai-enhancements')
   aiEnhancementsEl.checked = (await getSettings()).aiEnhancements

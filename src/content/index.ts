@@ -50,6 +50,17 @@ function syncEngines() {
   const onWatchPage = isWatchPage()
   const videoId = getVideoId()
 
+  // Rotate the visitor cookies the ad-blocker strike rides on, before YouTube's
+  // JS boots and fires /youtubei/v1/player — the request whose response decides
+  // whether this session gets ads or a wall. The document HTML is already in
+  // flight by now (nothing can beat that), but the player call is what matters.
+  // The service worker owns the throttle and the enabled check.
+  if (onWatchPage && settings.masterEnabled && settings.rotateYtVisitorCookies) {
+    chrome.runtime
+      .sendMessage({ type: 'skipSensei:rotateYtVisitorCookies' })
+      .catch(() => {})
+  }
+
   const adShouldRun =
     onWatchPage && settings.masterEnabled && settings.adEngineEnabled
   if (adShouldRun && !adEngine) {
