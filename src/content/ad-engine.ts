@@ -981,28 +981,33 @@ export class AdEngine {
         : ''
     body.textContent =
       'YouTube flagged this browser session for ad blocking, so it refuses to ' +
-      'play videos — reloading won’t help. Clearing its cookies lifts the flag, ' +
-      'which signs you out of YouTube.' +
+      'play videos — reloading won’t help. Clearing its cookies lifts the flag. ' +
+      'Try the first option below — it keeps you signed in, though it doesn’t ' +
+      'always work. Clearing everything always does, but signs you out.' +
       resumeNote
 
-    // Tested against a real flagged session (Jul 28): the visitor-only clear
-    // keeps the sign-in but does NOT lift the wall — the strike isn't in those
-    // cookies. So the full wipe leads, because it's the one that works, and
-    // the narrow clear stays as a labelled second option rather than a step
-    // everyone pays a reload for first.
-    // The consequence belongs ON the button. Body copy explaining it isn't
-    // enough: this is read by someone whose video just died, who wants it
-    // back, and who will click the primary action without reading a word.
-    const FULL_LABEL = 'Clear cookies & reload (signs you out)'
-    const KEEP_LABEL = 'Try without signing me out first'
-
-    const full = document.createElement('button')
-    full.className = 'hb-clear'
-    full.textContent = FULL_LABEL
+    // Order is chosen on COST, not on likelihood. Tested against a real
+    // flagged session (Jul 28) the visitor-only clear kept the sign-in but did
+    // NOT lift the wall, so it probably won't work. It still leads, because
+    // the outcomes aren't symmetric: trying it and failing costs one reload,
+    // while skipping it costs a sign-out that can't be taken back. At any
+    // non-trivial chance of success that trade is worth taking, and the wipe
+    // is one click away regardless. (v0.3.7 briefly led with the wipe on
+    // "lead with what works" reasoning — that optimised the wrong variable.)
+    //
+    // Both labels carry their consequence: this is read by someone whose video
+    // just died, who wants it back, and who will click the primary action
+    // without reading a word of the paragraph above it.
+    const KEEP_LABEL = 'Try it without signing me out'
+    const FULL_LABEL = 'Clear all cookies & reload (signs you out)'
 
     const clear = document.createElement('button')
-    clear.className = 'hb-secondary'
+    clear.className = 'hb-clear'
     clear.textContent = KEEP_LABEL
+
+    const full = document.createElement('button')
+    full.className = 'hb-secondary'
+    full.textContent = FULL_LABEL
 
     const run = (
       scope: 'visitor' | 'all',
@@ -1047,6 +1052,7 @@ export class AdEngine {
         'does lift it, at the cost of signing you out of YouTube.' +
         resumeNote
       clear.remove()
+      full.className = 'hb-clear'
     })
 
     const dismiss = document.createElement('button')
@@ -1067,7 +1073,7 @@ export class AdEngine {
     sensei.textContent = 'SENSEI'
     brand.append(ad, sensei)
 
-    panel.append(title, body, full, clear, dismiss, brand)
+    panel.append(title, body, clear, full, dismiss, brand)
     host.appendChild(panel)
   }
 
