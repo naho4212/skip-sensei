@@ -1,6 +1,6 @@
 {
   "name": "skip-sensei",
-  "version": "0.3.12",
+  "version": "0.3.13",
   "private": true,
   "description": "Block ads and trackers across the web — plus in-video ads and AI-detected sponsor segments on YouTube.",
   "type": "module",

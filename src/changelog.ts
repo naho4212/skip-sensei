@@ -15,6 +15,16 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.3.13',
+    date: '2026-07-29',
+    items: [
+      'Cookie-banner auto-reject is now strictly limited to the banner itself, so it can only ever click a consent choice — never something else on the page',
+      'Popups the AI hides now show up in “Hidden ads here”, so a 👎 brings one back if it judged wrong',
+      'Filter-list updates can’t be rolled back to older rules by a stale copy of the update file, and rules withdrawn upstream now properly fall away',
+      'The YouTube ad-blocker-wall workaround only acts on an element that genuinely is the wall, so a bad guess can’t remove part of the page',
+    ],
+  },
+  {
     version: '0.3.12',
     date: '2026-07-29',
     items: [
