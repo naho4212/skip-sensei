@@ -395,17 +395,36 @@ export async function auditHiddenElements(
   }
 }
 
-const POPUP_SYSTEM_PROMPT = `You decide whether an on-page overlay/popup should be hidden. HIDE only intrusive annoyances: newsletter/email-signup walls, promotional/discount popups, "subscribe" interstitials, app-install nags, survey/feedback popups, and popup/overlay ADS. KEEP (do not hide) anything functional or that the user may need: login/sign-in dialogs, authentication (OAuth), cookie/consent choices, age verification, payment/checkout, error or confirmation dialogs, and the site's actual content. When unsure, KEEP. Respond with ONLY JSON: {"hide": true|false, "summary": "<neutral 3-8 word description of what the popup is, e.g. 'Newsletter signup asking for email', 'Cookie consent banner', 'Login dialog', '20% discount promo'>"}. No prose.`
+const POPUP_SYSTEM_PROMPT = `You decide whether an on-page overlay/popup should be hidden. HIDE only intrusive annoyances: newsletter/email-signup walls, promotional/discount popups, "subscribe" interstitials, app-install nags, survey/feedback popups, and popup/overlay ADS. KEEP (do not hide) anything functional or that the user may need: login/sign-in dialogs, authentication (OAuth), cookie/consent choices, age verification, payment/checkout, error/confirmation/notification dialogs (e.g. "your time zone changed", "session expiring"), and the site's actual content. If the visible text is missing, truncated, or you cannot POSITIVELY identify the popup as one of the HIDE categories, you are unsure — KEEP. Respond with ONLY JSON: {"hide": true|false, "category": "<one of: newsletter|promo|ad|app-install|survey|subscribe-wall|functional|content|unknown>", "summary": "<neutral 3-8 word description of what the popup is, e.g. 'Newsletter signup asking for email', 'Cookie consent banner', 'Login dialog', '20% discount promo'>"}. No prose.`
+
+/** Categories the model may name that actually justify hiding. A hide verdict
+ * with any other category (functional/content/unknown, or garbage) is treated
+ * as "unsure" and kept — this makes the prompt's "when unsure, KEEP" a hard
+ * guarantee instead of a suggestion. */
+const POPUP_HIDE_CATEGORIES = new Set([
+  'newsletter',
+  'promo',
+  'ad',
+  'app-install',
+  'survey',
+  'subscribe-wall',
+])
 
 /** Decide whether an overlay is an intrusive annoyance (hide) or functional (keep). */
 export async function reviewPopup(
   html: string,
+  text: string,
   settings: Settings,
   signal: AbortSignal,
 ): Promise<{ hide: boolean; summary: string }> {
+  // Lead with the extracted visible text: deeply nested DOMs (Google apps
+  // especially) can bury the human-readable content past any sane HTML-prefix
+  // budget, and a review that never saw the words "Your time zone changed"
+  // once hid exactly that dialog.
+  const visible = text.trim().slice(0, 1500)
   const raw = await completeSmart(
     POPUP_SYSTEM_PROMPT,
-    `Overlay HTML:\n${html.slice(0, 4000)}`,
+    `Visible text of the overlay:\n${visible || '(none extracted)'}\n\nOverlay HTML:\n${html.slice(0, 4000)}`,
     settings,
     signal,
   )
@@ -415,8 +434,10 @@ export async function reviewPopup(
   if (first === -1 || last <= first) return { hide: false, summary: '' }
   try {
     const obj = JSON.parse(cleaned.slice(first, last + 1))
+    const category =
+      typeof obj.category === 'string' ? obj.category.trim().toLowerCase() : ''
     return {
-      hide: obj.hide === true,
+      hide: obj.hide === true && POPUP_HIDE_CATEGORIES.has(category),
       summary: typeof obj.summary === 'string' ? obj.summary.trim().slice(0, 80) : '',
     }
   } catch {

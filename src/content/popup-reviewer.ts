@@ -79,11 +79,18 @@ async function review(el: Element) {
   if (isFunctional(el)) return // never touch logins / consent / checkout
 
   const html = (el as HTMLElement).outerHTML.slice(0, 4000)
+  // Extracted visible text goes with the HTML: on deeply nested DOMs the
+  // 4000-char HTML prefix is often all wrapper markup, and the AI must never
+  // judge an overlay whose actual words it hasn't seen.
+  const text = ((el as HTMLElement).innerText ?? '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 1500)
   // Pass a short label so the service worker's activity entry (logged for both
   // the hide and keep outcomes) can say WHAT was reviewed, not just that one was.
   const desc = describePopup(el)
   const hide: boolean | null = await chrome.runtime
-    .sendMessage({ type: 'skipSensei:reviewPopup', html, desc })
+    .sendMessage({ type: 'skipSensei:reviewPopup', html, text, desc })
     .catch(() => null)
   if (hide && el.isConnected) {
     el.classList.add(POPUP_HIDDEN_CLASS)
