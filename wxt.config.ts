@@ -18,7 +18,12 @@ export default defineConfig({
     disabled: true,
   },
   manifest: {
-    name: 'Ad Sensei',
+    // Store-search keywords ride the name (the heaviest-weighted field);
+    // "for YouTube™" at the END is the nominative-fair-use pattern Featured
+    // competitors use (SponsorBlock for YouTube). Decided pre-first-publish —
+    // renaming after publish is a malware-correlated signal (see
+    // docs/cws-submission.md "Listing identity discipline").
+    name: 'Ad Sensei — AI Ad Blocker for All Ads & YouTube™ Sponsor Skip',
     // Leads with the web-wide single purpose; YouTube is that purpose applied
     // to one site (see docs/cws-submission.md — trademark-in-listing risk).
     description:

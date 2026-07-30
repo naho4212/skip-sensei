@@ -437,7 +437,8 @@ export type Message =
     } // → number[] | null: indexes the AI is CERTAIN are not ads; [] = judged,
   //   everything stays hidden; null = NO VERDICT — retry later, never cache
   //   as a definitive 'ad'
-  | { type: 'skipSensei:reviewPopup'; html: string; desc?: string } // → boolean (hide this overlay?)
+  | { type: 'skipSensei:reviewPopup'; html: string; text?: string; desc?: string } // → boolean (hide this overlay?)
+  | { type: 'skipSensei:uiUsage'; counter: string } // bump a UI-usage daily counter (fire-and-forget)
   | { type: 'skipSensei:logActivity'; feature: string; action: string } // content-script action → activity log
   | { type: 'skipSensei:findConsentReject'; html: string } // → string | null (reject-button selector)
   // Storage writers routed from content scripts to the SW, where one write

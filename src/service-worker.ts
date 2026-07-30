@@ -40,7 +40,12 @@ import { withResumeTime } from './resume'
 import { initTelemetryRollup } from './telemetry-rollup'
 import { isColdStart, runColdStart } from './lifecycle'
 import { fetchSponsorBlockSegments } from './sponsorblock'
-import { initErrorReporting, reportError, reportEvent } from './error-reporting'
+import {
+  getInstallId,
+  initErrorReporting,
+  reportError,
+  reportEvent,
+} from './error-reporting'
 import {
   clearYtBackoff,
   deleteCachedAnalysis,
@@ -49,6 +54,7 @@ import {
   getSettings,
   incrementStat,
   bumpDailyCounter,
+  type DailyCounter,
   recordActivity,
   recordAdblockWall,
   recordCorrection,
@@ -58,9 +64,11 @@ import {
   setCachedAnalysis,
   updateSettings,
   setYtBackoff,
+  onSettingsChanged,
 } from './storage'
 import {
   ANALYSIS_VERSION,
+  DEFAULT_SETTINGS,
   type BlockBreakdown,
   type LlmProvider,
   type Message,
@@ -402,9 +410,36 @@ async function findConsent(html: string): Promise<string | null> {
   }
 }
 
+/**
+ * UI-usage counters, routed here so the ONE storage chain (this context's)
+ * serializes all writers — the popup's and options page's own module
+ * instances would race it otherwise. Names are validated against a closed
+ * set: fixed counters, or `uiSet_<key>` for a real Settings key. Anything
+ * else is dropped, so the message surface can't be used to pollute rollups.
+ */
+const UI_USAGE_COUNTERS = new Set([
+  'uiPopupOpens',
+  'uiControlsTab',
+  'uiOptionsOpens',
+  'uiSitePauses',
+  'uiShares',
+])
+
+function bumpUiUsage(counter: string): void {
+  if (UI_USAGE_COUNTERS.has(counter)) {
+    void bumpDailyCounter(counter as DailyCounter)
+    return
+  }
+  if (counter.startsWith('uiSet_')) {
+    const key = counter.slice('uiSet_'.length)
+    if (key in DEFAULT_SETTINGS) void bumpDailyCounter(counter as DailyCounter)
+  }
+}
+
 /** AI popup review: is this overlay an intrusive annoyance (hide) or functional (keep)? */
 async function reviewPopupMsg(
   html: string,
+  text: string,
   host?: string,
   desc?: string,
 ): Promise<boolean> {
@@ -412,7 +447,7 @@ async function reviewPopupMsg(
   if (!settings.aiEnhancements) return false
   const controller = new AbortController()
   try {
-    const { hide, summary } = await reviewPopup(html, settings, controller.signal)
+    const { hide, summary } = await reviewPopup(html, text, settings, controller.signal)
     // Prefer the AI's content summary ("Newsletter signup…"); fall back to the
     // content script's structural label (tag + size) if the model gave none.
     const content = summary || desc || ''
@@ -655,6 +690,9 @@ chrome.runtime.onMessage.addListener(
       case 'skipSensei:logActivity':
         void recordActivity(message.feature, message.action, senderHost(sender))
         return false
+      case 'skipSensei:uiUsage':
+        bumpUiUsage(message.counter)
+        return false
       // Storage writers routed here from content scripts so ONE chain (this
       // context's) serializes them — each tab's own module instance would
       // otherwise read-modify-write the shared keys against every other tab.
@@ -810,9 +848,12 @@ chrome.runtime.onMessage.addListener(
         void auditHidden(message.candidates, message.page).then(sendResponse)
         return true
       case 'skipSensei:reviewPopup':
-        void reviewPopupMsg(message.html, senderHost(sender), message.desc).then(
-          sendResponse,
-        )
+        void reviewPopupMsg(
+          message.html,
+          message.text ?? '',
+          senderHost(sender),
+          message.desc,
+        ).then(sendResponse)
         return true
       case 'skipSensei:findConsentReject':
         void findConsent(message.html).then(sendResponse)
@@ -1032,3 +1073,21 @@ void (async () => {
 // Sanitized crash reporting for anything nobody caught (usage analytics come
 // from Chrome Web Store stats, not from the extension).
 initErrorReporting()
+
+// Post-uninstall goodbye page (reinstall CTA + optional exit survey). Consent-
+// gated, not a tracker: the URL carries the version and the same random
+// install id ONLY while the diagnostics toggle is on; with diagnostics off or
+// Local-only mode on, the URL is cleared and no page opens on uninstall —
+// disclosed in the privacy policy (§3). Re-synced on every settings change so
+// flipping the toggle takes effect immediately.
+const GOODBYE_URL = 'https://www.singlefinmedia.com/ad-sensei/goodbye'
+async function syncUninstallUrl(): Promise<void> {
+  const settings = await getSettings()
+  const url =
+    settings.telemetryEnabled && !settings.localOnlyMode
+      ? `${GOODBYE_URL}?v=${chrome.runtime.getManifest().version}&iid=${await getInstallId()}`
+      : ''
+  await chrome.runtime.setUninstallURL(url)
+}
+void syncUninstallUrl().catch(() => {})
+onSettingsChanged(() => void syncUninstallUrl().catch(() => {}))

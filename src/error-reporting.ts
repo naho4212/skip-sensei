@@ -40,7 +40,7 @@ const MAX_ERRORS_PER_HOUR = 5
 /** Operational events are cheaper/rarer than errors but allow a few more. */
 const MAX_EVENTS_PER_HOUR = 20
 
-async function getInstallId(): Promise<string> {
+export async function getInstallId(): Promise<string> {
   const result = await chrome.storage.local.get(INSTALL_ID_KEY)
   const existing = result[INSTALL_ID_KEY]
   if (typeof existing === 'string' && existing) return existing

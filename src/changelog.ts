@@ -15,6 +15,16 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.3.14',
+    date: '2026-07-29',
+    items: [
+      'The AI now reads a popup’s actual text before hiding it, and only hides what it can positively identify as a promo, newsletter, survey, or ad — functional dialogs (like a “time zone changed” notice) stay put',
+      'New support page: Settings → About → “Contact support” opens a short form for questions, bugs, and ideas',
+      'Anonymous daily usage counts (which of Ad Sensei’s own buttons and toggles get used — never which sites you visit) now help guide UI improvements, under the same diagnostics switch, detailed in the updated privacy policy',
+      'Uninstalling now opens a brief goodbye page with an optional exit survey (only when diagnostics are on)',
+    ],
+  },
+  {
     version: '0.3.13',
     date: '2026-07-29',
     items: [
