@@ -80,8 +80,8 @@ which the extensions page shows; keep the two in sync):
 > AI THAT STAYS ON YOUR DEVICE
 > Sponsor detection and the other AI helpers prefer Chrome's built-in
 > on-device model, which sends nothing anywhere. You can point them at your
-> own provider key instead (Gemini, Claude, OpenAI, Groq, OpenRouter, or a
-> local Ollama server) if you prefer. Either way there's no subscription and
+> own AI provider's API key instead — any major cloud provider or a local
+> self-hosted model — if you prefer. Either way there's no subscription and
 > no server of ours in the loop.
 >
 > SMALL PERMISSIONS BY DEFAULT

@@ -190,7 +190,7 @@ ${brand}
   ${[
     [aiSpark, 'Transcript-based sponsor detection', 'AI reads what’s actually said to find paid segments — precision-first, so it never cuts real content.'],
     [aiHeal, 'Self-healing selectors', 'When YouTube changes its layout and breaks skipping, the AI re-finds the button and caches the fix. No update needed.'],
-    [aiLock, '100% client-side, $0', 'No backend, no account, no card. Chrome’s built-in AI by default — or bring your own free key, or run fully local with Ollama.'],
+    [aiLock, '100% client-side, $0', 'No backend, no account, no card. Chrome’s built-in AI by default — or bring your own free key, or run a fully local model.'],
     [aiShield, 'No tracking, ever', 'We don’t build a profile, sell data, or inject affiliate links — and a one-switch local-only mode means zero external calls.'],
   ].map(([ic, t, d]) => `
     <div class="card" style="display:flex;gap:18px;align-items:flex-start;padding:26px 26px">
