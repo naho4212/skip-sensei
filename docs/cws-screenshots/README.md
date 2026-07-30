@@ -14,10 +14,12 @@ headless Chrome at 2× then downscaled for crisp text.
 | `4-ai-private.png` | 1280×800 | Screenshot — "Smart. Private. Free." (AI + privacy) |
 | `5-popup.png` | 1280×800 | Screenshot — the real popup UI ("This site" view) |
 | `promo-tile-440x280.png` | 440×280 | Small promo tile (search/category results) |
+| `marquee-1400x560.png` | 1400×560 | Marquee promo tile (required for the automated Featured-badge check — an empty slot disqualifies) |
 
 Screenshots are 1280×800 (CWS's preferred size), exactly five — CWS's maximum —
 uploaded in file order, and every tile carries the AI thread where it's real.
-A ready-to-upload copy is staged in `~/Desktop/cws-screenshots/submit/`.
+Upload directly from this directory (the old `~/Desktop/cws-screenshots/submit/`
+staging copy no longer exists).
 The popup tile mirrors the real `entrypoints/popup` "This site" view — keep it
 in sync if the popup UI changes materially.
 
@@ -29,7 +31,8 @@ To rebuild:
 ```
 node gen.mjs <output-dir>          # writes slide-1.html … slide-6.html
 # render each at --window-size=1280,800 --force-device-scale-factor=2,
-# then downscale to 1280×800 (e.g. `sips -z 800 1280`). promo.html uses 440×280.
+# then downscale to 1280×800 (e.g. `sips -z 800 1280`). promo.html uses 440×280;
+# marquee.html uses 1400×560 (render 2×, then `sips -z 560 1400`).
 ```
 
 Brand: Roboto / Roboto Mono, `#7c3aed` purple, two-tone Ad Sensei wordmark and

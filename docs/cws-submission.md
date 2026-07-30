@@ -32,14 +32,17 @@ as if they were separate products.
 
 | Field | Value |
 |---|---|
-| Item name | `Ad Sensei` (no "YouTube" — trademark in a listing title reads as implied affiliation) |
+| Item name | `Ad Sensei — AI Ad Blocker for All Ads & YouTube™ Sponsor Skip` (61 chars; mirrors `manifest.name`). Supersedes the earlier no-"YouTube" stance: live SERPs show Featured extensions using nominative "for YouTube™" at the END of the name (SponsorBlock for YouTube, SkipSponsor). Leading with "YouTube" would still read as implied affiliation — don't. |
 | Category | **Privacy & Security** |
 | Language | English (United States) |
 | Homepage URL | `https://www.singlefinmedia.com/ad-sensei` |
-| Support URL | `https://github.com/naho4212/skip-sensei/issues` |
+| Support URL | `https://www.singlefinmedia.com/ad-sensei/support` (hosted contact form; GitHub issues linked from it) |
 | Support email | `info@singlefinmedia.com` (matches the options → About contact link) |
 | Visibility | Public, all regions |
 | Pricing | Free, no in-app purchases |
+| Screenshots | 5 in `docs/cws-screenshots/` (1280×800), built by `gen.mjs` |
+| Small promo tile | `docs/cws-screenshots/promo-tile-440x280.png` — upload it; an empty tile slot disqualifies the automated Featured-badge check |
+| Marquee promo tile | `docs/cws-screenshots/marquee-1400x560.png` — also required for the Featured check ("it only shows if featured" inverts causality; an empty slot is what prevents featuring) |
 
 **Summary / short description** (132 char max — mirrors `manifest.description`,
 which the extensions page shows; keep the two in sync):
@@ -99,6 +102,29 @@ limits paragraph is deliberate — "zero ads" / "never think about an ad again"
 style copy is a misleading-claims risk and was already scrubbed from the
 landing page. Keep the two in sync.
 
+**Listing identity discipline** (from the Jan-2025 CWS-search-abuse exposé and
+the MADWeb 2026 cross-store study — name/author churn is a measured
+malware-correlated signal that automated triage now keys on):
+
+- **No renames after first publish.** If "Ad Sensei" is ever going to change,
+  change it BEFORE submission (the `wxt.config.ts` single-string affordance is
+  for that moment, not for post-publish rebrands).
+- **No competitor names anywhere in the listing** — "alternative to
+  uBlock/AdBlock" copy is the exact placement-manipulation pattern CWS policy
+  bans, even when it's honest positioning.
+- **If the listing is ever localized, translate faithfully.** Localized
+  descriptions are in a public dataset that researchers scan for
+  keyword-stuffed pseudo-translations; a sloppy machine translation with
+  English keywords left in pattern-matches to the abuse clusters.
+- **If an Edge Add-ons port ever happens:** identical extension name,
+  publisher name, and description, same support email — cross-store detail
+  divergence is what evasive actors do to break counterpart mapping, and
+  tooling now flags it.
+- **Never add Google Analytics (or any third-party analytics) to the
+  extension.** GA-as-camouflage is a documented exfiltration pattern in
+  malicious extensions; all telemetry stays first-party, disclosed, on the
+  `reportEvent` chokepoint.
+
 ---
 
 ## Permission justifications
@@ -124,6 +150,16 @@ It reads only match counts, not request contents.
 
 **alarms** — Schedules the periodic check for updated ad-filter rules (see the
 Website-content data note below). Only used to time that background check.
+
+**cookies (optional)** — Requested at runtime, only when the user clicks a
+"clear this site's cookies" recovery button (lifting an ad-blocker-detection
+wall). Cookies are enumerated solely to DELETE them in that user-initiated
+action; cookie values are never read for any other purpose, never stored, and
+never leave the browser. The base install holds no cookie access.
+*Reviewer context: `chrome.cookies.getAll` is a known exfiltration-pattern API
+(published malware case studies steal session cookies with it), so expect this
+one to be scrutinized — the justification above should be pasted verbatim, and
+the code path (`src/cookies.ts`) shows enumerate→remove with no network write.*
 
 ---
 
@@ -187,11 +223,15 @@ Optional (one toggle), off in Local-only mode.
 > violation and far worse than the disclosure itself. If the `host`/`domain`
 > fields are ever removed, flip this back to No — and not before.
 
-**User activity (analytics):** Yes, limited and optional — anonymous, scrubbed
-crash/adaptation diagnostics (extension version, coarse browser tag, selected
-provider name, scrubbed error text, the CSS selectors involved in an
-ad-detection event, a random install id). Off in Local-only mode and
-toggleable. No page titles, keys, or personal data.
+**User activity (analytics):** Yes, limited and optional — (a) anonymous,
+scrubbed crash/adaptation diagnostics (extension version, coarse browser tag,
+selected provider name, scrubbed error text, the CSS selectors involved in an
+ad-detection event, a random install id); (b) one aggregate report per day of
+how the extension's OWN interface was used — popup opens, which of its tabs,
+toggles, and buttons were clicked (setting names only, never typed values) —
+to guide UI improvements. Both ride the same consent toggle, off in Local-only
+mode. The usage counts cover Ad Sensei's controls only — never which sites the
+user visits. No page titles, keys, or personal data.
 **Website content:** Yes — (a) a YouTube video transcript is sent to the user's
 chosen AI provider for sponsor detection, only when a cloud provider is
 selected (never with on-device/local AI or in Local-only mode); (b) for the
@@ -217,7 +257,7 @@ the privacy policy (section 4).
 - Data is NOT used or transferred for advertising or creditworthiness.
 - Data use is limited to providing the user-facing features.
 
-**Privacy policy URL:** https://www.singlefinmedia.com/ad-sensei/privacy.html
+**Privacy policy URL:** https://www.singlefinmedia.com/ad-sensei/privacy
 
 All three outbound hosts now sit on this same origin — telemetry
 (`src/error-reporting.ts`), filter updates (`src/filter-updates.ts`), and the
