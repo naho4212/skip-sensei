@@ -24,6 +24,10 @@ const TEXT_FIELDS = {
 const MAX_FIELDS = 12
 const MAX_FIELD_KEY = 40
 const MAX_FIELD_VALUE = 300
+// The support form's message body is the one field that legitimately runs
+// long (kind: "contact", also uninstall-survey notes); everything else stays
+// at the tight default.
+const FIELD_VALUE_OVERRIDES = { message: 2000 }
 
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -61,7 +65,8 @@ module.exports = async (req, res) => {
     for (const [key, value] of Object.entries(body.fields)) {
       if (n >= MAX_FIELDS) break
       if (typeof value !== 'string' || !value) continue
-      fields[String(key).slice(0, MAX_FIELD_KEY)] = value.slice(0, MAX_FIELD_VALUE)
+      const cap = FIELD_VALUE_OVERRIDES[key] ?? MAX_FIELD_VALUE
+      fields[String(key).slice(0, MAX_FIELD_KEY)] = value.slice(0, cap)
       n++
     }
     record.fields = fields

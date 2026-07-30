@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Ad Sensei has been uninstalled</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --accent: #7c3aed;
+        --accent-2: #6d28d9;
+      }
+      body {
+        font-family: -apple-system, Roboto, Arial, sans-serif;
+        line-height: 1.6;
+        color: #1a1a1a;
+        background: #fff;
+        max-width: 720px;
+        margin: 0 auto;
+        padding: 48px 24px 96px;
+      }
+      @media (prefers-color-scheme: dark) {
+        body {
+          color: #e8e8e8;
+          background: #111;
+        }
+      }
+      h1 {
+        font-size: 28px;
+        letter-spacing: -0.02em;
+        margin-bottom: 4px;
+      }
+      h2 {
+        font-size: 19px;
+        margin-top: 40px;
+      }
+      a {
+        color: var(--accent);
+      }
+      a.brand { text-decoration: none; color: inherit; }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 32px;
+        font-weight: 700;
+        font-size: 20px;
+      }
+      .brand .mark {
+        display: grid;
+        place-items: center;
+        width: 34px;
+        height: 34px;
+        border-radius: 9px;
+        background: linear-gradient(150deg, var(--accent), var(--accent-2));
+      }
+      .brand b {
+        color: var(--accent);
+      }
+      .reinstall {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        flex-wrap: wrap;
+        border: 1px solid rgba(124, 58, 237, 0.35);
+        border-radius: 12px;
+        padding: 18px 20px;
+        background: rgba(124, 58, 237, 0.05);
+        margin: 28px 0 8px;
+      }
+      .reinstall strong {
+        font-size: 17px;
+      }
+      .btn {
+        display: inline-block;
+        background: linear-gradient(150deg, var(--accent), var(--accent-2));
+        color: #fff;
+        font-weight: 600;
+        padding: 10px 22px;
+        border-radius: 10px;
+        text-decoration: none;
+        border: 0;
+        font-size: 15px;
+        cursor: pointer;
+      }
+      .btn:hover {
+        filter: brightness(1.08);
+      }
+      form {
+        margin-top: 8px;
+      }
+      label.reason {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 9px 4px;
+        cursor: pointer;
+      }
+      label.reason input {
+        margin-top: 4px;
+        accent-color: var(--accent);
+      }
+      textarea {
+        width: 100%;
+        box-sizing: border-box;
+        margin-top: 12px;
+        padding: 10px 12px;
+        border-radius: 10px;
+        border: 1px solid rgba(128, 128, 128, 0.4);
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        min-height: 72px;
+        resize: vertical;
+      }
+      .submit-row {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        margin-top: 16px;
+      }
+      .hint {
+        color: #888;
+        font-size: 13px;
+      }
+      #thanks {
+        display: none;
+        margin-top: 16px;
+        font-weight: 600;
+        color: var(--accent);
+      }
+      footer {
+        margin-top: 56px;
+        font-size: 13px;
+        color: #888;
+      }
+    </style>
+  </head>
+  <body>
+    <a class="brand" href="https://www.singlefinmedia.com/ad-sensei">
+      <span class="mark"
+        ><svg viewBox="0 0 92 60" width="16" height="10.4" fill="#fff" aria-hidden="true">
+          <polygon points="0,0 34,30 0,60" />
+          <polygon points="38,0 72,30 38,60" />
+          <rect x="80" y="0" width="12" height="60" rx="5" /></svg
+      ></span>
+      <span>Ad<b>Sensei</b></span>
+    </a>
+
+    <h1>Ad Sensei has been uninstalled</h1>
+    <p>All data the extension stored in your browser was removed with it.</p>
+
+    <div class="reinstall">
+      <strong>Didn't mean to uninstall?</strong>
+      <a class="btn" href="https://www.singlefinmedia.com/ad-sensei">Reinstall Ad Sensei</a>
+    </div>
+
+    <h2>Sorry to see you go</h2>
+    <p>
+      Would you take a second to say why? One click helps us fix the right
+      things — the survey is optional and anonymous.
+    </p>
+
+    <form id="survey">
+      <label class="reason"><input type="radio" name="reason" value="still-saw-ads" /> I was still seeing ads</label>
+      <label class="reason"><input type="radio" name="reason" value="yt-ads-not-skipped" /> YouTube ads weren't skipped (or skipped too slowly)</label>
+      <label class="reason"><input type="radio" name="reason" value="sponsor-skip-wrong" /> Sponsor skipping was wrong or annoying</label>
+      <label class="reason"><input type="radio" name="reason" value="site-broke" /> A website broke or my browser slowed down</label>
+      <label class="reason"><input type="radio" name="reason" value="asked-to-disable" /> Sites kept asking me to disable my ad blocker</label>
+      <label class="reason"><input type="radio" name="reason" value="too-complicated" /> Too complicated, or I couldn't find a setting</label>
+      <label class="reason"><input type="radio" name="reason" value="privacy" /> Privacy concerns</label>
+      <label class="reason"><input type="radio" name="reason" value="different-blocker" /> I'm using a different ad blocker</label>
+      <label class="reason"><input type="radio" name="reason" value="temporary" /> Just testing / I'll be back</label>
+      <label class="reason"><input type="radio" name="reason" value="other" /> Another reason</label>
+      <textarea
+        id="note"
+        maxlength="280"
+        placeholder="Anything else you'd like us to know? (optional)"
+      ></textarea>
+      <div class="submit-row">
+        <button class="btn" type="submit">Submit</button>
+        <span class="hint"
+          >Sends only your selection, this note, and the extension
+          version.</span
+        >
+      </div>
+      <div id="thanks">Thank you — noted.</div>
+    </form>
+
+    <footer>
+      <a href="https://www.singlefinmedia.com/ad-sensei">Ad Sensei</a> · <a href="https://www.singlefinmedia.com/ad-sensei/privacy">Privacy Policy</a> ·
+      <a href="https://www.singlefinmedia.com/ad-sensei/terms">Terms of Service</a> ·
+      <a href="https://www.singlefinmedia.com/ad-sensei/support">Support</a> ·
+      <a href="mailto:info@singlefinmedia.com">info@singlefinmedia.com</a>
+    </footer>
+
+    <script>
+      // Survey POST reuses the extension's /api/event collector (same origin
+      // as this page). The uninstall URL carries ?v=<version>&iid=<installId>
+      // — set only when the user had diagnostics on; both are validated here
+      // and fall back to anonymous placeholders.
+      const params = new URLSearchParams(location.search)
+      const VERSION_RE = /^[\w.-]{1,32}$/
+      const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+      const version = VERSION_RE.test(params.get('v') || '') ? params.get('v') : '0'
+      const installId = UUID_RE.test(params.get('iid') || '')
+        ? params.get('iid')
+        : crypto.randomUUID()
+
+      document.getElementById('survey').addEventListener('submit', async (e) => {
+        e.preventDefault()
+        const reason = document.querySelector('input[name="reason"]:checked')
+        const note = document.getElementById('note').value.trim().slice(0, 280)
+        if (!reason && !note) return
+        const fields = { reason: reason ? reason.value : 'note-only' }
+        if (note) fields.note = note
+        try {
+          await fetch('api/event', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              event: 'app_event',
+              kind: 'uninstall_feedback',
+              install_id: installId,
+              app_version: version,
+              fields,
+            }),
+          })
+        } catch {}
+        document.getElementById('thanks').style.display = 'block'
+        e.target.querySelector('button[type="submit"]').disabled = true
+      })
+    </script>
+  </body>
+</html>

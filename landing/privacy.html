@@ -1,4 +1,4 @@
-what i<!doctype html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -80,11 +80,41 @@ what i<!doctype html>
         color: #888;
         font-weight: 600;
       }
+      a.brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 32px;
+        font-weight: 700;
+        font-size: 20px;
+        text-decoration: none;
+        color: inherit;
+      }
+      a.brand .mark {
+        display: grid;
+        place-items: center;
+        width: 34px;
+        height: 34px;
+        border-radius: 9px;
+        background: linear-gradient(150deg, var(--accent), #6d28d9);
+      }
+      a.brand b {
+        color: var(--accent);
+      }
     </style>
   </head>
   <body>
+    <a class="brand" href="https://www.singlefinmedia.com/ad-sensei">
+      <span class="mark"
+        ><svg viewBox="0 0 92 60" width="16" height="10.4" fill="#fff" aria-hidden="true">
+          <polygon points="0,0 34,30 0,60" />
+          <polygon points="38,0 72,30 38,60" />
+          <rect x="80" y="0" width="12" height="60" rx="5" /></svg
+      ></span>
+      <span>Ad<b>Sensei</b></span>
+    </a>
     <h1>Ad Sensei — Privacy Policy</h1>
-    <p class="updated">Last updated: 10 July 2026</p>
+    <p class="updated">Last updated: 29 July 2026</p>
 
     <p class="lead">
       Ad Sensei is a browser extension that skips YouTube ads and AI-detected
@@ -102,7 +132,7 @@ what i<!doctype html>
       provider <em>you</em> choose, and only if you pick a cloud provider (with
       Chrome's on-device AI available, these never leave your device); (2) a
       privacy-preserving, <em>hashed</em> SponsorBlock lookup; and (3) optional,
-      anonymous crash diagnostics you can turn off. Turn on
+      anonymous diagnostics and daily usage counts you can turn off. Turn on
       <strong>Local-only mode</strong> and nothing leaves your browser at all.
     </div>
 
@@ -219,6 +249,17 @@ what i<!doctype html>
       random install identifier that is not linked to you.
     </p>
     <p>
+      With diagnostics on, the extension also sends <strong>one aggregate
+      report per day</strong> containing counts of how Ad Sensei's own
+      interface was used — how many times its popup was opened, which of its
+      tabs, toggles, and buttons were used (setting names only, never values
+      you typed) — plus daily totals of its blocking activity. We use these
+      counts to decide what to improve in the UI. They describe the
+      extension's own controls only: they never include which sites you
+      visited or anything from a page, and they carry the same random install
+      identifier described above.
+    </p>
+    <p>
       <strong>Ad-detection events also include the bare domain of the page the
       event happened on</strong> — for example <code>example.com</code>, never
       <code>example.com/the/page?you=viewed</code>. We collect it because a
@@ -235,6 +276,13 @@ what i<!doctype html>
       your name, email, IP-derived identity, or any other personal information.
       You can turn this off at any time under Settings → AI &amp; privacy, and
       it is always off in Local-only mode.
+    </p>
+    <p>
+      <strong>Uninstall page.</strong> With diagnostics on, uninstalling the
+      extension opens a short goodbye page whose address includes the extension
+      version and the same random install identifier. The feedback survey on
+      that page is entirely optional. With diagnostics off — or in Local-only
+      mode — no page opens on uninstall.
     </p>
 
     <h2>4. Filter-list updates (optional)</h2>
@@ -312,6 +360,12 @@ what i<!doctype html>
       We will update this page if our data practices change and revise the date
       above. Questions? Contact
       <a href="mailto:info@singlefinmedia.com">info@singlefinmedia.com</a>.
+    </p>
+
+    <p style="margin-top:40px;font-size:13px;color:#888">
+      <a href="https://www.singlefinmedia.com/ad-sensei">Ad Sensei</a> · <a href="https://www.singlefinmedia.com/ad-sensei/terms">Terms of Service</a> ·
+      <a href="https://www.singlefinmedia.com/ad-sensei/support">Support</a> ·
+      <a href="mailto:info@singlefinmedia.com">info@singlefinmedia.com</a>
     </p>
   </body>
 </html>
