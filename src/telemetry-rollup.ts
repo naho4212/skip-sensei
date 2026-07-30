@@ -129,6 +129,22 @@ export async function sendDailyRollup(): Promise<boolean> {
     clear_visitor_tried: String(counts.visitorClearTried ?? 0),
     clear_visitor_failed: String(counts.visitorClearFailed ?? 0),
     clear_full: String(counts.fullClears ?? 0),
+    // UI usage: how the extension's OWN controls get used — "does anyone find
+    // the Controls tab", not what anyone browsed. The adoption booleans above
+    // give the end state; these give the day's interactions.
+    ui_popup_open: String(counts.uiPopupOpens ?? 0),
+    ui_tab_controls: String(counts.uiControlsTab ?? 0),
+    ui_options_open: String(counts.uiOptionsOpens ?? 0),
+    ui_site_pause: String(counts.uiSitePauses ?? 0),
+    ui_share: String(counts.uiShares ?? 0),
+  }
+  // Per-setting change counts (uiSet_<key>, key validated against Settings at
+  // bump time). Only days that saw a change carry the field, keeping the
+  // common all-zero rollup small.
+  for (const [name, n] of Object.entries(counts)) {
+    if (!name.startsWith('uiSet_')) continue
+    const key = `ui_set_${name.slice(6).replace(/[^a-zA-Z0-9]/g, '').toLowerCase()}`
+    fields[key.slice(0, 40)] = String(n ?? 0)
   }
 
   const attempted = await reportEvent('daily_rollup', fields)

@@ -533,7 +533,7 @@ const SETTING_LABELS: Record<string, string> = {
   aggressivePruning: "Block YouTube's first-party video ads",
   resumePlayback: 'Resume videos where you left off',
   debugLogging: 'Debug logging',
-  telemetryEnabled: 'Anonymous error reports',
+  telemetryEnabled: 'Anonymous diagnostics & usage counts',
   localOnlyMode: 'Local-only mode',
   llmProvider: 'AI provider',
   model: 'Model override',
@@ -779,7 +779,18 @@ async function renderUsage(provider: LlmProvider) {
   }
 }
 
+/** Fire-and-forget UI-usage counter bump, routed through the service worker
+ * so its single storage chain serializes all writers. Counts use of Ad
+ * Sensei's OWN controls only (setting names, never values). Rides the same
+ * telemetry consent as diagnostics — the rollup send is gated on it. */
+function usage(counter: string) {
+  void chrome.runtime
+    .sendMessage({ type: 'skipSensei:uiUsage', counter })
+    .catch(() => {})
+}
+
 async function save(patch: Partial<Settings>) {
+  for (const key of Object.keys(patch)) usage(`uiSet_${key}`)
   render(await updateSettings(patch))
   flashSaved()
 }
@@ -1061,6 +1072,7 @@ function debounce(fn: () => void, ms: number) {
 }
 
 async function main() {
+  usage('uiOptionsOpens')
   await loadCachedCatalogs()
   render(await getSettings())
   void renderBuiltinStatus()
@@ -1322,11 +1334,12 @@ async function main() {
     if (e.key === 'Enter') void addSite()
   })
 
-  // About panel + support email (mailto = no backend, no spam surface).
+  // About panel + support link (the hosted contact form; ?v= pre-tags the
+  // submission with this install's version so bug reports carry it).
   const { version } = chrome.runtime.getManifest()
   $('about-version').textContent = version
   $<HTMLAnchorElement>('contact-link').href =
-    `mailto:info@singlefinmedia.com?subject=${encodeURIComponent(`Ad Sensei v${version} — feedback`)}`
+    `https://www.singlefinmedia.com/ad-sensei/support?v=${encodeURIComponent(version)}`
 
   // Reset panel (About). Targeted resets re-render in place; the wider ones
   // reload the page so every control reflects the new state.

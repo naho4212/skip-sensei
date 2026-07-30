@@ -682,8 +682,20 @@ async function renderVideoStatus() {
   }
 }
 
+/** Fire-and-forget UI-usage counter bump, routed through the service worker
+ * so its single storage chain serializes all writers (this page's own module
+ * instance would race the SW's otherwise). Counts use of Ad Sensei's OWN
+ * controls only — never anything about the page. Rides the same telemetry
+ * consent as diagnostics (telemetryEnabled gates the rollup send). */
+function usage(counter: string) {
+  void chrome.runtime
+    .sendMessage({ type: 'skipSensei:uiUsage', counter })
+    .catch(() => {})
+}
+
 function wireToggle(input: HTMLInputElement, key: keyof Settings) {
   input.addEventListener('change', async () => {
+    usage(`uiSet_${key}`)
     renderSettings(await updateSettings({ [key]: input.checked }))
     void renderVideoStatus()
   })
@@ -894,6 +906,7 @@ async function clearSiteCookiesAndReload(
 }
 
 async function main() {
+  usage('uiPopupOpens')
   void renderUpdateBanner()
   void renderKeyReminder()
   void renderYtBackoff()
@@ -934,7 +947,10 @@ async function main() {
   ]
   tabs.forEach(([id, name], i) => {
     const btn = $<HTMLButtonElement>(id)
-    btn.addEventListener('click', () => selectTab(name))
+    btn.addEventListener('click', () => {
+      if (name === 'controls') usage('uiControlsTab')
+      selectTab(name)
+    })
     // Arrow keys move between tabs, the way a tablist is expected to behave.
     btn.addEventListener('keydown', (e) => {
       const step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0
@@ -963,6 +979,7 @@ async function main() {
         | 'blockSocial'
         | 'blockUrlTracking'
       const settings = await getSettings()
+      usage(`uiSet_${key}`)
       renderSettings(await updateSettings({ [key]: !settings[key] }))
       setTimeout(() => {
         void renderBlockerState()
@@ -987,6 +1004,7 @@ async function main() {
         .request({ origins: ['*://*/*'] })
         .catch(() => false)
     }
+    usage('uiSet_blockAllAds')
     renderSettings(await updateSettings({ blockAllAds: blockAdsToggle.checked }))
     // Give the service worker a moment to flip the rulesets, then report.
     setTimeout(() => {
@@ -997,6 +1015,7 @@ async function main() {
 
   pauseSiteToggle.addEventListener('change', async () => {
     if (!currentHost) return
+    usage('uiSitePauses')
     await setSiteAllowlisted(currentHost, pauseSiteToggle.checked)
     void renderSiteSection()
   })
@@ -1027,6 +1046,7 @@ async function main() {
 
   const shareBtn = $<HTMLButtonElement>('share-btn')
   shareBtn.addEventListener('click', async () => {
+    usage('uiShares')
     // Placeholder link — swap for the Chrome Web Store URL once published.
     const shareUrl = '' // TODO: store listing URL
     const shareText =

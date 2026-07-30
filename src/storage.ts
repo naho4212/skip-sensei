@@ -330,6 +330,17 @@ export type DailyCounter =
   | 'visitorClearTried'
   | 'visitorClearFailed'
   | 'fullClears'
+  // UI-usage counters: how the extension's OWN surfaces get used (popup opens,
+  // which toggles get flipped). Counts of our controls only — nothing about
+  // what pages the user visits ever rides these. `uiSet_<settingsKey>` counts
+  // changes to that setting; the service worker validates the key before
+  // bumping (see the uiUsage message handler).
+  | 'uiPopupOpens'
+  | 'uiControlsTab'
+  | 'uiOptionsOpens'
+  | 'uiSitePauses'
+  | 'uiShares'
+  | `uiSet_${string}`
 
 interface DailyCounters {
   /** Local YYYY-MM-DD the counts belong to; a new day resets them. */

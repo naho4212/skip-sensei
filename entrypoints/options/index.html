@@ -341,15 +341,15 @@
                 >Share anonymous diagnostics<span
                   class="info"
                   tabindex="0"
-                  data-tip="Two things, both scrubbed and anonymous: (1) errors — the error type, message, stack trace; (2) adaptation events — when ad detection self-heals or the gap-filler hides something, the CSS selectors involved AND the bare domain of the page it happened on (e.g. example.com), which is what makes a wrong hide on a specific site fixable. Both include a random install ID, extension version, provider name, and Chrome version. Never full web addresses, paths, page titles, page content, API keys, or device IDs."
+                  data-tip="Three things, all scrubbed and anonymous: (1) errors — the error type, message, stack trace; (2) adaptation events — when ad detection self-heals or the gap-filler hides something, the CSS selectors involved AND the bare domain of the page it happened on (e.g. example.com), which is what makes a wrong hide on a specific site fixable; (3) daily usage counts — how many times Ad Sensei's own popup, tabs, toggles, and buttons were used that day, to guide UI improvements. Usage counts cover Ad Sensei's controls only — never which sites you visit. All include a random install ID, extension version, provider name, and Chrome version. Never full web addresses, paths, page titles, page content, API keys, or device IDs."
                   >ⓘ</span
                 ></span
               >
             </label>
             <p class="hint">
-              Error reports are the only data Ad Sensei ever sends home.
-              Transcripts go only to the AI provider you chose above, and
-              everything else stays in this browser.
+              These diagnostics and daily usage counts are the only data Ad
+              Sensei ever sends home. Transcripts go only to the AI provider
+              you chose above, and everything else stays in this browser.
             </p>
             <label class="field checkbox">
               <input type="checkbox" id="filter-updates" />
@@ -622,8 +622,12 @@
             </p>
             <p class="hint">
               Questions, bugs, or ideas?
-              <a id="contact-link" href="mailto:info@singlefinmedia.com"
-                >info@singlefinmedia.com</a
+              <a
+                id="contact-link"
+                href="https://www.singlefinmedia.com/ad-sensei/support"
+                target="_blank"
+                rel="noopener"
+                >Contact support</a
               >
             </p>
             <p class="hint">
