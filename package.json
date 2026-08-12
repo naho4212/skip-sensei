@@ -14,10 +14,10 @@
     "postinstall": "wxt prepare"
   },
   "devDependencies": {
-    "@adguard/dnr-rulesets": "^4.1.20260707190042",
-    "@types/chrome": "^0.0.287",
-    "typescript": "^5.6.0",
-    "wxt": "^0.20.27"
+    "@adguard/dnr-rulesets": "^5.0.1",
+    "@types/chrome": "^0.2.5",
+    "typescript": "^7.0.2",
+    "wxt": "^0.21.3"
   },
   "overrides": {
     "shell-quote": "^1.8.4",
