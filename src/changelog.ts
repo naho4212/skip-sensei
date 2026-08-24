@@ -20,6 +20,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     items: [
       'Balanced is now the default: ads, trackers, cookie notices, and popups are blocked on every site from the first page load — no welcome-page click needed. Existing installs keep whatever level they chose',
       'All-sites access is now part of the install (like every general ad blocker) instead of a separate prompt when you pick a level — Chrome may ask you to approve it once on this update',
+      'After 30 days of use the popup asks once — and only once — for a Chrome Web Store rating; dismiss it and it never comes back',
     ],
   },
   {

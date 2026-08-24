@@ -157,6 +157,42 @@ export async function setLastSeenVersion(version: string): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// Review nudge — one in-popup "enjoying it? rate it" card, shown once the
+// extension has earned it (installed a while, blocked plenty) and never again
+// after a click or dismiss. Deliberately NOT an OS notification: that needs
+// the warning-level `notifications` permission and interrupts people outside
+// the extension. `since` is stamped on the first popup open after this
+// shipped, so existing installs get the same grace period as new ones.
+// ---------------------------------------------------------------------------
+
+const REVIEW_NUDGE_KEY = 'skipSensei.reviewNudge'
+
+export interface ReviewNudge {
+  /** Epoch ms of the first popup open that saw this feature. */
+  since: number
+  /** true once the user clicked through or dismissed — never show again. */
+  done: boolean
+}
+
+export async function getReviewNudge(): Promise<ReviewNudge> {
+  const result = await chrome.storage.local.get(REVIEW_NUDGE_KEY)
+  const stored = result[REVIEW_NUDGE_KEY]
+  if (stored && typeof stored.since === 'number') {
+    return { since: stored.since, done: stored.done === true }
+  }
+  const fresh: ReviewNudge = { since: Date.now(), done: false }
+  await chrome.storage.local.set({ [REVIEW_NUDGE_KEY]: fresh })
+  return fresh
+}
+
+export async function finishReviewNudge(): Promise<void> {
+  const current = await getReviewNudge()
+  await chrome.storage.local.set({
+    [REVIEW_NUDGE_KEY]: { ...current, done: true },
+  })
+}
+
+// ---------------------------------------------------------------------------
 // Feature activity log — what the features actually DID (ad skipped, popup
 // hidden, cookie banner answered, selector healed…), newest last. Writes are
 // chained (concurrent SW calls used to interleave and drop entries) AND must

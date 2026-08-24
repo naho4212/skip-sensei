@@ -100,6 +100,25 @@
       </button>
     </section>
 
+    <!-- One-time review nudge (see renderReviewNudge in popup.ts) -->
+    <section class="update-banner" id="review-nudge" hidden>
+      <button
+        type="button"
+        class="update-dismiss"
+        id="review-nudge-dismiss"
+        aria-label="Dismiss"
+      >
+        ×
+      </button>
+      <div class="update-title">Enjoying Ad Sensei?</div>
+      <p class="key-reminder-text" id="review-nudge-text">
+        A quick rating on the Chrome Web Store helps more people find it.
+      </p>
+      <button type="button" id="review-nudge-open" class="mini-btn">
+        ⭐ Rate it
+      </button>
+    </section>
+
     <!-- YouTube flagged the session; aggressive mode auto-disabled. -->
     <section class="yt-backoff" id="yt-backoff" hidden>
       <button

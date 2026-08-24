@@ -5,8 +5,10 @@ import {
   clearAdblockWall,
   clearYtBackoff,
   getAdblockWall,
+  finishReviewNudge,
   getKeyReminder,
   getLastSeenVersion,
+  getReviewNudge,
   getSettings,
   getStats,
   getYtBackoff,
@@ -713,20 +715,20 @@ function wireToggle(input: HTMLInputElement, key: keyof Settings) {
  * ZIP reloads alike. First run adopts the current version silently (no
  * changelog for the version that introduced changelogs).
  */
-async function renderUpdateBanner() {
+async function renderUpdateBanner(): Promise<boolean> {
   const current = chrome.runtime.getManifest().version
   const lastSeen = await getLastSeenVersion()
 
   if (lastSeen === undefined || lastSeen === current) {
     if (lastSeen === undefined) await setLastSeenVersion(current)
-    return
+    return false
   }
 
   const entries = changesSince(lastSeen)
   if (entries.length === 0) {
     // Updated, but nothing user-facing was logged — adopt silently.
     await setLastSeenVersion(current)
-    return
+    return false
   }
 
   $('update-title').textContent =
@@ -749,6 +751,53 @@ async function renderUpdateBanner() {
     () => {
       banner.hidden = true
       void setLastSeenVersion(current)
+    },
+    { once: true },
+  )
+  return true
+}
+
+const REVIEW_URL =
+  'https://chromewebstore.google.com/detail/mjdcndkalddmlahidjabnncicdmpimmi/reviews?utm_source=nudge'
+const REVIEW_NUDGE_MIN_DAYS = 30
+const REVIEW_NUDGE_MIN_BLOCKED = 100
+
+/** One-time "rate it" card. Earned, not scheduled: at least 30 days since the
+ * popup first saw this feature AND a meaningful lifetime total, so it only
+ * ever asks people the extension has demonstrably helped. Skipped whenever
+ * the What's-new banner is up (one card at a time), and gone for good after
+ * either button. */
+async function renderReviewNudge() {
+  const nudge = await getReviewNudge()
+  if (nudge.done) return
+  if (Date.now() - nudge.since < REVIEW_NUDGE_MIN_DAYS * 86_400_000) return
+  const stats = await getStats()
+  const total =
+    stats.allTimeAdSkips +
+    stats.allTimeSponsorSkips +
+    stats.allTimeYtAdsHidden +
+    stats.allTimeWebAdsBlocked
+  if (total < REVIEW_NUDGE_MIN_BLOCKED) return
+
+  $('review-nudge-text').textContent =
+    `${total.toLocaleString()} ads skipped or blocked so far. A quick rating on the Chrome Web Store helps more people find it.`
+  const banner = $('review-nudge')
+  banner.hidden = false
+  $('review-nudge-dismiss').addEventListener(
+    'click',
+    () => {
+      banner.hidden = true
+      void finishReviewNudge()
+    },
+    { once: true },
+  )
+  $('review-nudge-open').addEventListener(
+    'click',
+    () => {
+      usage('uiReviews')
+      void finishReviewNudge()
+      void chrome.tabs.create({ url: REVIEW_URL })
+      window.close()
     },
     { once: true },
   )
@@ -913,7 +962,9 @@ async function clearSiteCookiesAndReload(
 
 async function main() {
   usage('uiPopupOpens')
-  void renderUpdateBanner()
+  void renderUpdateBanner().then((shown) => {
+    if (!shown) void renderReviewNudge()
+  })
   void renderKeyReminder()
   void renderYtBackoff()
   void renderAdblockWall()
