@@ -759,10 +759,10 @@ async function renderUpdateBanner(): Promise<boolean> {
 
 const REVIEW_URL =
   'https://chromewebstore.google.com/detail/mjdcndkalddmlahidjabnncicdmpimmi/reviews?utm_source=nudge'
-const REVIEW_NUDGE_MIN_DAYS = 30
+const REVIEW_NUDGE_MIN_DAYS = 14
 const REVIEW_NUDGE_MIN_BLOCKED = 100
 
-/** One-time "rate it" card. Earned, not scheduled: at least 30 days since the
+/** One-time "rate it" card. Earned, not scheduled: at least 14 days since the
  * popup first saw this feature AND a meaningful lifetime total, so it only
  * ever asks people the extension has demonstrably helped. Skipped whenever
  * the What's-new banner is up (one card at a time), and gone for good after
