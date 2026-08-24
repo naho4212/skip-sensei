@@ -53,12 +53,13 @@ export default defineConfig({
       // at the moment the user clicks it. The base install holds no cookie access.
       'cookies',
     ],
-    host_permissions: [
-      '*://*.youtube.com/*',
-      // SponsorBlock crowd-sourced segment database (privacy-preserving hash
-      // prefix lookup; on by default, so this stays a base permission).
-      'https://sponsor.ajay.app/*',
-    ],
+    // SponsorBlock (sponsor.ajay.app) is deliberately NOT a host permission:
+    // its API answers every request with Access-Control-Allow-Origin: * and
+    // our lookup is a plain credential-less GET, so the fetch works under
+    // ordinary CORS. Listing it only added "…and sponsor.ajay.app" to the
+    // install prompt, which reads as an unrelated site to anyone who doesn't
+    // know the project.
+    host_permissions: ['*://*.youtube.com/*'],
     action: {
       default_title: 'Ad Sensei',
       default_icon: {

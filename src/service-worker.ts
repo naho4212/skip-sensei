@@ -423,6 +423,7 @@ const UI_USAGE_COUNTERS = new Set([
   'uiOptionsOpens',
   'uiSitePauses',
   'uiShares',
+  'uiReviews',
 ])
 
 function bumpUiUsage(counter: string): void {

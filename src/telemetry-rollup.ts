@@ -137,6 +137,7 @@ export async function sendDailyRollup(): Promise<boolean> {
     ui_options_open: String(counts.uiOptionsOpens ?? 0),
     ui_site_pause: String(counts.uiSitePauses ?? 0),
     ui_share: String(counts.uiShares ?? 0),
+    ui_review: String(counts.uiReviews ?? 0),
   }
   // Per-setting change counts (uiSet_<key>, key validated against Settings at
   // bump time). Only days that saw a change carry the field, keeping the

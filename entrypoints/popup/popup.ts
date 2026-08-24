@@ -26,6 +26,12 @@ import type {
   TabMessage,
 } from '../../src/types'
 
+/** Chrome Web Store listing — what the ↗ Share button hands to the OS share
+ * sheet / clipboard. utm_source distinguishes popup shares from landing-page
+ * clicks (utm_source=sfm). */
+const SHARE_URL =
+  'https://chromewebstore.google.com/detail/mjdcndkalddmlahidjabnncicdmpimmi?utm_source=share'
+
 const $ = <T extends HTMLElement>(id: string) =>
   document.getElementById(id) as T
 
@@ -1047,14 +1053,18 @@ async function main() {
   const shareBtn = $<HTMLButtonElement>('share-btn')
   shareBtn.addEventListener('click', async () => {
     usage('uiShares')
-    // Placeholder link — swap for the Chrome Web Store URL once published.
-    const shareUrl = '' // TODO: store listing URL
+    const shareUrl = SHARE_URL
     const shareText =
       'Skip YouTube ads & creator sponsor segments, and block ads across the web with Ad Sensei.'
     const nav = navigator as Navigator & {
       share?: (data: ShareData) => Promise<void>
     }
-    if (nav.share) {
+    // Only ever hand navigator.share() an absolute http(s) URL. A relative or
+    // empty `url` resolves against the popup's own chrome-extension:// origin,
+    // and the browser treats a non-http(s) Web Share URL as a bad IPC message
+    // and KILLS the renderer — i.e. "Ad Sensei has crashed" on every click
+    // (that was the '' placeholder before the store listing existed).
+    if (nav.share && /^https?:\/\//.test(shareUrl)) {
       try {
         await nav.share({ title: 'Ad Sensei', text: shareText, url: shareUrl })
         return

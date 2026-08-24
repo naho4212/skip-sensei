@@ -340,6 +340,7 @@ export type DailyCounter =
   | 'uiOptionsOpens'
   | 'uiSitePauses'
   | 'uiShares'
+  | 'uiReviews'
   | `uiSet_${string}`
 
 interface DailyCounters {

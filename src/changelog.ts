@@ -15,6 +15,15 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.3.15',
+    date: '2026-08-24',
+    items: [
+      'Fixed: the ↗ Share button in the popup crashed the extension (“Ad Sensei has crashed”) — it now shares the Chrome Web Store link, or copies it to the clipboard where system sharing isn’t available',
+      'Settings → About now has a “Rate & review” link to the Chrome Web Store listing',
+      'Install prompt no longer asks for access to sponsor.ajay.app (the SponsorBlock database works without it)',
+    ],
+  },
+  {
     version: '0.3.14',
     date: '2026-07-29',
     items: [

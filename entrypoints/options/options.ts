@@ -1340,6 +1340,7 @@ async function main() {
   $('about-version').textContent = version
   $<HTMLAnchorElement>('contact-link').href =
     `https://www.singlefinmedia.com/ad-sensei/support?v=${encodeURIComponent(version)}`
+  $('review-link').addEventListener('click', () => usage('uiReviews'))
 
   // Reset panel (About). Targeted resets re-render in place; the wider ones
   // reload the page so every control reflects the new state.
