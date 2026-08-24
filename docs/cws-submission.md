@@ -52,14 +52,15 @@ which the extensions page shows; keep the two in sync):
 
 **Detailed description** (paste as-is; plain text, the store renders no markup):
 
-> **Ad Sensei blocks ads and trackers everywhere — and skips the ones that
-> can't be blocked.**
+> Ad Sensei blocks ads and trackers on every site — and skips the ones that
+> can't be blocked: YouTube video ads and the sponsor reads creators bake into
+> their videos. Free, private, no account.
 >
-> Most blockers stop third-party ad requests and stop there. Ad Sensei does
-> that, using bundled filter lists evaluated by Chrome's own declarative
-> engine, and then handles the ads that arrive from a site's own servers,
-> where request blocking can't reach: promoted tiles on Pinterest, sponsored
-> results on Amazon and Reddit, feed ads and in-stream video ads on YouTube.
+> Most ad blockers stop at filter lists. Ad Sensei uses those too, evaluated by
+> Chrome's own declarative engine, then adds the two layers filter lists can't
+> reach: the ads sites serve from their own domains — promoted tiles on
+> Pinterest, sponsored results on Amazon and Reddit, feed and in-stream ads on
+> YouTube — and the sponsor segments inside the video itself.
 >
 > WHAT IT DOES
 > • Blocks ads, trackers, malware domains, cookie notices, and social widgets
@@ -68,6 +69,11 @@ which the extensions page shows; keep the two in sync):
 > • Skips creator sponsor reads inside videos, via SponsorBlock's community
 >   data or an optional AI transcript analysis
 > • Shows what it blocked on the page you're on, with a one-click pause per site
+>
+> WORKS OUT OF THE BOX
+> Balanced blocking — ads, trackers, cookie notices, popups — is on for every
+> site from the first page load. Dial it down to YouTube-only or up to Max
+> from the welcome page or the popup at any time.
 >
 > PRIVACY
 > No account, no sign-in, no advertising profile. Blocking is evaluated by
@@ -83,11 +89,6 @@ which the extensions page shows; keep the two in sync):
 > own AI provider's API key instead — any major cloud provider or a local
 > self-hosted model — if you prefer. Either way there's no subscription and
 > no server of ours in the loop.
->
-> BALANCED BY DEFAULT
-> Web-wide ad, tracker, cookie-notice, and popup blocking is on from the
-> first page load — no setup. Dial it down to YouTube-only or up to Max from
-> the welcome page or the popup at any time.
 >
 > HONEST ABOUT THE LIMITS
 > YouTube stitches some ads into the video stream itself. Those can't be
