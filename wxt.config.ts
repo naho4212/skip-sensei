@@ -23,7 +23,7 @@ export default defineConfig({
     // competitors use (SponsorBlock for YouTube). Decided pre-first-publish —
     // renaming after publish is a malware-correlated signal (see
     // docs/cws-submission.md "Listing identity discipline").
-    name: 'Ad Sensei — AI Ad Blocker for All Ads & YouTube™ Sponsor Skip',
+    name: 'Ad Sensei — AI Ad Blocker for Every Site & YouTube™ Ads + Sponsor Skip',
     // Leads with the web-wide single purpose; YouTube is that purpose applied
     // to one site (see docs/cws-submission.md — trademark-in-listing risk).
     description:
