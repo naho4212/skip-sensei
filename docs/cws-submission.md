@@ -84,10 +84,10 @@ which the extensions page shows; keep the two in sync):
 > self-hosted model — if you prefer. Either way there's no subscription and
 > no server of ours in the loop.
 >
-> SMALL PERMISSIONS BY DEFAULT
-> A fresh install asks for YouTube access and nothing broader. Access to all
-> sites is optional and requested only at the moment you turn on a feature
-> that needs it.
+> BALANCED BY DEFAULT
+> Web-wide ad, tracker, cookie-notice, and popup blocking is on from the
+> first page load — no setup. Dial it down to YouTube-only or up to Max from
+> the welcome page or the popup at any time.
 >
 > HONEST ABOUT THE LIMITS
 > YouTube stitches some ads into the video stream itself. Those can't be
@@ -165,43 +165,34 @@ the code path (`src/cookies.ts`) shows enumerate→remove with no network write.
 
 ## Host permission justifications
 
-**`*://*.youtube.com/*`** — Required to skip YouTube video ads and creator
-sponsor segments and to hide YouTube's display ads, which run only on
-youtube.com.
+*(Since 0.3.16 the only host permission is `*://*/*`; `*.youtube.com`,
+SponsorBlock, and the AI-provider hosts were folded into it — SponsorBlock and
+the AI APIs are all CORS-open and work without a grant regardless.)*
 
-**`https://sponsor.ajay.app/*`** — Fetches community-marked sponsor segments
-from SponsorBlock. Only a hashed prefix of the video ID is sent, so the service
-cannot learn which video you're watching. Contacted only when SponsorBlock is
-enabled.
+**`*://*/*`** — Ad Sensei is a general-purpose ad blocker; like every ad
+blocker it needs to act on every site the user visits:
 
-**AI provider hosts** (`generativelanguage.googleapis.com`, `api.anthropic.com`,
-`api.openai.com`, `api.groq.com`, `openrouter.ai`) — Sends a video's transcript
-to the AI provider the user selects, to detect sponsor segments, and — only when
-the user clicks "Refresh model list" — fetches that provider's list of available
-models to populate the model picker (a plain read of the model catalog, no user
-data). Contacted only when the user configures that provider; the default is
-Chrome's on-device AI, which makes no network calls.
-
-**`http://localhost/*`, `http://127.0.0.1/*`** — Lets users route AI analysis to
-a local Ollama server or self-hosted gateway on their own machine, so no data
-leaves their device (and, on "Refresh model list", reads the local server's list
-of installed models). Contacted only if the user selects a local provider.
-
-**Optional `*://*/*`** (requested at runtime, not at install) — Needed for the
-opt-in features that have to run on sites other than YouTube:
-
-1. **Hiding ads on every site** — the cosmetic layer registers its content
-   script on all sites so it can hide ad elements that network blocking can't
-   reach, e.g. first-party promoted tiles (`src/cosmetic-register.ts`, gated on
-   the web-cosmetic setting). This is the main reason for the grant.
-2. **Keeping ad-blocked pages usable** — the anti-adblock helper
+1. **Hiding ads on every site** — the cosmetic layer runs its content script
+   on all sites to hide ad elements that network blocking can't reach, e.g.
+   first-party promoted tiles and empty ad containers left behind by blocked
+   requests (`src/cosmetic-register.ts`). This is the main reason for the
+   permission.
+2. **Skipping YouTube video ads and creator sponsor segments** and hiding
+   YouTube's display ads (`entrypoints/youtube.content.ts`).
+3. **Keeping ad-blocked pages usable** — the anti-adblock helper
    (`src/scriptlet-register.ts`, gated on `defuseAntiAdblock`).
-3. **Stripping tracking parameters** from links the user clicks.
+4. **Stripping tracking parameters** from links (`url_tracking` ruleset, Max
+   level only) — DNR `redirect`/`transform` rules need host access.
 
-All three are requested with a permission prompt at the moment the user turns
-the feature on; the base install never holds broad host access, and none of the
-three registers anything until the grant exists (verified on a clean profile:
-`chrome.scripting.getRegisteredContentScripts()` returns empty).
+Fetches to SponsorBlock (`sponsor.ajay.app`, hashed video-ID prefix only) and
+to the AI provider the user configures (video transcript; default is Chrome's
+on-device model, which makes no network call) are plain CORS requests and do
+not depend on this permission.
+
+The permission is granted at install (Chrome's standard "Read and change all
+your data on all websites" prompt). Each layer still registers only while its
+own setting is on, and every one of them can be switched off — or the whole
+extension paused per site — from the popup.
 
 ---
 
@@ -301,10 +292,10 @@ place. If the origin ever moves, all three must move together.
    toString-cloak pattern ships in uBlock Origin Lite on the Web Store today. It
    reads as evasion out of context, but it's standard, store-approved technique;
    don't let its presence drive the build decision. It also targets *website*
-   anti-adblock detection, never Chrome, and is **dormant on a base install** —
-   it registers (MAIN world, via `chrome.scripting`) only after the user grants
-   the optional all-sites permission AND enables `defuseAntiAdblock`, so a
-   reviewer's default test install never activates it.
+   anti-adblock detection, never Chrome. It registers (MAIN world, via
+   `chrome.scripting`) when `defuseAntiAdblock` is on — which it is by default
+   since 0.3.16 (Balanced default + install-time all-sites access), so a
+   reviewer's default test install DOES run it on general sites.
 
 2. **Always-on YouTube network exemption** (`yt_exempt`, the one ruleset that
    ships enabled) — a single `allowAllRequests` rule for youtube.com, present

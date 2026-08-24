@@ -59,7 +59,13 @@ export default defineConfig({
     // ordinary CORS. Listing it only added "…and sponsor.ajay.app" to the
     // install prompt, which reads as an unrelated site to anyone who doesn't
     // know the project.
-    host_permissions: ['*://*.youtube.com/*'],
+    // All sites, at install — the store listing is "ad blocker for all ads",
+    // and Balanced (web-wide blocking) is the default, so the base install
+    // needs the same access every general ad blocker declares. This also
+    // means a user who closes the welcome page without picking a level still
+    // gets web-wide blocking (previously the grant was optional and only
+    // requested on a level-card click, so skipped onboarding = YouTube-only).
+    host_permissions: ['*://*/*'],
     action: {
       default_title: 'Ad Sensei',
       default_icon: {
@@ -110,15 +116,5 @@ export default defineConfig({
     //  - the broad `*://*/*` grant that powers web-wide cosmetic filtering,
     //    "Block all ads", URL-tracking-param stripping, and the anti-adblock
     //    scriptlet layer, requested when the user enables those features.
-    optional_host_permissions: [
-      'https://generativelanguage.googleapis.com/*',
-      'https://api.anthropic.com/*',
-      'https://api.openai.com/*',
-      'https://api.groq.com/*',
-      'https://openrouter.ai/*',
-      'http://localhost/*',
-      'http://127.0.0.1/*',
-      '*://*/*',
-    ],
   },
 })

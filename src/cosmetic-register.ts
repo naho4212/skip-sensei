@@ -11,8 +11,9 @@ import { getSettings, onSettingsChanged } from './storage'
  * (and related) opt-in. Rather than declare a static `<all_urls>` content
  * script — which forces every install to accept "read and change all your data
  * on all websites" — we register the SAME built script at runtime, on the
- * broad all-sites match, only once the user has both enabled a web-cosmetic feature AND granted the
- * optional all-sites host permission. Base installs stay YouTube-scoped.
+ * broad all-sites match, once a web-cosmetic feature is on (all-sites host
+ * access is a base permission since 0.3.16; the contains() check stays as a
+ * cheap guard against a user revoking site access in chrome://extensions).
  *
  * The built file paths are content-hashed by the bundler, so we read them back
  * from the manifest's own youtube cosmetic entry instead of hardcoding them —

@@ -834,8 +834,6 @@ interface RulesetGroup {
   tip: string
   /** cookies/social/popups only take effect when Web ads (blockAllAds) is on. */
   gatedOnAds?: boolean
-  /** url_tracking needs all-sites host access to rewrite URLs. */
-  needsPermission?: boolean
 }
 
 /**
@@ -892,8 +890,7 @@ const RULESET_GROUPS: RulesetGroup[] = [
     label: 'URL tracking parameters',
     setting: 'blockUrlTracking',
     rulesets: ['url_tracking'],
-    needsPermission: true,
-    tip: 'Strips tracking params (utm_*, fbclid, gclid, and hundreds more) from links as you browse. Needs all-sites access to rewrite URLs.',
+    tip: 'Strips tracking params (utm_*, fbclid, gclid, and hundreds more) from links as you browse.',
   },
   {
     label: 'Malware & phishing domains',
@@ -991,17 +988,6 @@ function buildRulesetGroup(
 }
 
 async function onRulesetToggle(group: RulesetGroup, box: HTMLInputElement) {
-  // url_tracking needs all-sites access to actually rewrite URLs — request it
-  // on the enabling gesture and revert the checkbox if the user declines.
-  if (group.needsPermission && box.checked) {
-    const granted = await chrome.permissions
-      .request({ origins: ['*://*/*'] })
-      .catch(() => false)
-    if (!granted) {
-      box.checked = false
-      return
-    }
-  }
   await save({ [group.setting]: box.checked })
   // The enabled-ruleset state changes only after the service worker's sync
   // runs; re-read once it has settled so the loaded dots + total catch up.

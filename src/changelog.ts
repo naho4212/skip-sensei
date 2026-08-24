@@ -15,6 +15,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.3.16',
+    date: '2026-08-24',
+    items: [
+      'Balanced is now the default: ads, trackers, cookie notices, and popups are blocked on every site from the first page load — no welcome-page click needed. Existing installs keep whatever level they chose',
+      'All-sites access is now part of the install (like every general ad blocker) instead of a separate prompt when you pick a level — Chrome may ask you to approve it once on this update',
+    ],
+  },
+  {
     version: '0.3.15',
     date: '2026-08-24',
     items: [

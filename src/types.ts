@@ -57,9 +57,8 @@ export interface Settings {
    * Anti-adblock defusing: inject MAIN-world scriptlets (set-constant,
    * spoof-css, abort-on-property-read, prevent-setTimeout/addEventListener) to
    * neutralize adblock-detection and ad-reinsertion on general sites. Part of
-   * "Block all ads". Only active where the extension has host access — the
-   * broad-web layer needs the optional all-sites permission (e.g. granted for
-   * URL-tracking protection); dormant until then. On by default.
+   * "Block all ads". On by default; all-sites host access is part of the base
+   * install, so the broad-web layer is live from the first page load.
    */
   defuseAntiAdblock: boolean
   /** General web URL-tracking-parameter stripping (AdGuard URL Tracking list).
@@ -168,11 +167,13 @@ export const DEFAULT_SETTINGS: Settings = {
   masterEnabled: true,
   adEngineEnabled: true,
   sponsorEngineEnabled: true,
-  blockAllAds: false,
-  blockTrackers: false,
-  blockCookieNotices: false,
+  // Balanced by default (the onboarding's "Recommended" level): web-wide ads,
+  // trackers, cookie notices, popups. Social/URL-tracking/aggressive stay Max.
+  blockAllAds: true,
+  blockTrackers: true,
+  blockCookieNotices: true,
   blockSocial: false,
-  blockPopups: false,
+  blockPopups: true,
   blockMalware: true,
   allowlist: [],
   confidenceThreshold: 0.7,

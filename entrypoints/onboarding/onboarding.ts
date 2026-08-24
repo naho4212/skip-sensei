@@ -12,9 +12,9 @@ document.getElementById('open-options')?.addEventListener('click', () => {
 // ---- Blocking levels ---------------------------------------------------
 // One decision instead of five toggles. Each level is a plain settings
 // patch, so the popup/options can still adjust everything piecemeal later —
-// the cards just re-derive the closest level from settings on load. Medium/
-// High request the all-sites grant on the click gesture; declining still
-// enables the network (DNR) side of the picks, and the hint says so.
+// the cards just re-derive the closest level from settings on load. All-sites
+// access is a base (install-time) permission, so a card click is purely a
+// settings change — no permission dialog.
 const LEVELS: Record<'low' | 'medium' | 'high', Partial<Settings>> = {
   low: {
     blockAllAds: false,
@@ -49,7 +49,6 @@ const LEVELS: Record<'low' | 'medium' | 'high', Partial<Settings>> = {
 type Level = keyof typeof LEVELS
 
 const DEFAULT_LEVEL_HINT_LINK = document.getElementById('diy-link')
-const levelHint = document.getElementById('level-hint')
 const levelCards = [
   ...document.querySelectorAll<HTMLButtonElement>('.level-card'),
 ]
@@ -68,29 +67,11 @@ function renderLevel(selected: Level) {
 
 void getSettings().then((settings) => renderLevel(levelFromSettings(settings)))
 
-const hasBroadGrant = () =>
-  chrome.permissions.contains({ origins: ['*://*/*'] }).catch(() => false)
-
 for (const card of levelCards) {
   card.addEventListener('click', async () => {
     const level = card.dataset.level as Level
-    let declined = false
-    if (level !== 'low') {
-      // contains() first: skip the dialog when access already exists (e.g.
-      // revisiting this page after granting from the popup).
-      const granted =
-        (await hasBroadGrant()) ||
-        (await chrome.permissions
-          .request({ origins: ['*://*/*'] })
-          .catch(() => false))
-      declined = !granted
-    }
     await updateSettings(LEVELS[level])
     renderLevel(level)
-    if (levelHint && declined) {
-      levelHint.textContent =
-        'All-sites access was declined — request-level blocking is on, but hiding leftover frames on pages needs the grant. Pick the level again to retry, or grant it later from the popup.'
-    }
   })
 }
 

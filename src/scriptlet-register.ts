@@ -12,8 +12,9 @@ import { getSettings, onSettingsChanged } from './storage'
  * permission for. YouTube is deliberately EXCLUDED (its ad path is handled by
  * the finely-tuned pruner + reactive ad engine — we don't want untested
  * scriptlets there). That leaves the broad web, which requires the optional
- * all-sites host permission. So this layer is dormant until that permission is
- * granted (e.g. when the user enables URL-tracking protection), then activates
+ * all-sites host permission — a base permission since 0.3.16 (the check
+ * remains in case a user revokes site access in chrome://extensions), so
+ * this layer activates at install when defuseAntiAdblock is on; it also re-activates
  * automatically. It must run in the PAGE world at document_start, which — like
  * the pruner — rules out a statically declared manifest content script;
  * it's registered directly via chrome.scripting with world:'MAIN'.

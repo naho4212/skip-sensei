@@ -974,8 +974,7 @@ async function main() {
     if (el.dataset.tip) el.setAttribute('aria-label', el.dataset.tip)
   })
 
-  // Granular web-blocking pills: each maps 1:1 to a settings key. The DNR
-  // side works without the broad grant (the blockAds toggle owns that ask).
+  // Granular web-blocking pills: each maps 1:1 to a settings key.
   for (const pill of document.querySelectorAll<HTMLButtonElement>('.pill')) {
     pill.addEventListener('click', async () => {
       const key = pill.dataset.key as
@@ -1000,16 +999,6 @@ async function main() {
   wireToggle(aggressiveToggle, 'aggressivePruning')
   wireToggle(aiEnhancementsToggle, 'aiEnhancements')
   blockAdsToggle.addEventListener('change', async () => {
-    // Cosmetic hiding on the broad web needs the optional all-sites permission
-    // (network/DNR blocking doesn't). Request it on this click gesture when the
-    // user turns blocking on, so hiding empty ad slots/containers actually works
-    // — otherwise "Block all ads" would only strip network requests and leave
-    // husks behind. Declining still enables network blocking.
-    if (blockAdsToggle.checked) {
-      await chrome.permissions
-        .request({ origins: ['*://*/*'] })
-        .catch(() => false)
-    }
     usage('uiSet_blockAllAds')
     renderSettings(await updateSettings({ blockAllAds: blockAdsToggle.checked }))
     // Give the service worker a moment to flip the rulesets, then report.
