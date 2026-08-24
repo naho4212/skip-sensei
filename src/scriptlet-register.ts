@@ -12,7 +12,7 @@ import { getSettings, onSettingsChanged } from './storage'
  * permission for. YouTube is deliberately EXCLUDED (its ad path is handled by
  * the finely-tuned pruner + reactive ad engine — we don't want untested
  * scriptlets there). That leaves the broad web, which requires the optional
- * all-sites host permission — a base permission since 0.3.16 (the check
+ * all-sites host permission — a base permission since 0.3.15 (the check
  * remains in case a user revokes site access in chrome://extensions), so
  * this layer activates at install when defuseAntiAdblock is on; it also re-activates
  * automatically. It must run in the PAGE world at document_start, which — like

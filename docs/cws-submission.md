@@ -165,7 +165,7 @@ the code path (`src/cookies.ts`) shows enumerate→remove with no network write.
 
 ## Host permission justifications
 
-*(Since 0.3.16 the only host permission is `*://*/*`; `*.youtube.com`,
+*(Since 0.3.15 the only host permission is `*://*/*`; `*.youtube.com`,
 SponsorBlock, and the AI-provider hosts were folded into it — SponsorBlock and
 the AI APIs are all CORS-open and work without a grant regardless.)*
 
@@ -294,7 +294,7 @@ place. If the origin ever moves, all three must move together.
    don't let its presence drive the build decision. It also targets *website*
    anti-adblock detection, never Chrome. It registers (MAIN world, via
    `chrome.scripting`) when `defuseAntiAdblock` is on — which it is by default
-   since 0.3.16 (Balanced default + install-time all-sites access), so a
+   since 0.3.15 (Balanced default + install-time all-sites access), so a
    reviewer's default test install DOES run it on general sites.
 
 2. **Always-on YouTube network exemption** (`yt_exempt`, the one ruleset that

@@ -15,21 +15,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
-    version: '0.3.16',
+    version: '0.3.15',
     date: '2026-08-24',
     items: [
       'Balanced is now the default: ads, trackers, cookie notices, and popups are blocked on every site from the first page load — no welcome-page click needed. Existing installs keep whatever level they chose',
       'All-sites access is now part of the install (like every general ad blocker) instead of a separate prompt when you pick a level — Chrome may ask you to approve it once on this update',
       'After two weeks of use the popup asks once — and only once — for a Chrome Web Store rating; dismiss it and it never comes back',
-    ],
-  },
-  {
-    version: '0.3.15',
-    date: '2026-08-24',
-    items: [
       'Fixed: the ↗ Share button in the popup crashed the extension (“Ad Sensei has crashed”) — it now shares the Chrome Web Store link, or copies it to the clipboard where system sharing isn’t available',
       'Settings → About now has a “Rate & review” link to the Chrome Web Store listing',
-      'Install prompt no longer asks for access to sponsor.ajay.app (the SponsorBlock database works without it)',
     ],
   },
   {
