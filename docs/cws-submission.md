@@ -137,9 +137,10 @@ cache, and local activity/settings logs in the browser. No remote storage.
 it can show status and the "pause on this site" control for the page you're on.
 
 **scripting** — Registers the extension's in-page helpers at document start in
-the page's context (the YouTube ad-pruning helper and, only where you grant
-access, the anti-adblock helper). Used solely to run the extension's own
-bundled scripts; no remote code is loaded or executed.
+the page's context (the YouTube ad-pruning helper, the web-wide cosmetic
+ad-hiding script, and the anti-adblock helper — each only while its setting
+is on). Used solely to run the extension's own bundled scripts; no remote code
+is loaded or executed.
 
 **declarativeNetRequest** — Powers ad, tracker, cookie-notice, and malware
 blocking using filter lists bundled in the extension. Blocking is declarative
