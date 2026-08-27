@@ -171,6 +171,12 @@ const STREAMING_AD_FILTERS = [
   // Ad decisioning — with this blocked the web player is never handed an ad
   // to play (its `flashpoint` sub-path is the one piece Base already has).
   '||spclient.wg.spotify.com/ad-logic/',
+  // The web player talks to REGIONAL spclient hosts (gew1-spclient.spotify.com,
+  // guc3-spclient…), one DNS label, so a `||spclient.spotify.com` anchor never
+  // matches them — the same reason AdGuard's own gabo-receiver rule is the
+  // unanchored `-spclient.spotify.com/…` form. Cover ad-logic on every host.
+  '-spclient.spotify.com/ad-logic/',
+  '||spotify.com/ad-logic/',
   '||spotify.com/ads/',
   // Ad impression / event beacons.
   '||adeventtracker.spotify.com^',
