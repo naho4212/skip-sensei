@@ -324,6 +324,22 @@ export class AdEngine {
    * (the <video> duration is the ad's while ad-showing). */
   private breakAdSeconds = 0
   private curAdDuration = 0
+  /**
+   * Distinct ads seen this break. A pod shares one ad-showing state, so the
+   * only per-ad boundaries are in the <video>: a source swap, a duration
+   * change, or the timeline rewinding to the start. `breakMethods.length`
+   * used to stand in for this and was wrong — it tallied at most one entry
+   * per METHOD per break, so "ads: 3" meant "click + seek + stuck recovery",
+   * not three ads, and the telemetry could not say how pods were cleared.
+   */
+  private adCount = 0
+  private curAdSrc = ''
+  /** When the current in-flight seek started (a seek that never lands is a
+   * wedge too; the watchdog used to treat `seeking` as endless progress). */
+  private seekingSince = 0
+  /** Our own recovery rewind must not read as a pod boundary. */
+  private recoverySeekAt = 0
+  private breakSeeks = 0
 
   constructor(
     private onSkip: (
@@ -460,11 +476,22 @@ export class AdEngine {
       this.breakMethods = []
       this.breakAdSeconds = 0
       this.curAdDuration = 0
+      this.adCount = 0
+      this.curAdSrc = ''
+      this.seekingSince = 0
+      this.recoverySeekAt = 0
+      this.breakSeeks = 0
       return
     }
 
     if (this.adShowingSince === null) this.adShowingSince = Date.now()
     this.applyCloak()
+    // Pod boundary BEFORE the click: the next ad's skip button must get its
+    // own click attribution and its own immediate seek, not inherit the
+    // previous ad's "already clicked / seek retry floor" state.
+    const adVideo = document.querySelector<HTMLVideoElement>(VIDEO)
+    if (adVideo && Number.isFinite(adVideo.duration) && adVideo.duration > 0)
+      this.detectAdBoundary(adVideo)
 
     // Click the skip button AND seek-to-end in the same tick. YouTube's skip
     // button intermittently ignores synthetic clicks, and the old "wait a
@@ -482,6 +509,41 @@ export class AdEngine {
       void this.trySelfHeal()
     }
     this.fastForwardAd()
+  }
+
+  /**
+   * Per-ad reset inside a pod. Every ad after the first used to inherit the
+   * previous ad's state: `skipClickedAt` stayed set (no per-ad click
+   * attribution), `ffLastSeekAt` held the retry floor, and the stuck
+   * watchdog carried its counters over. Telemetry showed the cost — 1-ad
+   * breaks cleared in ~1s (seek-to-end), 2-ad breaks took ~8s and 3-ad
+   * breaks ~15s: every ad after the first was effectively waited out to its
+   * skip button. Boundaries are read from the <video> itself.
+   */
+  private detectAdBoundary(video: HTMLVideoElement) {
+    const src = video.currentSrc || video.src
+    const now = Date.now()
+    const srcChanged = this.curAdSrc !== '' && src !== '' && src !== this.curAdSrc
+    const durationChanged =
+      this.curAdDuration !== 0 && Math.abs(video.duration - this.curAdDuration) > 1
+    // Rewound to the start (same-length ads on the same MSE source): not our
+    // own recovery rewind, which lands at duration-1, not near 0.
+    const rewound =
+      this.ffLastTime > 2 &&
+      video.currentTime < 1 &&
+      now - this.recoverySeekAt > 1500
+    if (this.adCount > 0 && !srcChanged && !durationChanged && !rewound) return
+    this.adCount++
+    this.curAdSrc = src
+    if (this.adCount === 1) return
+    this.skipClickedAt = null
+    this.fastForwarding = false
+    this.ffLastSeekAt = 0
+    this.lastClickDispatchAt = 0
+    this.ffLastTime = -1
+    this.ffLastAdvanceAt = now
+    this.stuckRecoveries = 0
+    this.seekingSince = 0
   }
 
   /**
@@ -591,7 +653,9 @@ export class AdEngine {
    */
   private reportBreakCleared(seconds: number) {
     const secs = seconds.toFixed(1)
-    const ads = this.breakMethods.length
+    // Real ads (pod boundaries), not the number of distinct methods used;
+    // zero only when the engine never acted (a bumper that ran out).
+    const ads = this.breakMethods.length === 0 ? 0 : Math.max(1, this.adCount)
     const clicks = this.breakMethods.filter((m) => m === 'skip-button').length
     const ffs = this.breakMethods.filter((m) => m === 'fast-forward').length
     const recoveries = ads - clicks - ffs
@@ -653,6 +717,13 @@ export class AdEngine {
         method: label,
         ads: String(ads),
         adSeconds: String(adFootage),
+        // How the pod was actually cleared — the per-ad picture the single
+        // `method` label flattens. `seeks` vs `ffs` says whether seek-to-end
+        // is landing or being reset; `recoveries` says how often it wedged.
+        clicks: String(clicks),
+        ffs: String(ffs),
+        recoveries: String(recoveries),
+        seeks: String(this.breakSeeks),
       },
     })
   }
@@ -843,8 +914,13 @@ export class AdEngine {
     if (video.seeking) {
       // A seek to the end of an unbuffered ad legitimately freezes
       // currentTime while the segment loads — that's progress, not a wedge.
-      this.ffLastAdvanceAt = now
+      // But only for a bounded time: a seek that never lands (YouTube
+      // withholding the end segment) used to count as progress forever, so
+      // the watchdog never fired and the ad played out in real time.
+      if (this.seekingSince === 0) this.seekingSince = now
+      if (now - this.seekingSince < STUCK_AFTER_MS) this.ffLastAdvanceAt = now
     } else if (video.currentTime !== this.ffLastTime) {
+      this.seekingSince = 0
       this.ffLastTime = video.currentTime
       this.ffLastAdvanceAt = now
     } else if (
@@ -869,6 +945,8 @@ export class AdEngine {
       }
       log('ad player looks stuck; recovery attempt', this.stuckRecoveries)
       video.playbackRate = 1
+      this.recoverySeekAt = now
+      this.seekingSince = 0
       video.currentTime = Math.max(0, video.duration - 1)
       void video.play().catch(() => {})
       this.tallySkip('stuck-recovery')
@@ -901,6 +979,7 @@ export class AdEngine {
       (this.skipClickedAt === null || playerShowsAd(this.player))
     ) {
       this.ffLastSeekAt = now
+      this.breakSeeks++
       video.currentTime = target
     }
 
@@ -957,10 +1036,23 @@ export class AdEngine {
       return
     }
 
-    this.wallsSeen++
-    // Dismissible modal wall — same report, same single decision-maker as the
-    // hard block; the service worker dedupes across tabs and engine restarts.
-    void this.send({ type: 'skipSensei:wallSeen', walls: this.wallsSeen })
+    // A pre-rendered but never-shown message (inside a closed dialog) is not
+    // a wall the user saw — take it out quietly, without counting it or
+    // tripping the breaker. Telemetry showed "walls" landing within 400ms of
+    // successful 1s skips, four in one afternoon on one install: the ad
+    // transition mounts the element hidden.
+    const shown = (message as HTMLElement).getClientRects().length > 0
+    if (shown) {
+      this.wallsSeen++
+      // Dismissible modal wall — same report, same single decision-maker as
+      // the hard block; the service worker dedupes across tabs and engine
+      // restarts. Stage-tagged so the two are no longer one event kind.
+      void this.send({
+        type: 'skipSensei:wallSeen',
+        walls: this.wallsSeen,
+        stage: 'modal',
+      })
+    }
 
     document.querySelectorAll(POPUP_DIALOG).forEach((dialog) => {
       if (dialog.querySelector(ENFORCEMENT_MESSAGE)) dialog.remove()
@@ -994,6 +1086,7 @@ export class AdEngine {
       void this.send({
         type: 'skipSensei:wallSeen',
         walls: this.wallsSeen,
+        stage: 'hard',
       })
       log('YouTube hard playback block detected — showing recovery panel')
     }

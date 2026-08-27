@@ -2,6 +2,8 @@
 // /api/error and /api/event persisted to Vercel Blob.
 //
 //   GET /api/errors?key=<ERROR_LOG_READ_KEY>[&limit=50][&type=errors|events]
+//                  [&since=<ISO>][&until=<ISO>]  — window on received_at; page
+//                  backwards by passing the oldest received_at as `until`
 //
 // `type=errors` (default) reads crash reports; `type=events` reads
 // operational events (self-heals, gapfills, aggressive-mode breaker trips).
@@ -44,8 +46,21 @@ module.exports = async (req, res) => {
     cursor = page.cursor
   } while (cursor)
 
-  // Pathnames are timestamp-named, so lexicographic order = chronological.
-  const recent = blobs
+  // Pathnames are timestamp-named (<prefix><day>/<received_at with :. → ->),
+  // so lexicographic order = chronological, and a window can be applied to
+  // the pathname without opening a single blob.
+  const stampOf = (b) => b.pathname.slice(b.pathname.lastIndexOf('/') + 1)
+  const toStamp = (iso) => {
+    const t = Date.parse(String(iso))
+    return Number.isFinite(t) ? new Date(t).toISOString().replace(/[:.]/g, '-') : null
+  }
+  const since = req.query.since ? toStamp(req.query.since) : null
+  const until = req.query.until ? toStamp(req.query.until) : null
+  const inWindow = blobs.filter((b) => {
+    const s = stampOf(b)
+    return (!since || s >= since) && (!until || s < until)
+  })
+  const recent = inWindow
     .sort((a, b) => (a.pathname < b.pathname ? 1 : -1))
     .slice(0, limit)
 
@@ -63,5 +78,9 @@ module.exports = async (req, res) => {
   ).filter(Boolean)
 
   res.setHeader('cache-control', 'no-store')
-  return res.status(200).json({ total_stored: blobs.length, reports })
+  return res.status(200).json({
+    total_stored: blobs.length,
+    in_window: inWindow.length,
+    reports,
+  })
 }

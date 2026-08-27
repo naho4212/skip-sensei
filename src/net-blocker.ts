@@ -16,7 +16,9 @@ import type { BlockBreakdown } from './types'
 // part of the ad group, not the tracker group AdGuard puts it in, so a default
 // install actually blocks audio ads on open.spotify.com.
 const AD_RULESET_IDS = ['ads_base', 'ads_mobile', 'streaming']
-const TRACKER_RULESET_IDS = ['trackers']
+// Two shards of one list (build-rulesets.mjs): setRulesets' per-id fallback
+// enables whichever fits when the pair together exceeds the static pool.
+const TRACKER_RULESET_IDS = ['trackers', 'trackers_2']
 
 /** The always-on 1-rule static exemption ruleset (built by
  * build-rulesets.mjs, enabled in the manifest) — the primary guarantee that
@@ -424,6 +426,7 @@ const CATEGORY_BY_RULESET: Record<string, keyof BlockBreakdown> = {
   ads_mobile: 'ads',
   streaming: 'ads',
   trackers: 'trackers',
+  trackers_2: 'trackers',
   cookies: 'cookies',
   social: 'social',
   popups: 'popups',

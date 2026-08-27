@@ -102,7 +102,8 @@
         margin-top: 4px;
         accent-color: var(--accent);
       }
-      textarea {
+      textarea,
+      input[type='text'] {
         width: 100%;
         box-sizing: border-box;
         margin-top: 12px;
@@ -174,6 +175,13 @@
       <label class="reason"><input type="radio" name="reason" value="different-blocker" /> I'm using a different ad blocker</label>
       <label class="reason"><input type="radio" name="reason" value="temporary" /> Just testing / I'll be back</label>
       <label class="reason"><input type="radio" name="reason" value="other" /> Another reason</label>
+      <input
+        type="text"
+        id="site"
+        maxlength="100"
+        placeholder="Which site or video? (optional — e.g. spotify.com, a news site)"
+        autocomplete="off"
+      />
       <textarea
         id="note"
         maxlength="280"
@@ -182,8 +190,8 @@
       <div class="submit-row">
         <button class="btn" type="submit">Submit</button>
         <span class="hint"
-          >Sends only your selection, this note, and the extension
-          version.</span
+          >Sends only your selection, the site, this note, and the
+          extension version.</span
         >
       </div>
       <div id="thanks">Thank you — noted.</div>
@@ -213,9 +221,13 @@
         e.preventDefault()
         const reason = document.querySelector('input[name="reason"]:checked')
         const note = document.getElementById('note').value.trim().slice(0, 280)
-        if (!reason && !note) return
+        const site = document.getElementById('site').value.trim().slice(0, 100)
+        if (!reason && !note && !site) return
         const fields = { reason: reason ? reason.value : 'note-only' }
         if (note) fields.note = note
+        // The one thing every actionable survey answer needs and the first
+        // one lacked: WHERE it failed.
+        if (site) fields.site = site
         try {
           await fetch('api/event', {
             method: 'POST',

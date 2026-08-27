@@ -64,7 +64,12 @@ function keepRule(r) {
 const RULESETS = [
   { adguardId: 2, id: 'ads_base', name: 'AdGuard Base (EasyList-equivalent)' },
   { adguardId: 11, id: 'ads_mobile', name: 'AdGuard Mobile Ads' },
-  { adguardId: 3, id: 'trackers', name: 'AdGuard Tracking Protection' },
+  // Sharded: at ~93k rules this is the one list that fails with "exceeds
+  // the rule count limit" when other extensions hold part of Chrome's shared
+  // static pool — seen in the field on default installs, silently. Two halves
+  // let net-blocker's per-ruleset fallback enable whichever fits rather than
+  // losing tracker blocking entirely.
+  { adguardId: 3, id: 'trackers', name: 'AdGuard Tracking Protection', shards: ['trackers', 'trackers_2'] },
   { adguardId: 18, id: 'cookies', name: 'AdGuard Cookie Notices' },
   { adguardId: 4, id: 'social', name: 'AdGuard Social Media' },
   { adguardId: 19, id: 'popups', name: 'AdGuard Popups' },
@@ -73,7 +78,7 @@ const RULESETS = [
 
 if (!existsSync(OUT)) mkdirSync(OUT, { recursive: true })
 
-for (const { adguardId, id, name } of RULESETS) {
+for (const { adguardId, id, name, shards } of RULESETS) {
   const path = `${SRC}/ruleset_${adguardId}/ruleset_${adguardId}.json`
   const rules = JSON.parse(readFileSync(path, 'utf8'))
   const kept = rules
@@ -104,6 +109,26 @@ for (const { adguardId, id, name } of RULESETS) {
     )
   }
 
+  if (shards) {
+    // Every shard carries ALL of the list's exception (allow) rules and its
+    // own slice of the block rules: DNR resolves priority across enabled
+    // rulesets, so a shard that loads without its sibling must still ship
+    // the exceptions that keep its blocks from breaking sites.
+    const isAllow = (r) => r.action.type !== 'block' && r.action.type !== 'redirect'
+    const allows = kept.filter(isAllow)
+    const blocks = kept.filter((r) => !isAllow(r))
+    const per = Math.ceil(blocks.length / shards.length)
+    shards.forEach((shardId, s) => {
+      const slice = [...allows, ...blocks.slice(s * per, (s + 1) * per)].map(
+        (r, i) => ({ ...r, id: i + 1 }),
+      )
+      if (slice.length < MIN_RULES_PER_SET)
+        throw new Error(`${shardId}: only ${slice.length} rules — shard too small`)
+      writeFileSync(`${OUT}/${shardId}.json`, JSON.stringify(slice))
+      console.log(`${shardId}: ${slice.length} rules (shard ${s + 1}/${shards.length} of ${name})`)
+    })
+    continue
+  }
   writeFileSync(`${OUT}/${id}.json`, JSON.stringify(kept))
   console.log(
     `${id}: ${kept.length} rules kept of ${rules.length} (${name})`,

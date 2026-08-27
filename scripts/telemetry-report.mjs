@@ -65,24 +65,51 @@ if (!KEY) {
   process.exit(1)
 }
 
+/**
+ * The endpoint returns at most 200 reports per call. Page backwards with
+ * `until` (= the oldest received_at of the previous page) until the window
+ * is covered or a page comes back short — before this, anything past the
+ * newest 200 events was silently invisible to the report.
+ */
 async function fetchEvents() {
   let lastError
+  const since = new Date(Date.now() - DAYS * 86_400_000).toISOString()
   for (const host of HOSTS) {
-    // Key travels in the Authorization header, not the query string — query
-    // params land in Vercel access logs; headers don't.
-    const url = `${host}/api/errors?type=events&limit=1000`
+    const items = []
+    const seen = new Set()
+    let until = null
     try {
-      const res = await fetch(url, {
-        headers: { authorization: `Bearer ${KEY}` },
-      })
-      if (!res.ok) {
-        lastError = `${host} → HTTP ${res.status}`
-        continue
+      for (let page = 0; page < 50; page++) {
+        // Key travels in the Authorization header, not the query string —
+        // query params land in Vercel access logs; headers don't.
+        const url =
+          `${host}/api/errors?type=events&limit=200&since=${encodeURIComponent(since)}` +
+          (until ? `&until=${encodeURIComponent(until)}` : '')
+        const res = await fetch(url, {
+          headers: { authorization: `Bearer ${KEY}` },
+        })
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const body = await res.json()
+        const batch = Array.isArray(body)
+          ? body
+          : (body.reports ?? body.events ?? body.items ?? body.errors ?? [])
+        for (const e of batch) {
+          // Identity = who/what/when. Guards against a server that ignores
+          // `until` (pre-window deploys return the same newest 200 on every
+          // page) and against the blob store's occasional double-write.
+          const k = `${e.install_id}|${e.kind}|${e.received_at}`
+          if (seen.has(k)) continue
+          seen.add(k)
+          items.push(e)
+        }
+        if (batch.length < 200) break
+        const oldest = batch.reduce(
+          (min, e) => (e.received_at < min ? e.received_at : min),
+          batch[0].received_at,
+        )
+        if (!oldest || oldest === until) break
+        until = oldest
       }
-      const body = await res.json()
-      const items = Array.isArray(body)
-        ? body
-        : (body.reports ?? body.events ?? body.items ?? body.errors ?? [])
       return { host, items }
     } catch (error) {
       lastError = `${host} → ${error.message}`
@@ -93,6 +120,14 @@ async function fetchEvents() {
 
 const num = (v) => (v === undefined || v === '' ? 0 : Number(v) || 0)
 const sum = (list, pick) => list.reduce((acc, x) => acc + num(pick(x)), 0)
+/**
+ * A counter that is ABSENT from every rollup is unknown, not zero. The
+ * server-side 12-field cap dropped every health counter for a month and the
+ * report printed a reassuring "0" for each — this prints "—" instead so a
+ * silently missing field can never again read as a healthy product.
+ */
+const sumOrDash = (list, key) =>
+  list.some((r) => r.fields?.[key] !== undefined) ? sum(list, (r) => r.fields[key]) : '—'
 
 /**
  * Percentile of a per-install percentile is not a percentile — but averaging
@@ -182,10 +217,17 @@ function report({ host, items }) {
 
   const fails = sum(rollups, (r) => r.fields.skip_failures)
   console.log('\nHEALTH  (rising numbers here mean the product is degrading)')
-  console.log(`   skip failures       ${fails} (${pctShare(fails, fails + skips)} of breaks)`)
-  console.log(`   self-heals          ${sum(rollups, (r) => r.fields.self_heals)}`)
-  console.log(`   cosmetic un-hides   ${sum(rollups, (r) => r.fields.cosmetic_unhides)}`)
-  console.log(`   ruleset enable fails ${sum(rollups, (r) => r.fields.ruleset_fails)}`)
+  const failsShown = sumOrDash(rollups, 'skip_failures')
+  console.log(`   skip failures       ${failsShown}${failsShown === '—' ? '' : ` (${pctShare(fails, fails + skips)} of breaks)`}`)
+  console.log(`   self-heals          ${sumOrDash(rollups, 'self_heals')}`)
+  console.log(`   cosmetic un-hides   ${sumOrDash(rollups, 'cosmetic_unhides')}`)
+  console.log(`   ruleset enable fails ${sumOrDash(rollups, 'ruleset_fails')}`)
+  const uiKeys = [...new Set(rollups.flatMap((r) => Object.keys(r.fields ?? {})))]
+    .filter((k) => k.startsWith('ui_'))
+    .sort()
+  console.log('\nUI USAGE  (interactions with the extension’s own controls)')
+  if (uiKeys.length === 0) console.log('   — (no ui_* fields in any rollup)')
+  for (const k of uiKeys) console.log(`   ${k.padEnd(20)} ${sum(rollups, (r) => r.fields[k])}`)
 
   console.log('\nADOPTION  (share of install-days with the feature on)')
   const FEATURES = {

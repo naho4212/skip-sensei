@@ -540,14 +540,22 @@ const WALL_DEDUPE_MS = 10_000
  * decision-maker (this file) AND single flight (this chain). */
 let wallChain: Promise<void> = Promise.resolve()
 
-function queueWallSeen(walls: number, tabId?: number): Promise<void> {
+function queueWallSeen(
+  walls: number,
+  tabId?: number,
+  stage: 'modal' | 'hard' = 'hard',
+): Promise<void> {
   wallChain = wallChain
-    .then(() => handleWallSeen(walls, tabId))
+    .then(() => handleWallSeen(walls, tabId, stage))
     .catch(() => {})
   return wallChain
 }
 
-async function handleWallSeen(walls: number, tabId?: number) {
+async function handleWallSeen(
+  walls: number,
+  tabId?: number,
+  stage: 'modal' | 'hard' = 'hard',
+) {
   const last =
     (await chrome.storage.session.get('lastWallAt')).lastWallAt ?? 0
   const now = Date.now()
@@ -575,10 +583,17 @@ async function handleWallSeen(walls: number, tabId?: number) {
   await setYtBackoff(walls)
   void recordActivity(
     'Skip YouTube ads',
-    'YouTube blocked playback for this session — offered the cookie-clear fix',
+    stage === 'hard'
+      ? 'YouTube blocked playback for this session — offered the cookie-clear fix'
+      : 'dismissed YouTube\'s ad-blocker warning dialog',
     'youtube.com',
   )
-  void reportEvent('yt_hard_block', { walls: String(walls) })
+  // Two kinds, not one: the dismissible warning and the server-side playback
+  // refusal are different severities, and reporting both as "hard block"
+  // made the wall rate unreadable.
+  void reportEvent(stage === 'hard' ? 'yt_hard_block' : 'yt_wall_modal', {
+    walls: String(walls),
+  })
 
   if (!(await getSettings()).aggressivePruning) return
   void bumpDailyCounter('breakerTrips')
@@ -824,7 +839,7 @@ chrome.runtime.onMessage.addListener(
         })()
         return true
       case 'skipSensei:wallSeen':
-        void queueWallSeen(message.walls, sender.tab?.id)
+        void queueWallSeen(message.walls, sender.tab?.id, message.stage ?? 'hard')
         return false
       case 'skipSensei:getWallState':
         void (async () => {

@@ -76,6 +76,18 @@ module.exports = async (req, res) => {
       fields[String(key).slice(0, MAX_FIELD_KEY)] = value.slice(0, cap)
       n++
     }
+    // `day` is stamped from the sender's local clock; a skewed machine
+    // produced rollups dated three days in the future. Local-vs-UTC can
+    // legitimately differ by one day either way — anything further is clock
+    // error, and is pinned to the day we actually received it.
+    if (typeof fields.day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(fields.day)) {
+      const sent = Date.parse(fields.day + 'T00:00:00Z')
+      const got = Date.parse(record.received_at.slice(0, 10) + 'T00:00:00Z')
+      if (Number.isFinite(sent) && Math.abs(sent - got) > 86_400_000) {
+        fields.day_sent = fields.day
+        fields.day = record.received_at.slice(0, 10)
+      }
+    }
     record.fields = fields
   }
 

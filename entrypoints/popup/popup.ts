@@ -198,7 +198,13 @@ async function renderBlockerState() {
     const state: { enabled: boolean; active: boolean; error?: string } =
       await chrome.runtime.sendMessage({ type: 'skipSensei:getBlockerState' })
     if (state.error) {
-      textEl.textContent = `Couldn't enable ad blocking: ${state.error}`
+      // The rule-count-limit failure is Chrome holding a stale static-rule
+      // allocation (or another blocker using the shared pool); nothing the
+      // extension retries can fix it, a browser restart can.
+      const poolLimit = /rule count limit/i.test(state.error)
+      textEl.textContent = poolLimit
+        ? `Some filter lists didn't load — Chrome's rule budget is full (usually another ad blocker, or a stale allocation after an update). Restart Chrome; if it persists, disable the other blocker.`
+        : `Couldn't enable ad blocking: ${state.error}`
       blockerNoteEl.className = 'blocker-note warn'
       blockerNoteEl.hidden = false
       reloadBtn.hidden = true

@@ -577,7 +577,12 @@ async function apply() {
   // Selectors the AI list-hide audit judged NOT ads on this domain (site UI /
   // user content) stay un-hidden too; 👍 in the popup flips them back.
   const audited = genericOn ? await getListAuditVerdicts(bareDomain()) : {}
-  activeAuditUi = Object.keys(audited).filter((s) => audited[s] === 'ui')
+  // Honour 'ui' verdicts for heuristic selectors only: verdicts cached before
+  // list rules were excluded from the audit (see auditListHides) would
+  // otherwise keep un-hiding the list-matched ads they wrongly cleared.
+  activeAuditUi = Object.keys(audited).filter(
+    (s) => audited[s] === 'ui' && (HEURISTIC_SELECTORS as readonly string[]).includes(s),
+  )
   const auditUi = new Set(activeAuditUi)
   // Heuristic selectors that currently match the site's own UI (needs the
   // real DOM — a no-op at document_start, checked again from onPageReady).
@@ -1982,7 +1987,13 @@ async function auditListHides() {
   if (!settings.aiEnhancements) return
   const domain = bareDomain()
   const verdicts = await getListAuditVerdicts(domain)
-  const auditable = new Set([...HEURISTIC_SELECTORS, ...(listSelectors ?? [])])
+  // Heuristic selectors ONLY. Filter-list rules used to be audited too, and
+  // the "unsure = keep" policy that is right for user content un-hid real ad
+  // slots — `.billboard-container`, `[class*="advertisement-"]`,
+  // `.sdaContainer` all came back as "UI" in the field. A list rule is a
+  // human-curated, low-false-positive hide; the AI only ever second-guesses
+  // our own broad heuristics, where the doubt is warranted.
+  const auditable = new Set<string>(HEURISTIC_SELECTORS)
   const suspects: Array<{ selector: string; el: HTMLElement }> = []
   for (const selector of activeSelectors) {
     if (suspects.length >= 8) break

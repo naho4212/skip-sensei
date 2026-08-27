@@ -100,6 +100,8 @@ export default defineConfig({
         // Protection; we ship them with the ad lists) — build-rulesets.mjs.
         { id: 'streaming', enabled: false, path: 'rulesets/streaming.json' },
         { id: 'trackers', enabled: false, path: 'rulesets/trackers.json' },
+        // Second half of Tracking Protection (see build-rulesets.mjs shards).
+        { id: 'trackers_2', enabled: false, path: 'rulesets/trackers_2.json' },
         { id: 'cookies', enabled: false, path: 'rulesets/cookies.json' },
         { id: 'social', enabled: false, path: 'rulesets/social.json' },
         { id: 'popups', enabled: false, path: 'rulesets/popups.json' },

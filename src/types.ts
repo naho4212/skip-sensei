@@ -413,7 +413,7 @@ export type Message =
   // An enforcement wall was seen on the sender's tab. The service worker owns
   // what happens next (backoff flag, activity entry, tripping the aggressive-
   // pruning breaker) so concurrent tabs can't each decide and each write.
-  | { type: 'skipSensei:wallSeen'; walls: number }
+  | { type: 'skipSensei:wallSeen'; walls: number; stage?: 'modal' | 'hard' }
   // → { triedVisitorClear: boolean }; did a visitor-only clear just happen on this
   // tab? Drives the panel's escalation copy when the wall survives stage one.
   | { type: 'skipSensei:getWallState' }

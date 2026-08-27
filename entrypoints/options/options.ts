@@ -845,7 +845,8 @@ const RULESET_SOURCES: Record<string, string> = {
   ads_base: 'AdGuard Base · EasyList-based',
   ads_mobile: 'AdGuard Mobile Ads',
   streaming: 'Spotify web-player ad endpoints',
-  trackers: 'AdGuard Tracking Protection',
+  trackers: 'AdGuard Tracking Protection · part 1',
+  trackers_2: 'AdGuard Tracking Protection · part 2',
   cookies: 'AdGuard Cookie Notices',
   social: 'AdGuard Social Media',
   popups: 'AdGuard Popups',
@@ -863,8 +864,8 @@ const RULESET_GROUPS: RulesetGroup[] = [
   {
     label: 'Trackers & analytics',
     setting: 'blockTrackers',
-    rulesets: ['trackers'],
-    tip: 'Blocks tracking/analytics pixels (TikTok, Snapchat, Google Tag Manager, etc.) — the largest list.',
+    rulesets: ['trackers', 'trackers_2'],
+    tip: 'Blocks tracking/analytics pixels (TikTok, Snapchat, Google Tag Manager, etc.) — the largest list, shipped in two parts so at least one loads when Chrome\'s rule budget is shared with other extensions.',
   },
   {
     label: 'Cookie-consent notices',
