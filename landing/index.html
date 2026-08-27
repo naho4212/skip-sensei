@@ -422,8 +422,26 @@
 
       /* popup mockup — a faithful still of the real popup's "This site" view,
          using the extension's own dark-theme values (popup.css) */
+      .mock-stage { position: relative; width: min(94vw, 344px); margin: 44px auto 0; }
+      .fpill {
+        position: absolute; z-index: 3; white-space: nowrap;
+        font-size: 12px; font-weight: 600; color: #fff;
+        background: var(--accent); border: 1px solid rgba(167,139,250,0.5);
+        padding: 6px 12px; border-radius: 999px;
+        box-shadow: 0 8px 24px rgba(124,58,237,0.35);
+        animation: fpfloat 4s ease-in-out infinite;
+      }
+      .fpill::before { content: "\2713  "; font-weight: 800; }
+      .fp-green { background: #1db954; border-color: rgba(30,215,96,0.5); box-shadow: 0 8px 24px rgba(30,215,96,0.35); }
+      .fp-1 { top: 8px; left: -40px; animation-delay: 0s; }
+      .fp-2 { top: 128px; right: -54px; animation-delay: .8s; }
+      .fp-3 { top: 300px; left: -40px; animation-delay: 1.6s; }
+      .fp-4 { bottom: 46px; right: -30px; animation-delay: 2.4s; }
+      @media (max-width: 900px) { .fpill { display: none; } }
+      @keyframes fpfloat { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+      @media (prefers-reduced-motion: reduce) { .fpill { animation: none; } }
       .hero-mock {
-        margin: 44px auto 0; width: min(94vw, 344px);
+        margin: 0; width: 100%;
         border-radius: 18px; overflow: hidden; text-align: left;
         background: #111113; border: 1px solid var(--hair);
         box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5),
@@ -503,6 +521,34 @@
         display: flex; justify-content: center; gap: 8px; padding: 10px;
         border-top: 1px solid var(--pm-border); font-size: 12px; color: var(--pm-text3);
       }
+
+      .mock-statusstrip {
+        display: flex; align-items: center; gap: 8px;
+        padding: 9px 13px; margin-bottom: 8px; border-radius: 12px;
+        font-size: 13px; font-weight: 600; color: var(--pm-text);
+        background: color-mix(in srgb, #22c55e 10%, var(--pm-panel));
+        border: 1px solid color-mix(in srgb, #22c55e 45%, transparent);
+      }
+      .mock-sdot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 8px #22c55e; }
+      .mock-heronum { font-size: 30px; font-weight: 800; line-height: 1; letter-spacing: -0.03em; color: var(--pm-text); margin: 4px 0 1px; font-variant-numeric: tabular-nums; }
+      .mock-heronumlabel { font-size: 11.5px; color: var(--pm-text2); }
+      .mock-host { margin-top: 4px; font-size: 12.5px; font-weight: 600; color: var(--pm-text2); }
+      .mock-homeline {
+        display: flex; align-items: baseline; gap: 8px; margin-top: 10px;
+        padding: 9px 13px; border: 1px solid var(--pm-border); border-radius: 12px; background: var(--pm-panel);
+      }
+      .mock-homeline b { font-size: 15px; font-weight: 800; color: var(--pm-accent); letter-spacing: -0.02em; }
+      .mock-homeline span:not(.mock-chev) { flex: 1; font-size: 11px; color: var(--pm-text2); }
+      .mock-tabbar {
+        display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px;
+        padding: 6px 8px 8px; border-top: 1px solid var(--pm-border);
+      }
+      .mock-tab {
+        display: flex; flex-direction: column; align-items: center; gap: 3px;
+        padding: 6px 2px 4px; border-radius: 10px; font-size: 10.5px; font-weight: 600; color: var(--pm-text3);
+      }
+      .mock-tab svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+      .mock-tab.on { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--pm-accent); }
 
       /* install steps */
       .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; counter-reset: step; }
@@ -600,46 +646,56 @@
         <div class="kicker"><b>Free</b> · Private · No account · Runs in your browser</div>
 
         <!-- the actual extension popup ("This site" view), so visitors see what they get -->
-        <div class="hero-mock" role="img" aria-label="The Ad Sensei popup on youtube.com: protection active, 23 ads blocked on this page, thousands blocked all-time">
-          <div class="mock-head">
-            <div class="mock-brand-row">
-              <svg class="mock-glyph" viewBox="0 0 24 17" aria-hidden="true"><path d="M0 1.5l6 7-6 7v-14zm7.5 0l6 7-6 7v-14zm8.5 0h2.4v14H16v-14z" /></svg>
-              <div class="mock-brand">
-                <span class="mock-wm"><span>AD</span> SENSEI</span>
-                <span class="mock-status">Protection active</span>
+        <div class="mock-stage">
+          <span class="fpill fp-1">Sponsor skipped</span>
+          <span class="fpill fp-2">Cookie popup cleared</span>
+          <span class="fpill fp-3">Tracker blocked</span>
+          <span class="fpill fp-4 fp-green">Ad muted on Spotify</span>
+          <div class="hero-mock" role="img" aria-label="The Ad Sensei popup on youtube.com: everything working, 24 ads blocked on this page, with Home, Controls, Stats and Settings tabs">
+            <div class="mock-head">
+              <div class="mock-brand-row">
+                <svg class="mock-glyph" viewBox="0 0 24 17" aria-hidden="true"><path d="M0 1.5l6 7-6 7v-14zm7.5 0l6 7-6 7v-14zm8.5 0h2.4v14H16v-14z" /></svg>
+                <div class="mock-brand">
+                  <span class="mock-wm"><span>AD</span> SENSEI</span>
+                  <span class="mock-status">Zero interruptions.</span>
+                </div>
+              </div>
+              <div class="mock-actions">
+                <span aria-hidden="true">↻</span>
+                <span class="mock-tgl" aria-hidden="true"></span>
               </div>
             </div>
-            <div class="mock-actions">
-              <span aria-hidden="true">↻</span>
-              <span class="mock-tgl" aria-hidden="true"></span>
-            </div>
-          </div>
-          <div class="mock-seg"><span class="on">This site</span><span>Controls</span></div>
-          <div class="mock-pad">
-            <div class="mock-sitehero">
-              <div class="mock-siteinfo">
-                <span class="mock-sitestatus">Blocking active</span>
-                <span class="mock-host">youtube.com</span>
-                <span class="mock-pageblocked">23 blocked on this page</span>
+            <div class="mock-pad">
+              <div class="mock-statusstrip">
+                <span class="mock-sdot" aria-hidden="true"></span>Everything&rsquo;s working
               </div>
-              <span class="mock-power" aria-hidden="true">
-                <svg viewBox="0 0 24 24"><path d="M12 3v9" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" /><path d="M7.4 6.4a7 7 0 1 0 9.2 0" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" /></svg>
-              </span>
+              <div class="mock-sitehero">
+                <div class="mock-siteinfo">
+                  <span class="mock-sitestatus">Blocking active</span>
+                  <span class="mock-heronum">24</span>
+                  <span class="mock-heronumlabel">ads blocked on this page</span>
+                  <span class="mock-host">youtube.com</span>
+                </div>
+                <span class="mock-power" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M12 3v9" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" /><path d="M7.4 6.4a7 7 0 1 0 9.2 0" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" /></svg>
+                </span>
+              </div>
+              <div class="mock-detail">
+                <span class="mock-chev" aria-hidden="true">&#9656;</span>
+                <span>2 sponsor segments skipped</span>
+                <span class="re" aria-hidden="true">&#8635;</span>
+              </div>
+              <div class="mock-homeline">
+                <b>25,228</b><span>ads &amp; trackers stopped all time</span><span class="mock-chev" aria-hidden="true">&#8250;</span>
+              </div>
             </div>
-            <div class="mock-detail">
-              <span class="mock-chev" aria-hidden="true">▸</span>
-              <span>2 sponsor segments skipped</span>
-              <span class="re" aria-hidden="true">↻</span>
-            </div>
-            <div class="mock-stat-eyebrow">Blocked everywhere</div>
-            <div class="mock-statrow">
-              <div class="mock-stat"><b>1,284</b><span>YouTube</span><i>7 today</i></div>
-              <div class="mock-stat"><b>18,930</b><span>Web ads</span><i>166 today</i></div>
-              <div class="mock-stat"><b>4,102</b><span>Trackers</span><i>38 today</i></div>
-              <div class="mock-stat"><b>912</b><span>Cookies</span><i>12 today</i></div>
+            <div class="mock-tabbar">
+              <span class="mock-tab on"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>Home</span>
+              <span class="mock-tab"><svg viewBox="0 0 24 24" aria-hidden="true"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="17" x2="20" y2="17"/><circle cx="9" cy="7" r="2.5"/><circle cx="15" cy="17" r="2.5"/></svg>Controls</span>
+              <span class="mock-tab"><svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="4 17 10 11 14 15 20 8"/><polyline points="15 8 20 8 20 13"/></svg>Stats</span>
+              <span class="mock-tab"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8 2 2 0 1 1-2.8 2.8 1.7 1.7 0 0 0-2.9 1.2 2 2 0 1 1-4 0 1.7 1.7 0 0 0-2.9-1.2 2 2 0 1 1-2.8-2.8A1.7 1.7 0 0 0 4 15a2 2 0 1 1 0-4 1.7 1.7 0 0 0 1.5-2.9 2 2 0 1 1 2.8-2.8A1.7 1.7 0 0 0 11 4.6a2 2 0 1 1 4 0 1.7 1.7 0 0 0 2.9 1.5 2 2 0 1 1 2.8 2.8A1.7 1.7 0 0 0 20 11a2 2 0 1 1 0 4z"/></svg>Settings</span>
             </div>
           </div>
-          <div class="mock-foot">↗ Share <span>·</span> ☕ Buy me a coffee</div>
         </div>
       </div>
     </header>
