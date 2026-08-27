@@ -28,6 +28,10 @@ import {
 } from './filter-updates'
 import { initPruneRegistration, syncPruneRegistration } from './prune-register'
 import {
+  initSpotifySkipRegistration,
+  syncSpotifySkipRegistration,
+} from './spotify-skip-register'
+import {
   initCosmeticRegistration,
   injectRegisteredIntoOpenTabs,
   syncCosmeticRegistration,
@@ -1166,6 +1170,7 @@ initNetBlocker({
 // Aggressive-mode YouTube pruner: (un)register the MAIN-world content script
 // to match the aggressivePruning setting.
 initPruneRegistration()
+  initSpotifySkipRegistration()
 
 // Anti-adblock scriptlet layer: (un)register the MAIN-world scriptlet bundle
 // for the broad web (dormant until broad host permission is granted).
@@ -1197,6 +1202,7 @@ void (async () => {
     await runColdStart(async () => {
       await syncNetBlocker()
       await syncPruneRegistration()
+  await syncSpotifySkipRegistration()
       await syncScriptletRegistration()
       await syncCosmeticRegistration()
     })

@@ -225,3 +225,24 @@ onSettingsChanged((s) => {
   settings = s
   sync()
 })
+
+// ---------------------------------------------------------------------------
+// Beta SKIP engine relay. The MAIN-world skipper (public/spotify-skip-main.js,
+// registered only when spotifySkipAds is on) posts a message each time it
+// removes an ad from the state machine; forward it to the activity log via the
+// service worker. The muter above stays running as the fallback.
+// ---------------------------------------------------------------------------
+window.addEventListener('message', (e) => {
+  if (e.source !== window || e.origin !== 'https://open.spotify.com') return
+  const data = e.data as { source?: string; type?: string } | null
+  if (!data || data.source !== 'adSenseiSpotifySkip') return
+  if (data.type === 'adSkipped') {
+    void chrome.runtime
+      .sendMessage({
+        type: 'skipSensei:logActivity',
+        feature: 'Skip Spotify audio ads',
+        action: 'skipped a Spotify audio ad',
+      })
+      .catch(() => {})
+  }
+})

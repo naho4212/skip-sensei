@@ -336,6 +336,30 @@
         margin: 10px 0 0; font-size: 12px; line-height: 1.5; color: var(--text-3);
       }
 
+      /* "Always know" status visual */
+      .status-stack { display: flex; flex-direction: column; gap: 14px; max-width: 480px; }
+      .sstat {
+        position: relative; padding: 14px 18px; border-radius: 14px;
+        border: 1px solid var(--sline); background: color-mix(in srgb, var(--scol) 9%, #14121c);
+        --scol: #22c55e; --sline: color-mix(in srgb, #22c55e 45%, transparent);
+      }
+      .sstat.warn { --scol: #e0a52e; --sline: color-mix(in srgb, #e0a52e 55%, transparent); }
+      .sstat.wall { --scol: #ef4444; --sline: color-mix(in srgb, #ef4444 50%, transparent); }
+      .sstat-head { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 14.5px; }
+      .sstat-head::before {
+        content: ''; width: 9px; height: 9px; border-radius: 50%; flex: none;
+        background: var(--scol); box-shadow: 0 0 10px var(--scol);
+      }
+      .sstat p { margin: 6px 0 0 19px; font-size: 12.5px; line-height: 1.5; color: var(--text-2); }
+      .sstat .sbtn {
+        display: inline-block; margin: 10px 0 0 19px; padding: 7px 14px; border-radius: 9px;
+        border: 1px solid var(--sline); background: color-mix(in srgb, var(--scol) 18%, transparent);
+        font-size: 12px; font-weight: 600; color: var(--text);
+      }
+      .status-cols { display: grid; grid-template-columns: 1fr 480px; gap: 48px; align-items: center; }
+      @media (max-width: 900px) { .status-cols { grid-template-columns: 1fr; } .status-stack { max-width: none; } }
+      .status-copy h2 { margin-top: 0; }
+
       /* privacy band */
       .band {
         background: var(--panel);
@@ -540,6 +564,7 @@
           <a href="#ai">AI</a>
           <a href="#privacy">Privacy</a>
           <a href="#install">Install</a>
+          <a href="https://www.singlefinmedia.com/ad-sensei/support">Support</a>
         </nav>
         <a class="cta-sm" href="https://chromewebstore.google.com/detail/mjdcndkalddmlahidjabnncicdmpimmi?utm_source=sfm">
           <svg class="chrome-ico" viewBox="0 0 48 48" fill="none"><path d="M24 8a16 16 0 0 0-13.86 8h11.1A8 8 0 0 1 32 20l5.54 9.6A16 16 0 0 0 24 8Z" fill="#DB4437"/><path d="M10.14 16A16 16 0 0 0 17 41.2l5.54-9.6A8 8 0 0 1 16 24H5.48A16.1 16.1 0 0 1 10.14 16Z" fill="#0F9D58"/><path d="M17 41.2a16 16 0 0 0 20.54-11.6H26.46a8 8 0 0 1-6.76 3.84L17 41.2Z" fill="#F4B400"/><circle cx="24" cy="24" r="5.33" fill="#4285F4"/></svg>
@@ -717,9 +742,42 @@
             <ul class="surface-list">
               <li><b>SoundCloud</b><span class="surface-tag t-blocked">blocked</span> — the ad request never leaves your browser</li>
               <li><b>Pandora</b><span class="surface-tag t-blocked">blocked</span> — ads blocked, and no “Ad Blocker is on” wall</li>
-              <li class="muted-note"><b>Spotify</b><span class="surface-tag t-muted">muted</span> — ads arrive in-stream with skip locked, so no extension can block or skip them. Ad Sensei mutes the tab for exactly as long as each ad plays</li>
+              <li class="muted-note"><b>Spotify</b><span class="surface-tag t-muted">muted</span> — ads are silenced by default: the tab is muted for exactly as long as each ad plays</li>
+              <li class="muted-note"><b>Spotify skip</b><span class="surface-tag t-muted">beta</span> — optional: rewrites the web player so ad tracks are skipped outright, no audio at all</li>
             </ul>
-            <p class="surface-honest">Web players only — no extension can reach the desktop or mobile apps. If a tool claims to <em>block</em> Spotify ads, it doesn't.</p>
+            <p class="surface-honest">Web players only — no extension can reach the desktop or mobile apps. Spotify skipping is experimental: Spotify changes its player often, so muting stays on as the reliable fallback.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- always know it's working: the popup's live status strip -->
+    <section id="status-visual">
+      <div class="wrap">
+        <div class="status-cols">
+          <div class="status-copy">
+            <p class="eyebrow">No black box</p>
+            <h2>Always know <span class="grad">it's working</span></h2>
+            <p class="lede" style="margin-left:0">
+              One status card in the popup tells you what's happening on the
+              page you're on — and when a site pushes back, the fix is a
+              single tap, right there.
+            </p>
+          </div>
+          <div class="status-stack" role="img" aria-label="Three popup status cards: everything working; a YouTube ad-blocker notice with a one-tap fix; a site's ad-blocker wall with a one-tap fix">
+            <div class="sstat">
+              <div class="sstat-head">Everything's working</div>
+            </div>
+            <div class="sstat warn">
+              <div class="sstat-head">YouTube showed an ad-blocker notice</div>
+              <p>First-party blocking backed off automatically — ads are still skipped normally.</p>
+              <span class="sbtn">Clear YouTube cookies &amp; reload</span>
+            </div>
+            <div class="sstat wall">
+              <div class="sstat-head">This site asked you to turn off your ad blocker</div>
+              <p>Clearing this site's cookies usually restores access.</p>
+              <span class="sbtn">Clear this site's cookies &amp; reload</span>
+            </div>
           </div>
         </div>
       </div>

@@ -77,6 +77,7 @@ const OPT_KEYS = [
   'resumePlayback',
   'showSkipToast',
   'muteAudioAds',
+  'spotifySkipAds',
 ] as const satisfies readonly (keyof Settings)[]
 type OptKey = (typeof OPT_KEYS)[number]
 

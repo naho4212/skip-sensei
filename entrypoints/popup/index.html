@@ -81,8 +81,8 @@
 
       <section class="spotify-note" id="spotify-note" hidden>
         <button type="button" class="update-dismiss" id="spotify-note-dismiss" aria-label="Dismiss">×</button>
-        <div class="update-title"><span class="spotify-dot" aria-hidden="true"></span>Spotify ads are muted, not skipped</div>
-        <p class="key-reminder-text" style="margin-bottom:0">Spotify’s web player delivers ads in-stream with skip locked for free accounts — there’s no ad request to block and nothing to skip to. Ad Sensei mutes the tab the moment an ad starts and unmutes when the music returns.</p>
+        <div class="update-title"><span class="spotify-dot" aria-hidden="true"></span>Spotify ads are muted by default</div>
+        <p class="key-reminder-text" style="margin-bottom:0">Spotify delivers ads in-stream, so Ad Sensei mutes the tab for exactly as long as each ad plays. Want them gone entirely? Turn on <b>Skip audio ads (beta)</b> under Controls &rarr; Spotify — it rewrites the player to skip ads outright, with muting as the fallback.</p>
       </section>
 
       <!-- Per-page tools -->
@@ -314,6 +314,14 @@
             <span class="ctl-section-chev" aria-hidden="true">▸</span>
           </button>
           <div class="controls" id="sec-spotify" hidden>
+          <label class="ctl-row" data-row="opt-spotifySkipAds">
+            <span class="ctl-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4l11 8-11 8z"/><line x1="19" y1="5" x2="19" y2="19"/></svg></span>
+            <span class="ctl-text">
+              <span class="ctl-title">Skip audio ads<em class="beta-tag">beta</em><span class="info" tabindex="0" data-tip="Rewrites the Spotify web player's playback data so ad tracks are skipped outright — no ad plays. Experimental: Spotify changes this often, so muting stays on as a fallback. Takes effect on the next Spotify reload.">ⓘ</span></span>
+              <span class="ctl-sub">Remove ads instead of muting them</span>
+            </span>
+            <span class="switch"><input type="checkbox" id="opt-spotifySkipAds" /><span class="slider"></span></span>
+          </label>
           <label class="ctl-row" data-row="opt-muteAudioAds">
             <span class="ctl-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10v4h4l5 4V6L8 10z"/><line x1="16" y1="9" x2="21" y2="14"/><line x1="21" y1="9" x2="16" y2="14"/></svg></span>
             <span class="ctl-text">
@@ -322,7 +330,7 @@
             </span>
             <span class="switch"><input type="checkbox" id="opt-muteAudioAds" /><span class="slider"></span></span>
           </label>
-          <p class="ctl-note">Muted, not blocked — Spotify plays ads in-stream. You’ll see them go by; you won’t hear them.</p>
+          <p class="ctl-note">Spotify plays ads in-stream. Muting silences them; the beta skip removes them outright. Muting stays on as the fallback either way.</p>
           </div>
         </section>
     </main>

@@ -81,6 +81,10 @@ export interface Settings {
   /** Spotify web player: mute the tab for the duration of each audio ad
    *  (in-stream delivery — muting is the ceiling; see src/content/audio-ads.ts). */
   muteAudioAds: boolean
+  /** BETA: skip Spotify web-player audio ads by rewriting the player's state
+   *  machine (MAIN-world, src/spotify-skip-register.ts). Off by default; the
+   *  muter (muteAudioAds) stays on as the fallback. */
+  spotifySkipAds: boolean
   /**
    * Local-only mode: force built-in on-device AI, disable telemetry, and make
    * ZERO external network calls (no cloud LLM, no SponsorBlock, no error
@@ -192,6 +196,7 @@ export const DEFAULT_SETTINGS: Settings = {
   ytDismissStillWatching: false,
   ytDisableEndCards: false,
   muteAudioAds: true,
+  spotifySkipAds: false,
   localOnlyMode: false,
   debugLogging: false,
   telemetryEnabled: true,

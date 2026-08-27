@@ -75,8 +75,8 @@ export async function showSpotifyNotice(): Promise<void> {
   card.setAttribute('role', 'status')
   card.innerHTML = `
     <button type="button" class="ss-x" aria-label="Dismiss">×</button>
-    <div class="ss-title"><span>Spotify ads are <b>muted</b>, not skipped</span></div>
-    <p>Spotify's web player delivers ads in-stream with skip locked for free accounts — there's no ad request to block and nothing to skip to. Ad Sensei mutes this tab the moment an ad starts and unmutes when the music returns. You'll see ads go by; you won't hear them.</p>
+    <div class="ss-title"><span>Spotify ads are <b>muted</b> by default</span></div>
+    <p>Spotify delivers ads in-stream, so Ad Sensei mutes this tab for exactly as long as each ad plays. Prefer them gone entirely? Turn on <b>Skip audio ads (beta)</b> in the Ad Sensei popup under Controls &rarr; Spotify — it rewrites the player to skip ads outright, with muting kept as the fallback.</p>
     <div class="ss-actions"><span class="ss-brand">AD SENSEI</span><button type="button" class="ss-ok">Got it</button></div>
   `
   const dismiss = () => {

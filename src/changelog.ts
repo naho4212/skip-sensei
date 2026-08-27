@@ -31,7 +31,7 @@ export const CHANGELOG: ChangelogEntry[] = [
       'All-new popup: Home, Controls, Stats and Settings tabs — page status and per-page tools on Home, blocking controls grouped by area (Ad blocker / YouTube / Spotify), and your stats over today, 7 days, 30 days or all time',
       'More controls without a trip to Settings: hide Shorts, auto-dismiss “Still watching?”, hide end cards, resume after skip, malware blocking and the anti-adblock defuser now toggle right in the popup',
       'One status card explains anything unusual — a site’s ad-blocker wall, a YouTube notice, or a filter list that couldn’t load — with the fix a single tap away',
-      'Spotify: a one-time note in the web player and popup explains that Spotify ads are muted, not skipped (in-stream delivery), and muting has its own switch',
+      'Spotify audio ads are muted by default (the tab is silenced for exactly as long as each ad plays), and a new beta option under Controls → Spotify skips them outright by rewriting the web player — with muting kept as the fallback',
       'Release notes are now published on the website — “What’s new” in the popup takes you there',
       'The support form pre-fills your extension version when you open it from the extension',
       'Fixed: Pandora no longer shows its “Ad Blocker is on…” wall — music plays normally, with its ads still blocked',

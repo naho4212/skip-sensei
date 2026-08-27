@@ -60,6 +60,26 @@ function keepRule(r) {
   return false
 }
 
+/**
+ * Drop AdGuard's Spotify `gabo-receiver-service` block rules. That endpoint is
+ * Spotify's general event/telemetry pipe (analytics + ad-impression events),
+ * NOT the audio ad itself — blocking it does nothing to stop or skip an ad
+ * (Spotify delivers ads in-stream). All it produces is a flood of
+ * ERR_BLOCKED_BY_CLIENT retries in the console and wasted requests. Ads are
+ * handled by the muter (src/content/audio-ads.ts) and the beta skip engine
+ * (public/spotify-skip-main.js). Keeping this rule was pure cost on Spotify,
+ * so it is filtered out of the tracker lists. (The `/ad-logic/` streaming
+ * rules stay — they are harmless and don't generate the noise.)
+ */
+function isSpotifyGaboRule(rule) {
+  const f = rule?.condition?.urlFilter
+  return (
+    typeof f === 'string' &&
+    f.includes('gabo-receiver-service') &&
+    (f.includes('spotify') || f.includes('spclient'))
+  )
+}
+
 // AdGuard filter id → our ruleset id (see filters_i18n.json for names).
 const RULESETS = [
   { adguardId: 2, id: 'ads_base', name: 'AdGuard Base (EasyList-equivalent)' },
@@ -83,6 +103,7 @@ for (const { adguardId, id, name, shards } of RULESETS) {
   const rules = JSON.parse(readFileSync(path, 'utf8'))
   const kept = rules
     .filter(keepRule)
+    .filter((r) => !isSpotifyGaboRule(r))
     // Keep ONLY valid DNR rule keys — AdGuard embeds a large `metadata` blob
     // on the first rule that isn't a valid property and bloats the file.
     .map((r, i) => {
