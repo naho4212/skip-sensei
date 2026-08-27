@@ -1132,7 +1132,8 @@ export class AdEngine {
       'YouTube flagged this browser session for ad blocking, so it refuses to ' +
       'play videos — reloading won’t help. Clearing its cookies lifts the flag. ' +
       'Try the first option below — it keeps you signed in, though it doesn’t ' +
-      'always work. Clearing everything always does, but signs you out.' +
+      'always work. Clearing everything always does, but signs you out of ' +
+      'YouTube (and Google, in this browser).' +
       resumeNote
 
     // Order is chosen on COST, not on likelihood. Tested against a real
@@ -1148,6 +1149,11 @@ export class AdEngine {
     // just died, who wants it back, and who will click the primary action
     // without reading a word of the paragraph above it.
     const KEEP_LABEL = 'Try it without signing me out'
+    // "(signs you out)" is a promise the service worker keeps for real: it
+    // clears youtube.com cookies AND runs YouTube's sign-out, because a
+    // browser holding a Google session otherwise re-signs YouTube in on the
+    // very next load and the account-level flag comes straight back (seen
+    // live Aug 27 — the old cookie-only clear signed nobody out).
     const FULL_LABEL = 'Clear all cookies & reload (signs you out)'
 
     const clear = document.createElement('button')
@@ -1198,7 +1204,8 @@ export class AdEngine {
       body.textContent =
         'Still blocked after clearing the visitor cookies — YouTube is holding ' +
         'the flag somewhere that survives a partial clear. Clearing everything ' +
-        'does lift it, at the cost of signing you out of YouTube.' +
+        'does lift it, at the cost of signing you out of YouTube (and Google, ' +
+        'in this browser).' +
         resumeNote
       clear.remove()
       full.className = 'hb-clear'

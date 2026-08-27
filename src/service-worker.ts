@@ -624,6 +624,45 @@ const senderHost = (sender: chrome.runtime.MessageSender): string | undefined =>
  * the tab themselves keeps it muted through and after the ad. Returns true
  * when the requested state was applied by us.
  */
+/**
+ * The full clear's sign-out. Deleting youtube.com cookies alone signs nobody
+ * out: a browser holding a Google session re-authenticates YouTube on the
+ * next load, and the account-level enforcement flag rides back in with it
+ * (observed live Aug 27 — the button promised a sign-out and delivered a
+ * reload). So the tab is sent through YouTube's real logout endpoint (which
+ * ends the Google session in this browser) and, once it lands back on
+ * youtube.com, returned to the video. A timeout returns it regardless so a
+ * changed logout flow can never strand the user on a blank page.
+ */
+function signOutAndReturn(tabId: number, returnUrl: string): Promise<void> {
+  return new Promise((resolve) => {
+    let done = false
+    const finish = () => {
+      if (done) return
+      done = true
+      chrome.tabs.onUpdated.removeListener(onUpdated)
+      clearTimeout(timer)
+      chrome.tabs
+        .update(tabId, { url: returnUrl })
+        .catch(() => {})
+        .then(() => resolve())
+    }
+    const onUpdated = (id: number, info: chrome.tabs.TabChangeInfo, tab: chrome.tabs.Tab) => {
+      if (id !== tabId || info.status !== 'complete') return
+      const url = tab.url ?? ''
+      // Landed after the accounts.google.com round-trip: back on youtube.com
+      // and no longer on the logout URL itself.
+      if (/^https:\/\/(www\.)?youtube\.com\//.test(url) && !/\/logout/.test(url))
+        finish()
+    }
+    const timer = setTimeout(finish, 20_000)
+    chrome.tabs.onUpdated.addListener(onUpdated)
+    chrome.tabs
+      .update(tabId, { url: 'https://www.youtube.com/logout' })
+      .catch(() => finish())
+  })
+}
+
 /** When we muted each tab — for the duration in the activity line. Lost on
  *  a worker restart mid-ad, in which case the line just omits the length. */
 const mutedSince = new Map<number, number>()
@@ -834,7 +873,7 @@ chrome.runtime.onMessage.addListener(
               'Skip YouTube ads',
               visitorOnly
                 ? `Cleared ${cleared} YouTube visitor cookie(s), kept the sign-in — testing whether the wall lifts`
-                : `Cleared all ${cleared} youtube.com cookie(s) — signs the user out`,
+                : `Cleared all ${cleared} youtube.com cookie(s) and signed out of YouTube`,
               'youtube.com',
             )
             sendResponse({ ok: true })
@@ -843,14 +882,14 @@ chrome.runtime.onMessage.addListener(
               // plain reload restarts the video at 0:00. Navigate to the same
               // watch URL with `t=` instead when the engine saw real playback;
               // withResumeTime returns null when there's nothing to restore.
-              const resumeUrl = withResumeTime(
-                sender.tab.url ?? '',
-                message.resumeSeconds ?? 0,
-              )
-              if (resumeUrl) {
-                await chrome.tabs.update(sender.tab.id, { url: resumeUrl })
+              const returnUrl =
+                withResumeTime(sender.tab.url ?? '', message.resumeSeconds ?? 0) ??
+                sender.tab.url ??
+                'https://www.youtube.com/'
+              if (visitorOnly) {
+                await chrome.tabs.update(sender.tab.id, { url: returnUrl })
               } else {
-                await chrome.tabs.reload(sender.tab.id)
+                await signOutAndReturn(sender.tab.id, returnUrl)
               }
             }
           } catch {
