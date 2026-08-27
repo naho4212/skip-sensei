@@ -84,16 +84,20 @@ function adPlaying(): boolean {
     // Ads render the title as plain text (no track link) in some builds —
     // fall back to the widget's accessible name, which Spotify sets to
     // "Now playing: <title> by <artist>". Take the segment before " by ".
+    // Observed live: during an ad the label is exactly "Advertisement" (no
+    // "Now playing:" prefix) and the title slot shows the advertiser's name.
     const label = widget.getAttribute('aria-label')
     if (label) {
+      if (isAdTitle(label)) return true
       const afterColon = label.slice(label.indexOf(':') + 1)
       const [first] = afterColon.split(/\s+by\s+/i)
       if (isAdTitle(first)) return true
     }
   }
-  // Document title: "Advertisement • Spotify" / "Advertisement - Spotify".
-  const [lead] = document.title.split(/\s+[•\-–|]\s+/)
-  return isAdTitle(lead)
+  // Document title. Observed live (Aug 2026): "Spotify – Advertisement" —
+  // the word can sit in ANY segment, so every segment is checked, not the
+  // first (which is the ad's brand name in the widget, and "Spotify" here).
+  return document.title.split(/\s+[•\-–|]\s+/).some(isAdTitle)
 }
 
 function send<T = unknown>(message: Message): Promise<T | null> {
@@ -115,9 +119,13 @@ async function setMuted(on: boolean) {
     if (applied !== true) return
     muted = true
     mutedAt = Date.now()
+    // Observable from the page (tab mute state isn't): lets a live check
+    // confirm the muter fired without opening the activity log.
+    document.documentElement.setAttribute('data-ad-sensei-muted', '1')
   } else {
     const seconds = ((Date.now() - mutedAt) / 1000).toFixed(1)
     muted = false
+    document.documentElement.removeAttribute('data-ad-sensei-muted')
     void send({
       type: 'skipSensei:event',
       kind: 'audio_ad_muted',

@@ -18,7 +18,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     version: '0.3.16',
     date: '2026-08-27',
     items: [
-      'Spotify web player: audio ads are now blocked on a default install — the ad-serving endpoints had only been covered by the separate tracker list. Any ad that still plays is muted for exactly its duration (web player only; no extension can reach the desktop or mobile apps)',
+      'Spotify web player: ads are muted for exactly as long as they play — they arrive in-stream, so no extension can block or skip them, but you no longer hear them (web player only; the desktop and mobile apps are out of reach)',
       'YouTube ad pods skip faster: each ad in a multi-ad break now gets its own instant seek-to-end and skip click instead of inheriting the previous ad\'s state — 2- and 3-ad breaks were taking 8–15 s',
       'YouTube Music web player: video and audio ads are skipped the same way as on YouTube (it always used the same player — now verified and listed)',
       'Tracker blocking ships in two parts so at least one loads when Chrome\'s shared rule budget is taken by another extension; the popup now explains that state and the fix (restart Chrome)',

@@ -95,8 +95,9 @@ which the extensions page shows; keep the two in sync):
 > prevented from loading by any extension — Ad Sensei skips them as they
 > start, so you see about a second rather than thirty. Anything claiming
 > otherwise on a stream-inserted ad is overselling.
-> Music-streaming web players: audio ads are blocked at the request level,
-> and any that still play are muted, not skipped — and only in the browser.
+> Music-streaming web players: ads are delivered in-stream, so they are
+> muted for their duration rather than blocked or skipped — and only in the
+> browser.
 > Desktop and mobile apps are out of reach for any extension.
 >
 > Free and open source (MIT): https://github.com/naho4212/skip-sensei

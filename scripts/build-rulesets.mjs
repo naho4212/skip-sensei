@@ -155,7 +155,12 @@ console.log(
 )
 
 /**
- * Audio-streaming ad endpoints that AdGuard files under Tracking Protection
+ * Audio-streaming ad endpoints that AdGuard files under Tracking Protection.
+ * VERIFIED LIVE Aug 27 2026: the current web player delivers an ad with NO
+ * ad-logic / ads HTTP request at all (slot via its socket/GraphQL, media from
+ * the same scdn.co CDN as music), so these rules stop nothing on their own
+ * today — the audio-ad muter (src/content/audio-ads.ts) is the mechanism.
+ * Kept because they are harmless, cover beacons, and older/other clients.
  * (filter 3) rather than Base. In our split that put the ONLY rules that stop
  * Spotify web-player audio ads behind the opt-in "trackers" toggle (26% of
  * install-days, and the one ruleset that fails with "exceeds the rule count
