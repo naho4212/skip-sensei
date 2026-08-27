@@ -22,14 +22,71 @@ import { getSettings, onSettingsChanged } from './storage'
 
 const SCRIPT_ID = 'skip-sensei-cosmetic-web'
 
-/** Pull the built cosmetic script's js files out of the youtube content-script entry. */
-function cosmeticScriptFiles(): string[] {
+/** Pull a built content script's js files out of the manifest entry whose
+ *  file name matches — paths are content-hashed, so never hardcode them. */
+export function contentScriptFiles(nameRe: RegExp): string[] {
   const entries = chrome.runtime.getManifest().content_scripts ?? []
   for (const entry of entries) {
     const js = entry.js ?? []
-    if (js.some((f) => /cosmetic/.test(f))) return js
+    if (js.some((f) => nameRe.test(f))) return js
   }
   return []
+}
+const cosmeticScriptFiles = () => contentScriptFiles(/cosmetic/)
+
+/**
+ * Run a built content script in the tabs that are ALREADY open. Content
+ * scripts (static or registered) only attach on page load, so after an
+ * install/update every open tab keeps running the previous version's script —
+ * or, for a brand-new script, nothing at all. That is exactly how the Spotify
+ * muter "didn't work" on its first live test: the tab predated the build.
+ * Injecting into existing tabs makes an update take effect without a reload.
+ * Failures are per-tab and swallowed (chrome:// pages, discarded tabs, a
+ * frame that went away mid-call).
+ */
+export async function injectIntoOpenTabs(
+  files: string[],
+  urlPatterns: string[],
+  opts: { allFrames?: boolean; exclude?: RegExp } = {},
+): Promise<number> {
+  if (files.length === 0) return 0
+  let done = 0
+  let tabs: chrome.tabs.Tab[] = []
+  try {
+    tabs = await chrome.tabs.query({ url: urlPatterns, discarded: false })
+  } catch {
+    return 0
+  }
+  for (const tab of tabs) {
+    if (tab.id === undefined) continue
+    if (opts.exclude && tab.url && opts.exclude.test(tab.url)) continue
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id, allFrames: opts.allFrames ?? false },
+        files,
+      })
+      done++
+    } catch {
+      // per-tab, non-fatal
+    }
+  }
+  return done
+}
+
+/** After install/update: replay the web cosmetic layer into open non-YouTube
+ *  tabs when it's registered (YouTube tabs get the ↻ badge — the ad engine
+ *  there is stateful and needs a real reload), and the Spotify muter into
+ *  open web-player tabs. */
+export async function injectRegisteredIntoOpenTabs(): Promise<void> {
+  if (await isRegistered()) {
+    await injectIntoOpenTabs(cosmeticScriptFiles(), ['http://*/*', 'https://*/*'], {
+      allFrames: true,
+      exclude: /^https?:\/\/([^/]+\.)?youtube\.com\//,
+    })
+  }
+  await injectIntoOpenTabs(contentScriptFiles(/audio-ads/), [
+    '*://open.spotify.com/*',
+  ])
 }
 
 async function isRegistered(): Promise<boolean> {

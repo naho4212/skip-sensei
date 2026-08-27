@@ -29,6 +29,7 @@ import {
 import { initPruneRegistration, syncPruneRegistration } from './prune-register'
 import {
   initCosmeticRegistration,
+  injectRegisteredIntoOpenTabs,
   syncCosmeticRegistration,
 } from './cosmetic-register'
 import {
@@ -623,6 +624,10 @@ const senderHost = (sender: chrome.runtime.MessageSender): string | undefined =>
  * the tab themselves keeps it muted through and after the ad. Returns true
  * when the requested state was applied by us.
  */
+/** When we muted each tab — for the duration in the activity line. Lost on
+ *  a worker restart mid-ad, in which case the line just omits the length. */
+const mutedSince = new Map<number, number>()
+
 async function setTabMuted(
   tabId: number | undefined,
   muted: boolean,
@@ -635,11 +640,26 @@ async function setTabMuted(
     if (muted) {
       if (info?.muted) return info.extensionId === chrome.runtime.id
       await chrome.tabs.update(tabId, { muted: true })
-      void recordActivity('Block all ads', 'muted an audio ad', host)
+      mutedSince.set(tabId, Date.now())
       return true
     }
     if (!info?.muted || info.extensionId !== chrome.runtime.id) return false
     await chrome.tabs.update(tabId, { muted: false })
+    // One muted ad = one ad the user didn't hear: it counts like a hidden ad
+    // slot — in the tab's "blocked here" line, the badge, and the lifetime /
+    // today web-ads counters — and gets an activity line with its length.
+    // Without this the only evidence the muter worked was the tab's speaker
+    // icon, and users assume an invisible feature is a broken one.
+    const since = mutedSince.get(tabId)
+    mutedSince.delete(tabId)
+    const secs = since ? ((Date.now() - since) / 1000).toFixed(0) : null
+    void recordActivity(
+      'Block all ads',
+      secs ? `muted a ${secs}s audio ad` : 'muted an audio ad',
+      host,
+    )
+    recordBlockCounts({ ads: 1, trackers: 0, cookies: 0 })
+    addTabMuted(tabId)
     return true
   } catch {
     return false
@@ -957,12 +977,15 @@ interface TabBadge {
    *  count (one slot ≈ one ad). Empty and filled alike: an empty slot's ad
    *  was stopped upstream, but it's still one ad the user didn't see. */
   cosmetic: number
+  /** Audio ads muted on this page (Spotify web player) — ads too. */
+  muted: number
   needsReload: boolean
 }
 const tabBadges = new Map<number, TabBadge>()
 const freshBadge = (): TabBadge => ({
   network: emptyBreakdown(),
   cosmetic: 0,
+  muted: 0,
   needsReload: false,
 })
 const badgeState = (tabId: number): TabBadge =>
@@ -974,7 +997,17 @@ const badgeState = (tabId: number): TabBadge =>
  *  no container to hide, and "0 ads" would be wrong there. Never both. */
 const tabBreakdown = (tabId: number): BlockBreakdown => {
   const s = badgeState(tabId)
-  return { ...s.network, ads: s.cosmetic > 0 ? s.cosmetic : s.network.ads }
+  return {
+    ...s.network,
+    ads: (s.cosmetic > 0 ? s.cosmetic : s.network.ads) + s.muted,
+  }
+}
+
+function addTabMuted(tabId: number) {
+  const state = badgeState(tabId)
+  state.muted++
+  tabBadges.set(tabId, state)
+  renderBadge(tabId)
 }
 
 /** Total shown on the badge / "blocked here": sum of the displayed breakdown,
@@ -1059,6 +1092,11 @@ chrome.runtime.onInstalled.addListener(async (details) => {
   } catch {
     // youtube host permission missing or query failed — non-fatal
   }
+  // Everything else gets the new scripts pushed in, no reload needed — after
+  // the cosmetic registration is synced for this version (explicitly: listener
+  // order between here and initCosmeticRegistration is not something to rely on).
+  await syncCosmeticRegistration()
+  await injectRegisteredIntoOpenTabs()
 })
 
 // One-time amnesty for saved "not an ad" ratings. Every rating collected

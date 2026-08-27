@@ -51,12 +51,20 @@ const POLL_MS = 1000
  * signal is assumed stuck (paused mid-ad, DOM drift) and the tab is released;
  * it re-arms only after the signal has cleared once. */
 const MAX_MUTE_MS = 180_000
+/** Keep the mute this long after the ad signal clears. Spotify serves ads in
+ * pods (two back-to-back were observed live); if the widget flickers to a
+ * track title between them the tab would unmute for the gap and the second
+ * ad's first second would be audible. A real track resuming costs 1.5s of
+ * silence at its very start — the better trade. */
+const RELEASE_HOLD_MS = 1500
 
 let settings: Settings | null = null
 let enabled = false
 let muted = false
 let mutedAt = 0
 let poisoned = false
+/** When the ad signal last went clear while muted (0 = not pending). */
+let clearSince = 0
 let timer: ReturnType<typeof setInterval> | null = null
 let observer: MutationObserver | null = null
 
@@ -137,13 +145,21 @@ async function setMuted(on: boolean) {
 function tick() {
   if (!enabled) return
   const ad = adPlaying()
+  const now = Date.now()
   if (!ad) {
     poisoned = false
-    if (muted) void setMuted(false)
+    if (muted) {
+      if (clearSince === 0) clearSince = now
+      if (now - clearSince >= RELEASE_HOLD_MS) {
+        clearSince = 0
+        void setMuted(false)
+      }
+    }
     return
   }
+  clearSince = 0
   if (poisoned) return
-  if (muted && Date.now() - mutedAt > MAX_MUTE_MS) {
+  if (muted && now - mutedAt > MAX_MUTE_MS) {
     poisoned = true
     void setMuted(false)
     return
@@ -176,6 +192,7 @@ function stop() {
   timer = null
   observer?.disconnect()
   observer = null
+  clearSince = 0
   if (muted) void setMuted(false)
 }
 
