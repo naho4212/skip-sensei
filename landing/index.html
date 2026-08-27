@@ -311,6 +311,31 @@
       }
       .more-item p { margin: 0; font-size: 13.5px; color: var(--text-2); line-height: 1.55; }
 
+      /* "Where it works" surface cards */
+      .surface-list { list-style: none; margin: 0; padding: 0; }
+      .surface-list li {
+        position: relative; padding: 7px 0 7px 22px;
+        font-size: 13.5px; color: var(--text-2); line-height: 1.5;
+      }
+      .surface-list li + li { border-top: 1px solid var(--hair-2); }
+      .surface-list li::before {
+        content: ''; position: absolute; left: 2px; top: 14px;
+        width: 7px; height: 7px; border-radius: 50%;
+        background: var(--accent-bright); box-shadow: 0 0 8px var(--accent-bright);
+      }
+      .surface-list li.muted-note::before { background: #1ed760; box-shadow: 0 0 8px #1ed760; }
+      .surface-list li b { color: var(--text); font-weight: 600; }
+      .surface-tag {
+        display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: 0.06em;
+        text-transform: uppercase; border-radius: 5px; padding: 2px 6px; margin-left: 7px;
+        vertical-align: 2px;
+      }
+      .surface-tag.t-blocked { color: var(--accent-bright); background: rgba(139, 92, 246, 0.14); }
+      .surface-tag.t-muted { color: #1ed760; background: rgba(30, 215, 96, 0.12); }
+      .surface-honest {
+        margin: 10px 0 0; font-size: 12px; line-height: 1.5; color: var(--text-3);
+      }
+
       /* privacy band */
       .band {
         background: var(--panel);
@@ -634,6 +659,67 @@
             </div>
             <h3>Skip YouTube ads &amp; sponsor reads</h3>
             <p>On YouTube it also clicks “Skip” the instant it appears and uses AI to skip creator sponsor and self-promo reads — pre-roll, mid-roll, overlays, and the anti-ad-blocker wall.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- where it works: per-surface coverage, honestly stated -->
+    <section id="surfaces">
+      <div class="wrap">
+        <p class="eyebrow">Where it works</p>
+        <h2>Every surface, <span class="grad">covered honestly</span></h2>
+        <p class="lede">
+          Different surfaces need different tactics — and some have hard
+          limits no extension can cross. Here's exactly what happens where.
+        </p>
+        <div class="grid g3">
+          <div class="card">
+            <div class="card-top">
+              <div class="ico">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#c4b5fd" stroke-width="1.7"><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3c2.5 2.5 2.5 15 0 18M12 3c-2.5 2.5-2.5 15 0 18" /></svg>
+              </div>
+              <span class="idx">Web</span>
+            </div>
+            <h3>Every website</h3>
+            <ul class="surface-list">
+              <li><b>Ads, banners &amp; popups</b> blocked by filter lists before they load</li>
+              <li><b>Trackers and tracking links</b> stripped as you browse</li>
+              <li><b>Cookie prompts</b> hidden — “reject all” clicked for you</li>
+              <li><b>“Disable your ad blocker” walls</b> defused, with one-tap recovery when a site digs in</li>
+              <li><b>First-party ads</b> — sponsored pins, promoted posts, feed ads — hidden by AI where lists can't see them</li>
+            </ul>
+          </div>
+          <div class="card">
+            <div class="card-top">
+              <div class="ico">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#c4b5fd" stroke-width="1.7"><rect x="3" y="5" width="18" height="14" rx="3" /><path d="M10 9l5 3-5 3V9z" fill="#c4b5fd" stroke="none" /></svg>
+              </div>
+              <span class="idx">YouTube</span>
+            </div>
+            <h3>YouTube &amp; YouTube Music</h3>
+            <ul class="surface-list">
+              <li><b>In-stream video ads</b> skipped the instant they start — pre-roll, mid-roll, and multi-ad breaks</li>
+              <li><b>Creator sponsor reads</b> AI-detected from the transcript and skipped, even on brand-new uploads</li>
+              <li><b>Feed, sidebar &amp; masthead ads</b> hidden</li>
+              <li><b>YouTube Music</b> uses the same player — same skipping, verified</li>
+              <li><b>Optional tidy-ups</b>: hide Shorts, end cards, and the “Still watching?” prompt</li>
+            </ul>
+          </div>
+          <div class="card">
+            <div class="card-top">
+              <div class="ico">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#c4b5fd" stroke-width="1.7"><path d="M9 18V6l10-2v12" /><circle cx="6.5" cy="18" r="2.5" /><circle cx="16.5" cy="16" r="2.5" /></svg>
+              </div>
+              <span class="idx">Music</span>
+            </div>
+            <h3>Music streaming</h3>
+            <ul class="surface-list">
+              <li><b>SoundCloud</b><span class="surface-tag t-blocked">blocked</span> — the ad request never leaves your browser</li>
+              <li><b>Pandora</b><span class="surface-tag t-blocked">blocked</span> — ads blocked, and no “Ad Blocker is on” wall</li>
+              <li class="muted-note"><b>Spotify</b><span class="surface-tag t-muted">muted</span> — ads arrive in-stream with skip locked, so no extension can block or skip them. Ad Sensei mutes the tab for exactly as long as each ad plays</li>
+            </ul>
+            <p class="surface-honest">Web players only — no extension can reach the desktop or mobile apps. If a tool claims to <em>block</em> Spotify ads, it doesn't.</p>
           </div>
         </div>
       </div>
