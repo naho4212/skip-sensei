@@ -6,14 +6,37 @@
  *
  * Keep items short and benefit-oriented — this is release notes for a viewer,
  * not a commit log. Omit purely internal changes.
+ *
+ * The landing release-notes page (scripts/build-release-notes.mjs) groups
+ * items into Improvements / Features / Bug fixes: start an item with "Fixed:"
+ * to pin it to Bug fixes; anything else is classified by keyword (see the
+ * script's OVERRIDES for pinned exceptions).
  */
 export interface ChangelogEntry {
   version: string
   date: string
   items: string[]
+  /** This version was (or is being) uploaded to the Chrome Web Store. The
+   *  landing release-notes page shows ONLY published versions — items from
+   *  dev-only versions in between roll into the next published release. */
+  published?: boolean
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '0.3.17',
+    date: '2026-08-27',
+    published: true,
+    items: [
+      'All-new popup: Home, Controls, Stats and Settings tabs — page status and per-page tools on Home, blocking controls grouped by area (Ad blocker / YouTube / Spotify), and your stats over today, 7 days, 30 days or all time',
+      'More controls without a trip to Settings: hide Shorts, auto-dismiss “Still watching?”, hide end cards, resume after skip, malware blocking and the anti-adblock defuser now toggle right in the popup',
+      'One status card explains anything unusual — a site’s ad-blocker wall, a YouTube notice, or a filter list that couldn’t load — with the fix a single tap away',
+      'Spotify: a one-time note in the web player and popup explains that Spotify ads are muted, not skipped (in-stream delivery), and muting has its own switch',
+      'Release notes are now published on the website — “What’s new” in the popup takes you there',
+      'The support form pre-fills your extension version when you open it from the extension',
+      'Fixed: Pandora no longer shows its “Ad Blocker is on…” wall — music plays normally, with its ads still blocked',
+    ],
+  },
   {
     version: '0.3.16',
     date: '2026-08-27',
@@ -29,6 +52,7 @@ export const CHANGELOG: ChangelogEntry[] = [
   },
   {
     version: '0.3.15',
+    published: true,
     date: '2026-08-24',
     items: [
       'Balanced is now the default: ads, trackers, cookie notices, and popups are blocked on every site from the first page load — no welcome-page click needed. Existing installs keep whatever level they chose',
@@ -40,6 +64,7 @@ export const CHANGELOG: ChangelogEntry[] = [
   },
   {
     version: '0.3.14',
+    published: true,
     date: '2026-07-29',
     items: [
       'The AI now reads a popup’s actual text before hiding it, and only hides what it can positively identify as a promo, newsletter, survey, or ad — functional dialogs (like a “time zone changed” notice) stay put',

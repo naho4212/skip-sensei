@@ -200,6 +200,10 @@
         <span>Email (optional — only if you'd like a reply)</span>
         <input id="email" type="email" maxlength="100" placeholder="you@example.com" />
       </label>
+      <label class="field">
+        <span>Extension version (prefilled when you arrive from the extension)</span>
+        <input id="version" maxlength="32" placeholder="e.g. 0.3.16" />
+      </label>
       <button class="btn" type="submit">Send</button>
       <span class="hint"
         >Sends your topic, message, email if given, and the extension version
@@ -222,10 +226,12 @@
     <script>
       // Submissions ride the same /api/event collector as extension telemetry
       // (kind: "contact"), so they surface in the standard telemetry report.
-      // ?v=<version> is set by the options page's "Contact support" link.
+      // ?v=<version> is appended by the popup's "Report a problem" row and
+      // the options page's "Contact support" link; the field stays editable.
       const params = new URLSearchParams(location.search)
       const VERSION_RE = /^[\w.-]{1,32}$/
-      const version = VERSION_RE.test(params.get('v') || '') ? params.get('v') : '0'
+      const versionEl = document.getElementById('version')
+      if (VERSION_RE.test(params.get('v') || '')) versionEl.value = params.get('v')
       if (params.get('topic')) {
         const sel = document.getElementById('topic')
         if ([...sel.options].some((o) => o.value === params.get('topic')))
@@ -252,7 +258,7 @@
               event: 'app_event',
               kind: 'contact',
               install_id: crypto.randomUUID(),
-              app_version: version,
+              app_version: VERSION_RE.test(versionEl.value.trim()) ? versionEl.value.trim() : '0',
               fields,
             }),
           })

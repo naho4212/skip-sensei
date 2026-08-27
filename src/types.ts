@@ -78,6 +78,9 @@ export interface Settings {
   ytHideShorts: boolean
   ytDismissStillWatching: boolean
   ytDisableEndCards: boolean
+  /** Spotify web player: mute the tab for the duration of each audio ad
+   *  (in-stream delivery — muting is the ceiling; see src/content/audio-ads.ts). */
+  muteAudioAds: boolean
   /**
    * Local-only mode: force built-in on-device AI, disable telemetry, and make
    * ZERO external network calls (no cloud LLM, no SponsorBlock, no error
@@ -188,6 +191,7 @@ export const DEFAULT_SETTINGS: Settings = {
   ytHideShorts: false,
   ytDismissStillWatching: false,
   ytDisableEndCards: false,
+  muteAudioAds: true,
   localOnlyMode: false,
   debugLogging: false,
   telemetryEnabled: true,
@@ -214,6 +218,9 @@ export interface Stats {
    *  over — "today" is a window users can reason about, unlike the old
    *  "this session" (invisible reset, uninterpretable timespan). */
   today: TodayStats
+  /** Previous days' counters, newest last, capped at 30 — fills the popup's
+   *  7-day / 30-day ranges. Rolled in by getStats when `today` turns over. */
+  history: TodayStats[]
 }
 
 /** One day's counters — each lifetime counter's daily twin. */
@@ -229,7 +236,7 @@ export interface TodayStats {
 }
 
 /** Lifetime counter keys (everything in Stats except the nested `today`). */
-export type LifetimeStatKey = Exclude<keyof Stats, 'today'>
+export type LifetimeStatKey = Exclude<keyof Stats, 'today' | 'history'>
 
 export const EMPTY_TODAY: TodayStats = {
   date: '',
@@ -275,6 +282,7 @@ export const DEFAULT_STATS: Stats = {
   allTimeTrackersBlocked: 0,
   allTimeCookiesBlocked: 0,
   today: EMPTY_TODAY,
+  history: [],
 }
 
 /** How an ad was neutralized — kept for future metrics/debugging. */

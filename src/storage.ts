@@ -287,10 +287,36 @@ function normalizeToday(today: TodayStats | undefined): TodayStats {
   return { ...EMPTY_TODAY, date: day }
 }
 
+/** Days of per-day history kept for the popup's 7/30-day ranges. */
+const HISTORY_DAYS = 30
+
+/** `history` with yesterday's (or older) `today` folded in when the date has
+ *  rolled over. Pure: the caller persists it on its next write. Days with
+ *  nothing counted are skipped — an empty entry says nothing. */
+function rollHistory(
+  history: TodayStats[] | undefined,
+  today: TodayStats | undefined,
+): TodayStats[] {
+  const list = Array.isArray(history) ? [...history] : []
+  if (today && today.date && today.date !== localDayKey()) {
+    const counted =
+      today.adSkips + today.sponsorSkips + today.ytAdsHidden +
+      today.webAdsBlocked + today.trackersBlocked + today.cookiesBlocked
+    if (counted > 0 && !list.some((d) => d.date === today.date)) list.push({ ...today })
+  }
+  list.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
+  return list.slice(-HISTORY_DAYS)
+}
+
 export async function getStats(): Promise<Stats> {
   const result = await chrome.storage.local.get(STATS_KEY)
   const stored = result[STATS_KEY] ?? {}
-  return { ...DEFAULT_STATS, ...stored, today: normalizeToday(stored.today) }
+  return {
+    ...DEFAULT_STATS,
+    ...stored,
+    today: normalizeToday(stored.today),
+    history: rollHistory(stored.history, stored.today),
+  }
 }
 
 export async function incrementStat(
@@ -315,7 +341,7 @@ export function onStatsChanged(callback: (stats: Stats) => void) {
 /** Reset lifetime AND today counters to zero (the popup's reset-stats). */
 export async function resetStats(): Promise<void> {
   await chrome.storage.local.set({
-    [STATS_KEY]: { ...DEFAULT_STATS, today: normalizeToday(undefined) },
+    [STATS_KEY]: { ...DEFAULT_STATS, today: normalizeToday(undefined), history: [] },
   })
 }
 

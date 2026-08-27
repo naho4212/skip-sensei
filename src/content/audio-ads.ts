@@ -1,5 +1,6 @@
 import { getSettings, onSettingsChanged } from '../storage'
 import type { Message, Settings } from '../types'
+import { showSpotifyNotice } from './spotify-notice'
 
 /**
  * Audio-ad muting for the Spotify web player (open.spotify.com).
@@ -75,7 +76,12 @@ function isAllowlisted(allowlist: string[]): boolean {
 }
 
 function shouldRun(s: Settings): boolean {
-  return s.masterEnabled && s.blockAllAds && !isAllowlisted(s.allowlist)
+  return (
+    s.masterEnabled &&
+    s.blockAllAds &&
+    s.muteAudioAds &&
+    !isAllowlisted(s.allowlist)
+  )
 }
 
 function isAdTitle(text: string | null | undefined): boolean {
@@ -170,6 +176,8 @@ function tick() {
 function start() {
   if (enabled) return
   enabled = true
+  // Set expectations once: this layer mutes, it can't skip or block.
+  void showSpotifyNotice()
   timer = setInterval(tick, POLL_MS)
   // React on the same tick the track changes rather than up to a second
   // later — the difference between a muted ad and a muted first second of

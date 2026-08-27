@@ -13,6 +13,7 @@ import {
   getStats,
   getYtBackoff,
   onStatsChanged,
+  resetStats,
   setKeyReminder,
   setLastSeenVersion,
   setSiteAllowlisted,
@@ -26,13 +27,16 @@ import type {
   Settings,
   Stats,
   TabMessage,
+  TodayStats,
 } from '../../src/types'
 
-/** Chrome Web Store listing — what the ↗ Share button hands to the OS share
+/** Chrome Web Store listing — what the Share row hands to the OS share
  * sheet / clipboard. utm_source distinguishes popup shares from landing-page
  * clicks (utm_source=sfm). */
 const SHARE_URL =
   'https://chromewebstore.google.com/detail/mjdcndkalddmlahidjabnncicdmpimmi?utm_source=share'
+const REVIEW_URL =
+  'https://chromewebstore.google.com/detail/mjdcndkalddmlahidjabnncicdmpimmi/reviews?utm_source=nudge'
 
 const $ = <T extends HTMLElement>(id: string) =>
   document.getElementById(id) as T
@@ -49,12 +53,44 @@ const sponsorToggle = $<HTMLInputElement>('sponsor-engine-toggle')
 const aggressiveToggle = $<HTMLInputElement>('aggressive-toggle')
 const blockAdsToggle = $<HTMLInputElement>('block-ads-toggle')
 const aiEnhancementsToggle = $<HTMLInputElement>('ai-enhancements-toggle')
-const blockerNoteEl = $('blocker-note')
 const pauseSiteToggle = $<HTMLInputElement>('pause-site-toggle')
 const videoStatusEl = $('video-status')
 const adStatusEl = $('ad-status')
 const segmentListEl = $<HTMLUListElement>('segment-list')
 const reloadTabEl = $<HTMLButtonElement>('reload-tab')
+
+/** Boolean settings exposed as plain rows in the Controls sections. Each
+ * `opt-<key>` checkbox maps 1:1 to the settings key; the five web-block
+ * lists used to be pills, the YouTube tidy-ups and the Spotify muter used
+ * to live only on the options page. */
+const OPT_KEYS = [
+  'blockTrackers',
+  'blockCookieNotices',
+  'blockPopups',
+  'blockSocial',
+  'blockUrlTracking',
+  'blockMalware',
+  'defuseAntiAdblock',
+  'ytHideShorts',
+  'ytDismissStillWatching',
+  'ytDisableEndCards',
+  'resumePlayback',
+  'showSkipToast',
+  'muteAudioAds',
+] as const satisfies readonly (keyof Settings)[]
+type OptKey = (typeof OPT_KEYS)[number]
+
+/** Keys whose change flips DNR rulesets in the service worker — give it a
+ * moment before re-reading the blocker state and the page count. */
+const RULESET_KEYS: ReadonlySet<string> = new Set([
+  'blockAllAds',
+  'blockTrackers',
+  'blockCookieNotices',
+  'blockPopups',
+  'blockSocial',
+  'blockUrlTracking',
+  'blockMalware',
+])
 
 function renderSettings(settings: Settings) {
   masterToggle.checked = settings.masterEnabled
@@ -63,36 +99,53 @@ function renderSettings(settings: Settings) {
   aggressiveToggle.checked = settings.aggressivePruning
   blockAdsToggle.checked = settings.blockAllAds
   aiEnhancementsToggle.checked = settings.aiEnhancements
-  for (const pill of document.querySelectorAll<HTMLButtonElement>('.pill')) {
-    const key = pill.dataset.key as keyof Settings
-    const on = Boolean(settings[key])
-    pill.classList.toggle('on', on)
-    // The visual .on class is invisible to assistive tech — these are toggle
-    // buttons, so their state must ride aria-pressed.
-    pill.setAttribute('aria-pressed', String(on))
+  for (const key of OPT_KEYS) {
+    const el = document.getElementById(`opt-${key}`) as HTMLInputElement | null
+    if (el) el.checked = Boolean(settings[key])
   }
+  // Section masters: dependent rows dim (state kept) when the master is off.
+  $('sec-adblock').classList.toggle('master-off', !settings.blockAllAds)
+  $('sec-spotify').classList.toggle('master-off', !settings.blockAllAds)
   document.body.classList.toggle('disabled', !settings.masterEnabled)
   $('brand-status').textContent = settings.masterEnabled
     ? 'Zero interruptions.'
     : 'Paused'
+  renderSectionStates(settings)
+  if (!settings.masterEnabled) {
+    setStatus('off', 'Ad Sensei is paused', 'Flip the switch above to resume.')
+  } else if (statusState.kind === 'off') {
+    void renderStatus()
+  }
 }
 
-/** "This site" / "Controls" views — plain show/hide, reset on every open.
- * Real tablist semantics: aria-selected + roving tabindex so the active view
- * is announced, matching the options page's log subtabs. */
-function selectTab(tab: 'site' | 'controls') {
-  $('view-site').hidden = tab !== 'site'
-  $('view-controls').hidden = tab !== 'controls'
-  for (const [id, name] of [
-    ['tab-site', 'site'],
-    ['tab-controls', 'controls'],
-  ] as const) {
-    const btn = $<HTMLButtonElement>(id)
-    const active = name === tab
+/** "3 of 9 on" summary on each collapsed section head. */
+function renderSectionStates(settings: Settings) {
+  for (const sec of document.querySelectorAll<HTMLElement>('.ctl-section')) {
+    const inputs = sec.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')
+    const on = Array.from(inputs).filter((i) => i.checked).length
+    const el = sec.querySelector<HTMLElement>('.ctl-section-state')
+    if (el) el.textContent = `${on} of ${inputs.length} on`
+  }
+  void settings
+}
+
+/* ── Views ──────────────────────────────────────────────────────────── */
+type View = 'home' | 'controls' | 'stats' | 'settings'
+const VIEWS: View[] = ['home', 'controls', 'stats', 'settings']
+
+/** Bottom tab bar: real tablist semantics (aria-selected + roving tabindex).
+ * Every open starts on Home — the page-specific view. */
+function selectView(view: View) {
+  for (const v of VIEWS) {
+    $(`view-${v}`).hidden = v !== view
+    const btn = $<HTMLButtonElement>(`tab-${v}`)
+    const active = v === view
     btn.classList.toggle('on', active)
     btn.setAttribute('aria-selected', String(active))
     btn.tabIndex = active ? 0 : -1
   }
+  $('view-wrap-scroll')?.scrollTo(0, 0)
+  document.querySelector('.view-wrap')?.scrollTo(0, 0)
 }
 
 /** True when `url`'s HOST is youtube.com — never a substring test on the full
@@ -116,6 +169,147 @@ function formatCount(n: number): string {
 
 let currentHost: string | null = null
 
+/* ── Status strip ───────────────────────────────────────────────────── */
+type StatusKind = 'ok' | 'warn' | 'wall' | 'off'
+interface StatusView {
+  kind: StatusKind
+  title: string
+  text?: string
+  action?: { label: string; run: (btn: HTMLButtonElement) => void }
+  dismiss?: () => void
+}
+let statusState: StatusView = { kind: 'ok', title: "Everything's working" }
+
+function setStatus(
+  kind: StatusKind,
+  title: string,
+  text?: string,
+  action?: StatusView['action'],
+  dismiss?: () => void,
+) {
+  statusState = { kind, title, text, action, dismiss }
+  paintStatus()
+}
+
+function paintStatus() {
+  const el = $('status')
+  el.dataset.state = statusState.kind
+  $('status-title').textContent = statusState.title
+  const text = $('status-text')
+  text.hidden = !statusState.text
+  text.textContent = statusState.text ?? ''
+  const btn = $<HTMLButtonElement>('status-action')
+  btn.hidden = !statusState.action
+  btn.disabled = false
+  btn.textContent = statusState.action?.label ?? ''
+  btn.onclick = statusState.action
+    ? () => statusState.action?.run(btn)
+    : null
+  const dismiss = $<HTMLButtonElement>('status-dismiss')
+  dismiss.hidden = !statusState.dismiss
+  dismiss.onclick = statusState.dismiss
+    ? () => {
+        statusState.dismiss?.()
+        void renderStatus()
+      }
+    : null
+}
+
+/**
+ * One strip, highest-priority state wins:
+ *   wall  — the active site (or YouTube) showed an ad-blocker wall
+ *   warn  — YouTube back-off notice, filter-list load failure, or ads that
+ *           loaded before blocking (reload to clear)
+ *   ok    — nothing to report
+ * Replaces the old stack of yt-backoff / adblock-wall / blocker-note cards.
+ */
+async function renderStatus() {
+  const settings = await getSettings()
+  if (!settings.masterEnabled) {
+    setStatus('off', 'Ad Sensei is paused', 'Flip the switch above to resume.')
+    return
+  }
+  const active = await activeTabHost()
+
+  // 1. Site wall on the active tab.
+  const wall = active ? await getAdblockWall(active.host) : null
+  if (wall && active) {
+    const site = active.host.replace(/^www\./, '')
+    setStatus(
+      'wall',
+      `${site} asked you to turn off your ad blocker`,
+      "Some sites gate content behind an ad-blocker notice. Clearing this site's cookies usually restores access — or reload after signing out.",
+      {
+        label: "Clear this site's cookies & reload",
+        run: (btn) => void clearSiteCookiesAndReload(btn),
+      },
+      () => void clearAdblockWall(active.host),
+    )
+    return
+  }
+
+  // 2. YouTube back-off (fresh within 7 days).
+  const backoff = await getYtBackoff()
+  const fresh = backoff && Date.now() - backoff.at < 7 * 24 * 60 * 60 * 1000
+  if (!fresh && backoff) void clearYtBackoff()
+  if (fresh) {
+    setStatus(
+      'warn',
+      'YouTube showed an ad-blocker notice',
+      'Experimental first-party blocking was turned off automatically. Ads are still skipped normally. If the notice sticks around, clearing YouTube\'s cookies usually clears it — or sign out and back in.',
+      {
+        label: 'Clear YouTube cookies & reload',
+        run: (btn) => void clearYouTubeCookiesAndReload(btn),
+      },
+      () => void clearYtBackoff(),
+    )
+    return
+  }
+
+  // 3. Blocker health.
+  try {
+    const state: { enabled: boolean; active: boolean; error?: string } =
+      await chrome.runtime.sendMessage({ type: 'skipSensei:getBlockerState' })
+    if (state.error) {
+      // The rule-count-limit failure is Chrome holding a stale static-rule
+      // allocation (or another blocker using the shared pool); nothing the
+      // extension retries can fix it, a browser restart can.
+      const poolLimit = /rule count limit/i.test(state.error)
+      setStatus(
+        'warn',
+        poolLimit ? "Some filter lists didn't load" : "Couldn't enable ad blocking",
+        poolLimit
+          ? "Chrome's rule budget is full (usually another ad blocker, or a stale allocation after an update). Restart Chrome; if it persists, disable the other blocker."
+          : state.error,
+      )
+      return
+    }
+    if (state.enabled && state.active && active && !isYouTubeUrl(active.url)) {
+      // Only when THIS page still has ads that loaded before blocking. Never
+      // on YouTube: it's exempt from network blocking, a reload won't remove
+      // a video ad.
+      if (await pageHasLoadedAds()) {
+        setStatus(
+          'warn',
+          'Ads loaded before blocking',
+          'Reload this page to clear them.',
+          { label: 'Reload page', run: () => void reloadActiveTab() },
+        )
+        return
+      }
+    }
+  } catch {
+    /* SW asleep — fall through to ok */
+  }
+
+  const onYouTube = isYouTubeUrl(active?.url)
+  setStatus(
+    'ok',
+    onYouTube ? 'Watching for ads on YouTube' : "Everything's working",
+  )
+}
+
+/* ── Site hero ──────────────────────────────────────────────────────── */
 async function renderSiteSection() {
   const sectionEl = $('site-section')
   const settings = await getSettings()
@@ -145,10 +339,12 @@ async function renderSiteSection() {
   sectionEl.classList.toggle('paused', paused)
   $('site-status').textContent = paused ? 'Paused here' : 'Blocking active'
 
-  const pageBlockedEl = $('page-blocked')
+  const numEl = $('page-blocked-num')
+  const labelEl = $('page-blocked-label')
   const pageBreakdownEl = $('page-breakdown')
   if (paused) {
-    pageBlockedEl.textContent = 'Tap the power button to resume'
+    numEl.textContent = '—'
+    labelEl.textContent = 'Tap the power button to resume'
     pageBreakdownEl.textContent = ''
   } else {
     // Same live counter the icon badge uses, so the two never disagree.
@@ -163,7 +359,8 @@ async function renderSiteSection() {
     // overwriting with "0 blocked here" was a lie the popup used to tell.
     if (bd) {
       const total = BLOCK_CATEGORY_LABELS.reduce((s, [k]) => s + bd![k], 0)
-      pageBlockedEl.textContent = `${total} blocked here`
+      numEl.textContent = total.toLocaleString()
+      labelEl.textContent = total === 1 ? 'ad blocked on this page' : 'ads blocked on this page'
       // Per-type line: only the categories that actually blocked something.
       pageBreakdownEl.textContent =
         total > 0
@@ -171,8 +368,9 @@ async function renderSiteSection() {
               .map(([k, label]) => `${bd![k]} ${label}${bd![k] === 1 ? '' : 's'}`)
               .join(' · ')
           : ''
-    } else if (!pageBlockedEl.textContent) {
-      pageBlockedEl.textContent = '— blocked here' // first paint, no data yet
+    } else if (numEl.textContent === '' || numEl.textContent === '—') {
+      numEl.textContent = '—' // first paint, no data yet
+      labelEl.textContent = 'blocked on this page'
     }
   }
 }
@@ -191,68 +389,105 @@ async function pageHasLoadedAds(): Promise<boolean> {
   }
 }
 
-async function renderBlockerState() {
-  const textEl = $('blocker-note-text')
-  const reloadBtn = $('blocker-reload')
-  try {
-    const state: { enabled: boolean; active: boolean; error?: string } =
-      await chrome.runtime.sendMessage({ type: 'skipSensei:getBlockerState' })
-    if (state.error) {
-      // The rule-count-limit failure is Chrome holding a stale static-rule
-      // allocation (or another blocker using the shared pool); nothing the
-      // extension retries can fix it, a browser restart can.
-      const poolLimit = /rule count limit/i.test(state.error)
-      textEl.textContent = poolLimit
-        ? `Some filter lists didn't load — Chrome's rule budget is full (usually another ad blocker, or a stale allocation after an update). Restart Chrome; if it persists, disable the other blocker.`
-        : `Couldn't enable ad blocking: ${state.error}`
-      blockerNoteEl.className = 'blocker-note warn'
-      blockerNoteEl.hidden = false
-      reloadBtn.hidden = true
-    } else if (state.enabled && state.active) {
-      // Only surface the note when THIS page still has ads that loaded before
-      // blocking — otherwise stay quiet (the ⓘ tooltip explains the feature).
-      // Never on YouTube: it's exempt from network blocking (video ads are
-      // skipped by the ad engine, display ads are hidden), so "reload to clear"
-      // is wrong advice — a reload won't remove a video ad.
-      const [tab] = await chrome.tabs.query({
-        active: true,
-        currentWindow: true,
-      })
-      const onYouTube = isYouTubeUrl(tab?.url)
-      const needsReload = !onYouTube && (await pageHasLoadedAds())
-      if (needsReload) {
-        blockerNoteEl.className = 'blocker-note'
-        textEl.textContent = 'Ads loaded before blocking — reload to clear them.'
-        reloadBtn.hidden = false
-        blockerNoteEl.hidden = false
-      } else {
-        blockerNoteEl.hidden = true
-      }
-    } else {
-      blockerNoteEl.hidden = true
-    }
-  } catch {
-    blockerNoteEl.hidden = true
+/* ── Stats ──────────────────────────────────────────────────────────── */
+type Range = 'today' | '7' | '30' | 'all'
+let statsRange: Range = 'today'
+let lastStats: Stats | null = null
+
+interface Bucket {
+  youtube: number
+  web: number
+  trackers: number
+  cookies: number
+}
+
+function bucketOf(d: TodayStats): Bucket {
+  return {
+    youtube: d.adSkips + d.sponsorSkips + d.ytAdsHidden,
+    web: d.webAdsBlocked,
+    trackers: d.trackersBlocked,
+    cookies: d.cookiesBlocked,
+  }
+}
+function add(a: Bucket, b: Bucket): Bucket {
+  return {
+    youtube: a.youtube + b.youtube,
+    web: a.web + b.web,
+    trackers: a.trackers + b.trackers,
+    cookies: a.cookies + b.cookies,
   }
 }
 
+/** Local "YYYY-MM-DD" for `daysAgo` days before today. */
+function dayKey(daysAgo: number): string {
+  const d = new Date()
+  d.setDate(d.getDate() - daysAgo)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
+function bucketForRange(stats: Stats, range: Range): Bucket {
+  if (range === 'all')
+    return {
+      youtube:
+        stats.allTimeAdSkips + stats.allTimeSponsorSkips + stats.allTimeYtAdsHidden,
+      web: stats.allTimeWebAdsBlocked,
+      trackers: stats.allTimeTrackersBlocked,
+      cookies: stats.allTimeCookiesBlocked,
+    }
+  let b = bucketOf(stats.today)
+  if (range === 'today') return b
+  const days = Number(range)
+  const floor = dayKey(days - 1) // inclusive: today counts as day 1
+  for (const d of stats.history ?? []) {
+    if (d.date >= floor && d.date !== stats.today.date) b = add(b, bucketOf(d))
+  }
+  return b
+}
+
+const RANGE_LABEL: Record<Range, string> = {
+  today: 'today',
+  '7': 'in the last 7 days',
+  '30': 'in the last 30 days',
+  all: 'all time',
+}
+
 function renderStats(stats: Stats) {
-  // YouTube card is one "interruptions handled on YouTube" figure: video
-  // ad-skips + sponsor-skips + hidden display ads. They're tracked separately
-  // (the "This video" section shows sponsor segments on their own).
-  $('alltime-youtube').textContent = formatCount(
-    stats.allTimeAdSkips + stats.allTimeSponsorSkips + stats.allTimeYtAdsHidden,
-  )
-  $('alltime-web-blocks').textContent = formatCount(stats.allTimeWebAdsBlocked)
-  $('alltime-trackers').textContent = formatCount(stats.allTimeTrackersBlocked)
-  $('alltime-cookies').textContent = formatCount(stats.allTimeCookiesBlocked)
-  const today = stats.today
-  $('today-youtube').textContent = String(
-    today.adSkips + today.sponsorSkips + today.ytAdsHidden,
-  )
-  $('today-web-blocks').textContent = String(today.webAdsBlocked)
-  $('today-trackers').textContent = String(today.trackersBlocked)
-  $('today-cookies').textContent = String(today.cookiesBlocked)
+  lastStats = stats
+  const b = bucketForRange(stats, statsRange)
+  const total = b.youtube + b.web + b.trackers + b.cookies
+  $('stat-total').textContent = formatCount(total)
+  $('stat-total-label').textContent = `interruption${total === 1 ? '' : 's'} stopped ${RANGE_LABEL[statsRange]}`
+  $('stat-youtube').textContent = formatCount(b.youtube)
+  $('stat-web').textContent = formatCount(b.web)
+  $('stat-trackers').textContent = formatCount(b.trackers)
+  $('stat-cookies').textContent = formatCount(b.cookies)
+  // Honest footnote: ranges only cover days recorded since this version.
+  const note = $('stat-note')
+  if (statsRange === '7' || statsRange === '30') {
+    const days = (stats.history ?? []).filter((d) => d.date >= dayKey(Number(statsRange) - 1)).length + 1
+    note.textContent =
+      days < Number(statsRange)
+        ? `Daily history started ${days === 1 ? 'today' : `${days} days ago`} — earlier activity is only in All time.`
+        : ''
+  } else {
+    note.textContent = ''
+  }
+  // Home's compact line.
+  const all = bucketForRange(stats, 'all')
+  const today = bucketOf(stats.today)
+  $('home-stats-num').textContent = formatCount(all.youtube + all.web + all.trackers + all.cookies)
+  $('home-stats-today').textContent = formatCount(today.youtube + today.web + today.trackers + today.cookies)
+}
+
+function selectRange(range: Range) {
+  statsRange = range
+  for (const btn of document.querySelectorAll<HTMLButtonElement>('.seg-btn[data-range]')) {
+    const on = btn.dataset.range === range
+    btn.classList.toggle('on', on)
+    btn.setAttribute('aria-selected', String(on))
+  }
+  if (lastStats) renderStats(lastStats)
 }
 
 function formatTime(seconds: number): string {
@@ -763,8 +998,6 @@ async function renderUpdateBanner(): Promise<boolean> {
   return true
 }
 
-const REVIEW_URL =
-  'https://chromewebstore.google.com/detail/mjdcndkalddmlahidjabnncicdmpimmi/reviews?utm_source=nudge'
 const REVIEW_NUDGE_MIN_DAYS = 14
 const REVIEW_NUDGE_MIN_BLOCKED = 100
 
@@ -838,16 +1071,6 @@ async function renderKeyReminder() {
   )
 }
 
-async function renderYtBackoff() {
-  const el = $('yt-backoff')
-  const backoff = await getYtBackoff()
-  // Show only while the notice is fresh (7 days) — the flag itself clears when
-  // the user acts, this just stops a very old one lingering.
-  const fresh = backoff && Date.now() - backoff.at < 7 * 24 * 60 * 60 * 1000
-  el.hidden = !fresh
-  if (!fresh && backoff) void clearYtBackoff()
-}
-
 // Where the ad engine last saw the content video, for the resume-after-reload
 // path. 0 whenever the content script isn't there to answer.
 async function tabResumeSeconds(tabId: number): Promise<number> {
@@ -917,16 +1140,21 @@ async function activeTabHost(): Promise<{ host: string; url: string } | null> {
   }
 }
 
-// Show the "site detected your ad blocker" notice if the active tab's host has
-// a recent wall record.
-async function renderAdblockWall() {
-  const el = $('adblock-wall')
+// Spotify web player: ads are MUTED, never blocked or skipped (in-stream
+// delivery — see src/content/audio-ads.ts). Say so while the user is there,
+// so "Blocking active" never reads as a promise to silence the ad slot.
+// Dismissed once = stays dismissed. Shared with the in-page notice
+// (src/content/spotify-notice.ts).
+const SPOTIFY_NOTE_KEY = 'spotifyNoteDismissed'
+async function renderSpotifyNote() {
+  const el = $('spotify-note')
   const active = await activeTabHost()
-  const wall = active ? await getAdblockWall(active.host) : null
-  el.hidden = !wall
-  if (wall && active) {
-    $('adblock-wall-site').textContent = active.host.replace(/^www\./, '')
+  if (!active || active.host !== 'open.spotify.com') {
+    el.hidden = true
+    return
   }
+  const stored = await chrome.storage.local.get(SPOTIFY_NOTE_KEY)
+  el.hidden = stored[SPOTIFY_NOTE_KEY] === true
 }
 
 // Clear the active site's cookies to lift its ad-blocker wall, then reload.
@@ -966,63 +1194,133 @@ async function clearSiteCookiesAndReload(
   }
 }
 
+// Only ever the current tab — reloading others could lose work in progress.
+async function reloadActiveTab() {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+  if (tab?.id) {
+    await chrome.tabs.reload(tab.id)
+    window.close()
+  }
+}
+
+/** Controls accordion. The section for the current site opens by default
+ * (YouTube on youtube.com, Spotify on open.spotify.com, otherwise Ad
+ * blocker); a manual open/close is remembered for the session's later
+ * popups via localStorage — an extension-page convenience, nothing more. */
+const SECTIONS = ['adblock', 'youtube', 'spotify'] as const
+type Section = (typeof SECTIONS)[number]
+function setSectionOpen(key: Section, open: boolean) {
+  $(`sec-${key}`).hidden = !open
+  document
+    .querySelector<HTMLButtonElement>(`.ctl-section[data-section="${key}"] .ctl-section-head`)
+    ?.setAttribute('aria-expanded', String(open))
+}
+function initSections(host: string | null) {
+  const contextual: Section = /(^|\.)youtube\.com$/.test(host ?? '')
+    ? 'youtube'
+    : host === 'open.spotify.com'
+      ? 'spotify'
+      : 'adblock'
+  // Contextual section first in the list.
+  const list = $('view-controls')
+  const first = list.querySelector<HTMLElement>(`.ctl-section[data-section="${contextual}"]`)
+  if (first) list.prepend(first)
+  let remembered: Partial<Record<Section, boolean>> = {}
+  try {
+    remembered = JSON.parse(localStorage.getItem('sections') ?? '{}')
+  } catch {
+    remembered = {}
+  }
+  for (const key of SECTIONS) {
+    setSectionOpen(key, remembered[key] ?? key === contextual)
+  }
+  for (const head of document.querySelectorAll<HTMLButtonElement>('.ctl-section-head')) {
+    head.addEventListener('click', () => {
+      const key = head.closest<HTMLElement>('.ctl-section')!.dataset.section as Section
+      const open = $(`sec-${key}`).hidden
+      setSectionOpen(key, open)
+      remembered[key] = open
+      try {
+        localStorage.setItem('sections', JSON.stringify(remembered))
+      } catch {
+        /* storage unavailable — fine */
+      }
+    })
+  }
+}
+
 async function main() {
   usage('uiPopupOpens')
-  void renderUpdateBanner().then((shown) => {
-    if (!shown) void renderReviewNudge()
-  })
-  void renderKeyReminder()
-  void renderYtBackoff()
-  void renderAdblockWall()
-  $('yt-backoff-dismiss').addEventListener('click', () => {
-    $('yt-backoff').hidden = true
-    void clearYtBackoff()
-  })
-  $('yt-backoff-clear').addEventListener('click', (e) => {
-    void clearYouTubeCookiesAndReload(e.currentTarget as HTMLButtonElement)
-  })
-  $('adblock-wall-dismiss').addEventListener('click', () => {
-    $('adblock-wall').hidden = true
-    void activeTabHost().then((a) => a && clearAdblockWall(a.host))
-  })
-  $('adblock-wall-clear').addEventListener('click', (e) => {
-    void clearSiteCookiesAndReload(e.currentTarget as HTMLButtonElement)
-  })
-  // Always-available "reset this site": clear cookies + reload. Only meaningful
-  // on a real web page, so reveal it only when the active tab has an http(s) host.
-  const resetSiteBtn = $<HTMLButtonElement>('reset-site-btn')
-  void activeTabHost().then((active) => {
-    resetSiteBtn.hidden = !active
-  })
-  resetSiteBtn.addEventListener('click', (e) => {
-    void clearSiteCookiesAndReload(
-      e.currentTarget as HTMLButtonElement,
-      $('reset-site-label'),
-    )
-  })
-  renderSettings(await getSettings())
-  renderStats(await getStats())
-  onStatsChanged(renderStats)
+  $('version').textContent = chrome.runtime.getManifest().version
+  // Support form prefill: the page reads ?v= into its version field.
+  const reportLink = $<HTMLAnchorElement>('report-btn')
+  reportLink.href = `${reportLink.href}?v=${encodeURIComponent(chrome.runtime.getManifest().version)}`
 
-  const tabs: Array<['tab-site' | 'tab-controls', 'site' | 'controls']> = [
-    ['tab-site', 'site'],
-    ['tab-controls', 'controls'],
-  ]
-  tabs.forEach(([id, name], i) => {
-    const btn = $<HTMLButtonElement>(id)
+  // Bottom tab bar.
+  VIEWS.forEach((view, i) => {
+    const btn = $<HTMLButtonElement>(`tab-${view}`)
     btn.addEventListener('click', () => {
-      if (name === 'controls') usage('uiControlsTab')
-      selectTab(name)
+      if (view === 'controls') usage('uiControlsTab')
+      if (view === 'stats') usage('uiStatsTab')
+      selectView(view)
     })
     // Arrow keys move between tabs, the way a tablist is expected to behave.
     btn.addEventListener('keydown', (e) => {
       const step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0
       if (!step) return
       e.preventDefault()
-      const [nextId, nextName] = tabs[(i + step + tabs.length) % tabs.length]
-      selectTab(nextName)
-      $<HTMLButtonElement>(nextId).focus()
+      const next = VIEWS[(i + step + VIEWS.length) % VIEWS.length]
+      selectView(next)
+      $<HTMLButtonElement>(`tab-${next}`).focus()
     })
+  })
+  $('home-stats').addEventListener('click', () => selectView('stats'))
+
+  void renderUpdateBanner().then((shown) => {
+    if (!shown) void renderReviewNudge()
+  })
+  void renderKeyReminder()
+  void renderSpotifyNote()
+  $('spotify-note-dismiss').addEventListener('click', () => {
+    $('spotify-note').hidden = true
+    void chrome.storage.local.set({ [SPOTIFY_NOTE_KEY]: true })
+  })
+
+  // Always-available "reset this site": clear cookies + reload. Only meaningful
+  // on a real web page, so reveal it only when the active tab has an http(s) host.
+  const resetSiteBtn = $<HTMLButtonElement>('reset-site-btn')
+  const active = await activeTabHost()
+  resetSiteBtn.hidden = !active
+  resetSiteBtn.addEventListener('click', (e) => {
+    void clearSiteCookiesAndReload(
+      e.currentTarget as HTMLButtonElement,
+      $('reset-site-label'),
+    )
+  })
+  initSections(active?.host ?? null)
+
+  renderSettings(await getSettings())
+  renderStats(await getStats())
+  onStatsChanged(renderStats)
+  for (const btn of document.querySelectorAll<HTMLButtonElement>('.seg-btn[data-range]')) {
+    btn.addEventListener('click', () => selectRange(btn.dataset.range as Range))
+  }
+  $('reset-stats-btn').addEventListener('click', async () => {
+    const btn = $<HTMLButtonElement>('reset-stats-btn')
+    if (btn.dataset.armed !== '1') {
+      // Two-tap confirm instead of a modal: first tap arms, second clears.
+      btn.dataset.armed = '1'
+      btn.querySelector('.ctl-sub')!.textContent = 'Tap again to confirm'
+      setTimeout(() => {
+        btn.dataset.armed = ''
+        btn.querySelector('.ctl-sub')!.textContent = 'Reset every counter to zero'
+      }, 4000)
+      return
+    }
+    btn.dataset.armed = ''
+    await resetStats()
+    renderStats(await getStats())
+    btn.querySelector('.ctl-sub')!.textContent = 'Cleared'
   })
 
   // The ⓘ tips render via CSS from data-tip, which screen readers never see —
@@ -1031,39 +1329,31 @@ async function main() {
     if (el.dataset.tip) el.setAttribute('aria-label', el.dataset.tip)
   })
 
-  // Granular web-blocking pills: each maps 1:1 to a settings key.
-  for (const pill of document.querySelectorAll<HTMLButtonElement>('.pill')) {
-    pill.addEventListener('click', async () => {
-      const key = pill.dataset.key as
-        | 'blockTrackers'
-        | 'blockCookieNotices'
-        | 'blockPopups'
-        | 'blockSocial'
-        | 'blockUrlTracking'
-      const settings = await getSettings()
-      usage(`uiSet_${key}`)
-      renderSettings(await updateSettings({ [key]: !settings[key] }))
-      setTimeout(() => {
-        void renderBlockerState()
-        void renderSiteSection()
-      }, 300)
-    })
-  }
-
   wireToggle(masterToggle, 'masterEnabled')
   wireToggle(adToggle, 'adEngineEnabled')
   wireToggle(sponsorToggle, 'sponsorEngineEnabled')
   wireToggle(aggressiveToggle, 'aggressivePruning')
   wireToggle(aiEnhancementsToggle, 'aiEnhancements')
+  const afterRulesetChange = () =>
+    setTimeout(() => {
+      void renderStatus()
+      void renderSiteSection()
+    }, 300)
   blockAdsToggle.addEventListener('change', async () => {
     usage('uiSet_blockAllAds')
     renderSettings(await updateSettings({ blockAllAds: blockAdsToggle.checked }))
-    // Give the service worker a moment to flip the rulesets, then report.
-    setTimeout(() => {
-      void renderBlockerState()
-      void renderSiteSection()
-    }, 300)
+    afterRulesetChange() // give the SW a moment to flip the rulesets
   })
+  for (const key of OPT_KEYS) {
+    const el = document.getElementById(`opt-${key}`) as HTMLInputElement | null
+    if (!el) continue
+    el.addEventListener('change', async () => {
+      usage(`uiSet_${key}`)
+      renderSettings(await updateSettings({ [key]: el.checked } as Pick<Settings, OptKey>))
+      if (RULESET_KEYS.has(key)) afterRulesetChange()
+    })
+  }
+  masterToggle.addEventListener('change', () => void renderStatus())
 
   pauseSiteToggle.addEventListener('change', async () => {
     if (!currentHost) return
@@ -1072,20 +1362,33 @@ async function main() {
     void renderSiteSection()
   })
 
-  // Only ever the current tab — reloading others could lose work in progress.
-  const reloadActiveTab = async () => {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
-    if (tab?.id) {
-      await chrome.tabs.reload(tab.id)
-      window.close()
-    }
-  }
-  $('blocker-reload').addEventListener('click', () => void reloadActiveTab())
   $('reload-page').addEventListener('click', () => void reloadActiveTab())
+  reloadTabEl.addEventListener('click', () => void reloadActiveTab())
 
-  $('open-options').addEventListener('click', (event) => {
-    event.preventDefault()
-    void chrome.runtime.openOptionsPage()
+  // Deep links into the options page — its hash router (options.ts
+  // showPanel) opens the matching sidebar panel directly.
+  const openOptionsPanel = (panel: string) => {
+    void chrome.tabs.create({
+      url: chrome.runtime.getURL('options.html') + '#' + panel,
+    })
+    window.close()
+  }
+  $('open-options').addEventListener('click', () => openOptionsPanel('ai'))
+  $('open-filters').addEventListener('click', () => openOptionsPanel('adblock'))
+  // SponsorBlock categories, confidence, debug logging stay on the options
+  // page on purpose — config, not mid-browse switches.
+  $('open-yt-options').addEventListener('click', () => openOptionsPanel('youtube'))
+  $('whatsnew-btn').addEventListener('click', () => {
+    void chrome.tabs.create({
+      url: 'https://www.singlefinmedia.com/ad-sensei/release-notes',
+    })
+    window.close()
+  })
+  $('rate-btn').addEventListener('click', () => {
+    usage('uiReviews')
+    void finishReviewNudge()
+    void chrome.tabs.create({ url: REVIEW_URL })
+    window.close()
   })
 
   // Clicking an ⓘ shouldn't toggle the switch it sits inside — hover only.
@@ -1097,6 +1400,7 @@ async function main() {
   )
 
   const shareBtn = $<HTMLButtonElement>('share-btn')
+  const shareSub = shareBtn.querySelector<HTMLElement>('.ctl-sub')!
   shareBtn.addEventListener('click', async () => {
     usage('uiShares')
     const shareUrl = SHARE_URL
@@ -1119,21 +1423,17 @@ async function main() {
       }
     }
     try {
-      await navigator.clipboard.writeText(
-        shareUrl ? `${shareText} ${shareUrl}` : shareText,
-      )
-      const original = shareBtn.textContent
-      shareBtn.textContent = '✓ Copied'
-      setTimeout(() => (shareBtn.textContent = original), 1500)
+      await navigator.clipboard.writeText(`${shareText} ${shareUrl}`)
+      const original = shareSub.textContent
+      shareSub.textContent = '✓ Link copied'
+      setTimeout(() => (shareSub.textContent = original), 1500)
     } catch {
       // clipboard blocked — nothing more to do
     }
   })
 
-  reloadTabEl.addEventListener('click', () => void reloadActiveTab())
-
+  void renderStatus()
   void renderVideoStatus()
-  void renderBlockerState()
   void renderSiteSection()
   void renderHiddenReview()
 

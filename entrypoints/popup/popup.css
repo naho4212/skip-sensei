@@ -68,11 +68,11 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* ── View tabs + scroll shell ───────────────────────────────────────── */
+/* ── Range picker (Stats) + scroll shell ───────────────────────────── */
 .seg {
   display: flex;
   gap: 2px;
-  margin: 2px 12px 6px;
+  margin: 0;
   padding: 3px;
   background: var(--panel);
   border: 1px solid var(--divider);
@@ -99,10 +99,6 @@ body {
   flex: 1;
   overflow-y: auto;
   min-height: 0;
-}
-footer {
-  flex-shrink: 0;
-  border-top: 1px solid var(--divider);
 }
 
 /* ── Header ─────────────────────────────────────────────────────────── */
@@ -187,20 +183,17 @@ body.disabled .brand-status {
 }
 
 main {
-  padding: 10px 12px 4px;
+  padding: 8px 12px 6px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
+}
+/* Views are flex columns only for the Home footer line's margin-top:auto;
+ * cards must never shrink to fit — the view scrolls instead. */
+main > * {
+  flex-shrink: 0;
 }
 
-/* The global stat tally sits flush at the bottom of the view, with the
- * spare space above it — a footer summary, not part of the site stack. */
-#view-site {
-  min-height: 100%;
-}
-#view-site .stat-block {
-  margin-top: auto;
-}
 
 body.disabled main > *:not(.site-hero) {
   opacity: 0.4;
@@ -226,45 +219,6 @@ body.disabled main > *:not(.site-hero) {
   border-top: 1px solid var(--divider);
 }
 
-/* Granular web-blocking pills under "Block all ads" */
-.pill-group {
-  padding: 9px 14px 10px 56px;
-}
-.pill-title {
-  font-size: 9.5px;
-  font-weight: 600;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  color: var(--text-3);
-  margin-bottom: 7px;
-}
-.pills {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-}
-/* Sized so three active chips (✓ Trackers / ✓ Cookie banners / ✓ Popups)
- * fit on one row within the 274px the group gets. */
-.pill {
-  font-family: inherit;
-  font-size: 10.5px;
-  color: var(--text-2);
-  border: 1px solid var(--divider);
-  border-radius: 14px;
-  padding: 4px 8px;
-  background: var(--hover);
-  cursor: pointer;
-  white-space: nowrap;
-}
-.pill.on {
-  color: var(--accent-bright);
-  border-color: color-mix(in srgb, var(--accent) 50%, transparent);
-  background: color-mix(in srgb, var(--accent) 10%, transparent);
-}
-.pill.on::before {
-  content: '✓ ';
-  font-weight: 700;
-}
 
 /* Small BETA pill (matches options.css's) */
 .beta-tag {
@@ -326,64 +280,6 @@ body.disabled main > *:not(.site-hero) {
   color: var(--text);
 }
 
-/* YouTube ad-wall back-off notice (amber warning) */
-.yt-backoff {
-  position: relative;
-  margin: 12px 12px 0;
-  padding: 11px 30px 11px 13px;
-  border: 1px solid color-mix(in srgb, #e0a52e 60%, transparent);
-  border-radius: 12px;
-  background: color-mix(in srgb, #e0a52e 14%, var(--panel));
-}
-.yt-backoff-title {
-  font-weight: 600;
-  font-size: 13px;
-  color: var(--text);
-  margin-bottom: 4px;
-}
-.yt-backoff-text {
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.4;
-  color: var(--text-2);
-}
-.yt-backoff-dismiss {
-  position: absolute;
-  top: 7px;
-  right: 7px;
-  width: 20px;
-  height: 20px;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--text-2);
-  font-size: 16px;
-  line-height: 1;
-  cursor: pointer;
-}
-.yt-backoff-dismiss:hover {
-  background: var(--hover);
-  color: var(--text);
-}
-.yt-backoff-action {
-  margin-top: 10px;
-  width: 100%;
-  padding: 7px 10px;
-  border: 1px solid color-mix(in srgb, #e0a52e 55%, transparent);
-  border-radius: 8px;
-  background: color-mix(in srgb, #e0a52e 22%, var(--panel));
-  color: var(--text);
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.yt-backoff-action:hover {
-  background: color-mix(in srgb, #e0a52e 32%, var(--panel));
-}
-.yt-backoff-action:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
 
 /* ── Active-site hero ───────────────────────────────────────────────── */
 .site-hero {
@@ -391,7 +287,7 @@ body.disabled main > *:not(.site-hero) {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 14px 16px;
+  padding: 12px 14px;
   border: 1px solid var(--border);
   border-radius: 14px;
   background: var(--panel);
@@ -431,19 +327,31 @@ body.disabled main > *:not(.site-hero) {
 }
 
 .site-host {
-  font-size: 17px;
+  margin-top: 4px;
+  font-size: 12.5px;
   font-weight: 600;
   letter-spacing: -0.01em;
-  color: var(--text);
+  color: var(--text-2);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.page-blocked {
+.hero-num {
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  margin: 4px 0 1px;
+}
+.site-hero.paused .hero-num {
+  color: var(--text-3);
+}
+.hero-label {
   font-size: 11.5px;
   color: var(--text-2);
-  font-variant-numeric: tabular-nums;
 }
 .page-breakdown {
   display: block;
@@ -501,19 +409,6 @@ body.disabled main > *:not(.site-hero) {
   outline-offset: 2px;
 }
 
-/* ── Blocker note (errors / reload hint) ────────────────────────────── */
-.blocker-note {
-  margin: 0;
-  font-size: 11.5px;
-  color: var(--text-2);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 4px;
-}
-.blocker-note.warn {
-  color: var(--accent-bright);
-}
 
 .key-reminder-text {
   margin: 6px 0 8px;
@@ -539,54 +434,6 @@ body.disabled main > *:not(.site-hero) {
   background: var(--accent-bright);
 }
 
-/* ── Analytics cards ────────────────────────────────────────────────── */
-/* Scope label: the tiles are global lifetime counts on a "This site" tab,
- * so say so. Same voice as the other caps eyebrows. */
-.stat-eyebrow {
-  font-size: 9.5px;
-  font-weight: 600;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  color: var(--text-3);
-  margin: 0 2px 6px;
-}
-.stat-row {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 6px;
-}
-.stat-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  padding: 9px 3px 7px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--panel);
-  text-align: center;
-}
-.stat-num {
-  font-size: 18px;
-  font-weight: 800;
-  line-height: 1.1;
-  letter-spacing: -0.02em;
-  color: var(--accent-bright);
-  font-variant-numeric: tabular-nums;
-}
-.stat-label {
-  font-size: 8.5px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--text-2);
-}
-.stat-sub {
-  font-size: 8.5px;
-  line-height: 1.2;
-  color: var(--text-3);
-  font-variant-numeric: tabular-nums;
-}
 
 /* ── Control rows ───────────────────────────────────────────────────── */
 /* No overflow:hidden — the ⓘ tooltips must escape the card (they were
@@ -1067,32 +914,6 @@ body.disabled main > *:not(.site-hero) {
   flex-shrink: 0;
 }
 
-/* ── Footer ─────────────────────────────────────────────────────────── */
-footer {
-  padding: 6px 16px 12px;
-  text-align: center;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-}
-.footer-link {
-  font-family: inherit;
-  font-size: 12px;
-  color: var(--text-2);
-  text-decoration: none;
-  background: none;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-}
-.footer-link:hover {
-  color: var(--text);
-}
-.footer-sep {
-  color: var(--text-2);
-  opacity: 0.5;
-}
 
 /* "Reset this site" is a link-row inside the card; strip button chrome. */
 button.ctl-row {
@@ -1155,4 +976,374 @@ button.ctl-row:disabled {
 .switch input:focus-visible + .slider::before {
   outline: 2px solid var(--link);
   outline-offset: 2px;
+}
+
+/* ── Bottom tab bar ─────────────────────────────────────────────────── */
+.tabbar {
+  flex-shrink: 0;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 2px;
+  padding: 6px 8px 8px;
+  border-top: 1px solid var(--divider);
+  background: var(--bg);
+}
+.tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 6px 2px 4px;
+  border: none;
+  border-radius: 10px;
+  background: none;
+  color: var(--text-3);
+  font-family: inherit;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.tab svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.tab:hover {
+  background: var(--hover);
+  color: var(--text-2);
+}
+.tab.on {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent-bright);
+}
+.tab:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: -2px;
+}
+
+/* ── Status strip (Home) ────────────────────────────────────────────── */
+.status {
+  position: relative;
+  padding: 9px 30px 9px 13px;
+  border-radius: 12px;
+  border: 1px solid var(--status-line);
+  background: color-mix(in srgb, var(--status-color) 10%, var(--panel));
+  --status-color: #22c55e;
+  --status-line: color-mix(in srgb, #22c55e 45%, transparent);
+}
+.status[data-state='warn'] {
+  --status-color: #e0a52e;
+  --status-line: color-mix(in srgb, #e0a52e 60%, transparent);
+}
+.status[data-state='wall'] {
+  --status-color: #ef4444;
+  --status-line: color-mix(in srgb, #ef4444 55%, transparent);
+}
+.status[data-state='off'] {
+  --status-color: #9092a0;
+  --status-line: var(--divider);
+}
+.status-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--status-color);
+  box-shadow: 0 0 8px var(--status-color);
+  flex: none;
+}
+.status-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.status-text {
+  margin: 5px 0 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-2);
+}
+.status-action {
+  margin-top: 9px;
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--status-line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--status-color) 20%, var(--panel));
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.status-action:hover {
+  background: color-mix(in srgb, var(--status-color) 30%, var(--panel));
+}
+.status-action:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.status-dismiss {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+.status-dismiss:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+/* The status strip stays legible while the extension is paused. */
+body.disabled main > *:not(.site-hero):not(.status) {
+  opacity: 0.4;
+  pointer-events: none;
+}
+body.disabled main > .status {
+  opacity: 1;
+}
+
+/* ── Spotify note (Home) ────────────────────────────────────────────── */
+.spotify-note {
+  position: relative;
+  padding: 11px 30px 11px 13px;
+  border: 1px solid color-mix(in srgb, #1ed760 45%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, #1ed760 10%, var(--panel));
+}
+.spotify-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #1ed760;
+  box-shadow: 0 0 8px #1ed760;
+  margin-right: 7px;
+  vertical-align: 1px;
+}
+
+/* ── Home: compact lifetime line ────────────────────────────────────── */
+.home-stats {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: auto;
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+  font-family: inherit;
+  color: var(--text-2);
+  text-align: left;
+  cursor: pointer;
+}
+.home-stats:hover {
+  background: var(--panel-2);
+}
+.home-stats-num {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--accent-bright);
+  font-variant-numeric: tabular-nums;
+}
+.home-stats-label {
+  flex: 1;
+  font-size: 11px;
+  line-height: 1.3;
+}
+.home-stats .chevron {
+  font-size: 18px;
+  line-height: 1;
+  color: var(--text-3);
+  align-self: center;
+}
+#view-home {
+  min-height: 100%;
+}
+
+/* ── Controls: accordion sections ───────────────────────────────────── */
+/* Each section is a card with the same chrome as the Settings blocks —
+ * collapsed heads read as tappable blocks, not floating labels. The inner
+ * .controls loses its own card chrome and becomes the card's body. */
+.ctl-section {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--panel);
+}
+.ctl-section > .controls {
+  border: none;
+  border-radius: 0 0 13px 13px;
+  background: transparent;
+  border-top: 1px solid var(--divider);
+}
+.ctl-section-head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 14px;
+  border: none;
+  border-radius: 13px;
+  background: none;
+  font-family: inherit;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+}
+.ctl-section-head:hover {
+  background: var(--hover);
+}
+.ctl-section-head[aria-expanded='true'] {
+  border-radius: 13px 13px 0 0;
+}
+.ctl-section-title {
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+.ctl-section-state {
+  margin-left: auto;
+  font-size: 10.5px;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+.ctl-section-chev {
+  font-size: 11px;
+  color: var(--text-3);
+  width: 12px;
+  text-align: center;
+  transition: transform 0.15s;
+}
+.ctl-section-head[aria-expanded='true'] .ctl-section-chev {
+  transform: rotate(90deg);
+}
+.ctl-subhead {
+  padding: 9px 14px 3px;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  border-top: 1px solid var(--divider);
+}
+.ctl-subhead + .ctl-row {
+  border-top: none;
+}
+.ctl-note {
+  margin: 0;
+  padding: 8px 14px 11px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-3);
+  border-top: 1px solid var(--divider);
+}
+/* Rows that depend on the section's master toggle dim when it's off but
+ * keep their state — turning the master back on restores the same setup. */
+.controls.master-off .ctl-row:not(.master-row),
+.controls.master-off .ctl-subhead,
+.controls.master-off .ctl-note {
+  opacity: 0.45;
+}
+/* Tooltip direction: sections scroll, so rows near the top of the view open
+ * downward; the nth-child rule from the single-card layout still applies. */
+
+/* ── Stats view ─────────────────────────────────────────────────────── */
+.stat-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 18px 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--panel);
+}
+.stat-hero-num {
+  font-size: 40px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: var(--accent-bright);
+  font-variant-numeric: tabular-nums;
+}
+.stat-hero-label {
+  font-size: 12px;
+  color: var(--text-2);
+}
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+.stat-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 10px 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+  text-align: center;
+}
+.stat-num {
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.stat-label {
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+.stat-note {
+  margin: 0 2px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-3);
+}
+.stat-note:empty {
+  display: none;
+}
+
+/* ── Settings view ──────────────────────────────────────────────────── */
+.version-line {
+  margin: 4px 0 0;
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+a.ctl-row {
+  border-top: 1px solid var(--divider);
+}
+.controls > .ctl-row:first-child,
+.controls > a.ctl-row:first-child,
+.controls > button.ctl-row:first-child {
+  border-top: none;
 }

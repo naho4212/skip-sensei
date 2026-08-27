@@ -1431,3 +1431,11 @@ async function main() {
 }
 
 void main()
+
+// Support form prefill (support.html reads ?v= into its version field —
+// the link alone never carried it, so web contact rows logged app_version '0').
+const supportLink = document.getElementById(
+  'contact-support-link',
+) as HTMLAnchorElement | null
+if (supportLink)
+  supportLink.href = `${supportLink.href}?v=${encodeURIComponent(chrome.runtime.getManifest().version)}`

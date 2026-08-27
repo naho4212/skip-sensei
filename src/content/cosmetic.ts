@@ -596,8 +596,13 @@ async function apply() {
   // won't parse, and one bad selector in a comma-joined rule silently voids
   // the WHOLE stylesheet rule.
   if (genericOn) requestListSelectors(() => void apply())
+  // Name-guess selectors are dropped on bait-probe hosts (see
+  // BAIT_PROBE_HOST_RE) — hiding their probe element is what trips the wall.
+  const genericSelectors = isBaitProbeHost()
+    ? SELECTORS.filter((s) => !(HEURISTIC_SELECTORS as readonly string[]).includes(s))
+    : SELECTORS
   const hideSelectors = [
-    ...(genericOn ? SELECTORS : []),
+    ...(genericOn ? genericSelectors : []),
     ...(genericOn ? (listSelectors ?? []) : []),
     ...siteHits
       .filter((site) => site.mode !== 'placeholder')
@@ -1697,6 +1702,28 @@ const USER_CONTENT_HOST_RE =
 
 function isUserContentHost(): boolean {
   return USER_CONTENT_HOST_RE.test(location.hostname)
+}
+
+/**
+ * Sites whose anti-adblock probe plants a throwaway BAIT element carrying
+ * generic ad-token classes and checks whether it got hidden. Pandora
+ * (verified Aug 27 2026, web client 1.296): four probes — IMA SDK load, a
+ * versioned sbar.json fetch, a marker element, and a 1×1 off-screen div with
+ * class="ad_placeholder ad_hidden invisible_ad ad_slot promo_content
+ * promo-banner ad-container sponsored_link" — and two or more hits flip
+ * "hammer mode": an "Ad Blocker is on…" modal on every play, playback gated,
+ * plus a nag audio clip. The IMA block (filter lists) is one hit; our own
+ * [class*=" ad-container"] name guess hiding the bait was the second. The
+ * bait lives for a single synchronous getComputedStyle call, so the DOM
+ * guard can never see it — the name-guess selectors are simply skipped on
+ * these hosts. Verified markers and list rules still apply, and every ad
+ * REQUEST stays blocked (api/v1/ad/, ads.*.js, adserver.pandora.com…), so
+ * nothing new is shown.
+ */
+const BAIT_PROBE_HOST_RE = /(^|\.)pandora\.com$/i
+
+function isBaitProbeHost(): boolean {
+  return BAIT_PROBE_HOST_RE.test(location.hostname)
 }
 /**
  * Exact ad-disclosure label text (leaf nodes only), across common locales.

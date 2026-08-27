@@ -9,9 +9,7 @@
     <header>
       <div class="brand">
         <svg class="brand-mark" viewBox="0 0 24 17" aria-hidden="true">
-          <path
-            d="M0 1.5l6 7-6 7v-14zm7.5 0l6 7-6 7v-14zm8.5 0h2.4v14H16v-14z"
-          />
+          <path d="M0 1.5l6 7-6 7v-14zm7.5 0l6 7-6 7v-14zm8.5 0h2.4v14H16v-14z" />
         </svg>
         <div class="brand-text">
           <h1 class="wordmark"><span class="ad">AD</span> SENSEI</h1>
@@ -19,501 +17,411 @@
         </div>
       </div>
       <div class="header-actions">
-        <button
-          type="button"
-          id="reload-page"
-          class="icon-btn"
-          title="Reload this page"
-          aria-label="Reload this page"
-        >
-          ↻
-        </button>
+        <button type="button" id="reload-page" class="icon-btn" title="Reload this page" aria-label="Reload this page">↻</button>
         <label class="switch" title="Turn Ad Sensei on or off">
-          <input
-            type="checkbox"
-            id="master-toggle"
-            aria-label="Turn Ad Sensei on or off"
-          />
+          <input type="checkbox" id="master-toggle" aria-label="Turn Ad Sensei on or off" />
           <span class="slider"></span>
         </label>
       </div>
     </header>
 
-    <!-- Two views: "This site" (page status + per-page tools) and
-         "Controls" (feature toggles). Footer stays pinned below both. -->
-    <nav class="seg" role="tablist" aria-label="Popup views">
-      <button
-        type="button"
-        id="tab-site"
-        class="seg-btn on"
-        role="tab"
-        aria-selected="true"
-        aria-controls="view-site"
-      >
-        This site
-      </button>
-      <button
-        type="button"
-        id="tab-controls"
-        class="seg-btn"
-        role="tab"
-        aria-selected="false"
-        aria-controls="view-controls"
-        tabindex="-1"
-      >
-        Controls
-      </button>
-    </nav>
-
     <div class="view-wrap">
+    <!-- ═══════════════ HOME ═══════════════ -->
+    <main id="view-home" role="tabpanel" aria-labelledby="tab-home">
+      <!-- One status strip for the whole page: ok / warn / wall. Fed by
+           renderStatus() from the yt-backoff, adblock-wall and blocker-state
+           signals — highest-priority state wins, one card at a time. -->
+      <section class="status" id="status" data-state="ok">
+        <button type="button" class="status-dismiss" id="status-dismiss" aria-label="Dismiss" hidden>×</button>
+        <div class="status-head">
+          <span class="status-dot" aria-hidden="true"></span>
+          <span class="status-title" id="status-title">Everything’s working</span>
+        </div>
+        <p class="status-text" id="status-text" hidden></p>
+        <button type="button" class="status-action" id="status-action" hidden></button>
+      </section>
 
-    <section class="update-banner" id="update-banner" hidden>
-      <button
-        type="button"
-        class="update-dismiss"
-        id="update-dismiss"
-        aria-label="Dismiss"
-      >
-        ×
-      </button>
-      <div class="update-title" id="update-title"></div>
-      <ul class="update-list" id="update-list"></ul>
-    </section>
+      <section class="update-banner" id="update-banner" hidden>
+        <button type="button" class="update-dismiss" id="update-dismiss" aria-label="Dismiss">×</button>
+        <div class="update-title" id="update-title"></div>
+        <ul class="update-list" id="update-list"></ul>
+      </section>
+      <section class="update-banner" id="key-reminder" hidden>
+        <button type="button" class="update-dismiss" id="key-reminder-dismiss" aria-label="Dismiss">×</button>
+        <div class="update-title">Faster sponsor detection</div>
+        <p class="key-reminder-text">Add a free Gemini API key — a big speed-up on long videos, no credit card needed.</p>
+        <button type="button" id="key-reminder-open" class="mini-btn">Open settings</button>
+      </section>
+      <section class="update-banner" id="review-nudge" hidden>
+        <button type="button" class="update-dismiss" id="review-nudge-dismiss" aria-label="Dismiss">×</button>
+        <div class="update-title">Enjoying Ad Sensei?</div>
+        <p class="key-reminder-text" id="review-nudge-text">A quick rating on the Chrome Web Store helps more people find it.</p>
+        <button type="button" id="review-nudge-open" class="mini-btn">⭐ Rate it</button>
+      </section>
 
-    <!-- "Remind me later" from onboarding's Gemini-key step -->
-    <section class="update-banner" id="key-reminder" hidden>
-      <button
-        type="button"
-        class="update-dismiss"
-        id="key-reminder-dismiss"
-        aria-label="Dismiss"
-      >
-        ×
-      </button>
-      <div class="update-title">Faster sponsor detection</div>
-      <p class="key-reminder-text">
-        Add a free Gemini API key — a big speed-up on long videos, no credit
-        card needed.
-      </p>
-      <button type="button" id="key-reminder-open" class="mini-btn">
-        Open settings
-      </button>
-    </section>
-
-    <!-- One-time review nudge (see renderReviewNudge in popup.ts) -->
-    <section class="update-banner" id="review-nudge" hidden>
-      <button
-        type="button"
-        class="update-dismiss"
-        id="review-nudge-dismiss"
-        aria-label="Dismiss"
-      >
-        ×
-      </button>
-      <div class="update-title">Enjoying Ad Sensei?</div>
-      <p class="key-reminder-text" id="review-nudge-text">
-        A quick rating on the Chrome Web Store helps more people find it.
-      </p>
-      <button type="button" id="review-nudge-open" class="mini-btn">
-        ⭐ Rate it
-      </button>
-    </section>
-
-    <!-- YouTube flagged the session; aggressive mode auto-disabled. -->
-    <section class="yt-backoff" id="yt-backoff" hidden>
-      <button
-        type="button"
-        class="yt-backoff-dismiss"
-        id="yt-backoff-dismiss"
-        aria-label="Dismiss"
-      >
-        ×
-      </button>
-      <div class="yt-backoff-title">YouTube showed an ad-blocker notice</div>
-      <p class="yt-backoff-text">
-        Experimental aggressive blocking was turned off automatically. Ads are
-        still skipped normally. If the notice sticks around, clearing YouTube's
-        cookies usually clears it — or sign out and back in.
-      </p>
-      <button type="button" class="yt-backoff-action" id="yt-backoff-clear">
-        Clear YouTube cookies &amp; reload
-      </button>
-    </section>
-
-    <!-- A site is showing an ad-blocker wall on the active tab. -->
-    <section class="yt-backoff" id="adblock-wall" hidden>
-      <button
-        type="button"
-        class="yt-backoff-dismiss"
-        id="adblock-wall-dismiss"
-        aria-label="Dismiss"
-      >
-        ×
-      </button>
-      <div class="yt-backoff-title">
-        <span id="adblock-wall-site">This site</span> asked you to turn off your
-        ad blocker
-      </div>
-      <p class="yt-backoff-text">
-        Some sites gate content behind an ad-blocker notice. Clearing this
-        site's cookies usually restores access — or reload after signing out.
-      </p>
-      <button type="button" class="yt-backoff-action" id="adblock-wall-clear">
-        Clear this site's cookies &amp; reload
-      </button>
-    </section>
-
-    <main id="view-site" role="tabpanel" aria-labelledby="tab-site">
-      <!-- Active site: prominent at the top. Shown only for the general
-           "Block all ads" engine on a real web page. -->
+      <!-- Hero: the number for THIS page. -->
       <section class="site-hero" id="site-section" hidden>
         <div class="site-hero-info">
           <span class="site-status" id="site-status">Blocking active</span>
+          <span class="hero-num" id="page-blocked-num">—</span>
+          <span class="hero-label" id="page-blocked-label">blocked on this page</span>
           <span class="site-host" id="site-host"></span>
-          <span class="page-blocked" id="page-blocked"></span>
           <span class="page-breakdown" id="page-breakdown"></span>
         </div>
         <label class="power" title="Pause ad blocking on this site">
-          <input
-            type="checkbox"
-            id="pause-site-toggle"
-            aria-label="Pause ad blocking on this site"
-          />
+          <input type="checkbox" id="pause-site-toggle" aria-label="Pause ad blocking on this site" />
           <span class="power-btn" aria-hidden="true">
             <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path
-                d="M12 3v9"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2.2"
-                stroke-linecap="round"
-              />
-              <path
-                d="M7.4 6.4a7 7 0 1 0 9.2 0"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2.2"
-                stroke-linecap="round"
-              />
+              <path d="M12 3v9" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" />
+              <path d="M7.4 6.4a7 7 0 1 0 9.2 0" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" />
             </svg>
           </span>
         </label>
       </section>
 
-      <div class="blocker-note" id="blocker-note" hidden>
-        <span id="blocker-note-text"></span>
-        <button class="mini-btn" id="blocker-reload" hidden>↻ Reload</button>
-      </div>
+      <section class="spotify-note" id="spotify-note" hidden>
+        <button type="button" class="update-dismiss" id="spotify-note-dismiss" aria-label="Dismiss">×</button>
+        <div class="update-title"><span class="spotify-dot" aria-hidden="true"></span>Spotify ads are muted, not skipped</div>
+        <p class="key-reminder-text" style="margin-bottom:0">Spotify’s web player delivers ads in-stream with skip locked for free accounts — there’s no ad request to block and nothing to skip to. Ad Sensei mutes the tab the moment an ad starts and unmutes when the music returns.</p>
+      </section>
 
       <!-- Per-page tools -->
-      <section class="controls page-card">
-        <!-- Contextual per-video status for the ad engine (watch pages only) -->
+      <section class="controls page-card" id="page-card">
         <div class="ctl-detail" id="ad-detail" hidden>
           <span id="ad-status"></span>
           <button id="reload-tab" hidden>Reload page</button>
         </div>
-        <!-- Contextual sponsor status for the current video. Same collapsed
-             pattern as "Hidden ads here": a short title with the count, the
-             segment list only on expand. Progress bar stays outside the
-             collapse so analysis is always visible. -->
         <div class="ctl-detail" id="sponsor-detail" hidden>
           <div class="hidden-head">
-            <button
-              type="button"
-              class="hidden-toggle"
-              id="sponsor-toggle"
-              aria-expanded="false"
-            >
+            <button type="button" class="hidden-toggle" id="sponsor-toggle" aria-expanded="false">
               <span class="hidden-chevron" id="sponsor-chevron" hidden>▸</span>
               <span class="section-title" id="video-status"></span>
               <span class="count-badge" id="sponsor-count" hidden></span>
             </button>
-            <button
-              type="button"
-              class="reanalyze-btn"
-              id="sponsor-reanalyze"
-              title="Re-analyze this video's transcript"
-              aria-label="Re-analyze transcript"
-              hidden
-            >
-              ↻
-            </button>
+            <button type="button" class="reanalyze-btn" id="sponsor-reanalyze" title="Re-analyze this video's transcript" aria-label="Re-analyze transcript" hidden>↻</button>
           </div>
-          <div
-            class="progress"
-            id="analysis-progress"
-            role="progressbar"
-            aria-label="Analyzing transcript"
-            aria-valuemin="0"
-            aria-valuemax="100"
-            hidden
-          >
+          <div class="progress" id="analysis-progress" role="progressbar" aria-label="Analyzing transcript" aria-valuemin="0" aria-valuemax="100" hidden>
             <div class="progress-bar" id="analysis-bar"></div>
           </div>
           <ul class="segments" id="segment-list" hidden></ul>
         </div>
-
-        <!-- AI hidden-ads review for this page, folded under Block all ads -->
         <div class="ctl-detail hidden-review" id="hidden-review" hidden>
           <div class="hidden-head">
-            <button
-              type="button"
-              class="hidden-toggle"
-              id="hidden-toggle"
-              aria-expanded="false"
-            >
+            <button type="button" class="hidden-toggle" id="hidden-toggle" aria-expanded="false">
               <span class="hidden-chevron" id="hidden-chevron">▸</span>
               <span class="section-title" id="hidden-title">Hidden ads here</span>
               <span class="count-badge" id="hidden-count" hidden></span>
             </button>
-            <button type="button" id="scan-ads-btn" class="mini-btn">
-              Scan for ads
-            </button>
+            <button type="button" id="scan-ads-btn" class="mini-btn">Scan for ads</button>
           </div>
           <div id="hidden-body" hidden>
-            <p class="hidden-hint" id="hidden-hint">
-              What the extension hid on this page. “👎 Not ad” shows it again and
-              stops hiding it on this site.
-            </p>
+            <p class="hidden-hint" id="hidden-hint">What the extension hid on this page. “👎 Not ad” shows it again and stops hiding it on this site.</p>
             <ul class="hidden-list" id="hidden-list"></ul>
-            <p class="hidden-empty" id="hidden-empty" hidden>
-              Nothing hidden here. Tap “Scan for ads” to check this page with AI.
-            </p>
+            <p class="hidden-empty" id="hidden-empty" hidden>Nothing hidden here. Tap “Scan for ads” to check this page with AI.</p>
             <p class="hidden-reset" id="hidden-reset" hidden>
               <span id="hidden-reset-text"></span>
-              <button type="button" id="hidden-reset-btn" class="mini-btn">
-                Undo
-              </button>
+              <button type="button" id="hidden-reset-btn" class="mini-btn">Undo</button>
             </p>
           </div>
         </div>
-
-        <!-- Manual site reset: clear the current site's cookies and reload.
-             Handy when a site is misbehaving or gating content — clears its
-             login/consent state for a fresh start. Hidden on non-web tabs. -->
         <button type="button" id="reset-site-btn" class="ctl-row link-row" hidden>
-          <span class="ctl-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M3 12a9 9 0 1 0 2.6-6.4" />
-              <polyline points="3 3 3 8 8 8" />
-            </svg>
-          </span>
+          <span class="ctl-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"> <path d="M3 12a9 9 0 1 0 2.6-6.4" /> <polyline points="3 3 3 8 8 8" /> </svg></span>
           <span class="ctl-text">
             <span class="ctl-title">Reset this site</span>
-            <span class="ctl-sub" id="reset-site-label"
-              >Clear cookies &amp; reload the page</span
-            >
+            <span class="ctl-sub" id="reset-site-label">Clear cookies &amp; reload the page</span>
           </span>
         </button>
       </section>
 
-      <!-- Analytics: global running tally, so it closes the view rather than
-           interrupting the site-scoped blocks above. -->
-      <section class="stat-block">
-        <div class="stat-eyebrow">Blocked everywhere</div>
-        <div class="stat-row">
-          <div class="stat-card">
-            <span class="stat-num" id="alltime-youtube">0</span>
-            <span class="stat-label">YouTube</span>
-            <span class="stat-sub"><span id="today-youtube">0</span> today</span>
+      <!-- Compact lifetime line; the full breakdown lives in Stats. -->
+      <button type="button" class="home-stats" id="home-stats">
+        <span class="home-stats-num" id="home-stats-num">0</span>
+        <span class="home-stats-label">ads &amp; trackers stopped all time · <span id="home-stats-today">0</span> today</span>
+        <span class="chevron" aria-hidden="true">›</span>
+      </button>
+    </main>
+
+    <!-- ═══════════════ CONTROLS ═══════════════ -->
+    <main id="view-controls" role="tabpanel" aria-labelledby="tab-controls" hidden>
+        <section class="ctl-section" data-section="adblock">
+          <button type="button" class="ctl-section-head" aria-expanded="false" aria-controls="sec-adblock">
+            <span class="ctl-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 7.6-7 9-4-1.4-7-4.5-7-9V6z"/><path d="M9.5 12.5l2 2 3.5-4"/></svg></span>
+            <span class="ctl-section-title">Ad blocker</span>
+            <span class="ctl-section-state" data-state-for="adblock"></span>
+            <span class="ctl-section-chev" aria-hidden="true">▸</span>
+          </button>
+          <div class="controls" id="sec-adblock" hidden>
+          <label class="ctl-row" data-row="block-ads-toggle">
+            <span class="ctl-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"> <path d="M12 3l7 3v5c0 4.5-3 7.6-7 9-4-1.4-7-4.5-7-9V6z" /> <line x1="9" y1="9" x2="15" y2="15" /> </svg></span>
+            <span class="ctl-text">
+              <span class="ctl-title">Block all ads<span class="info" tabindex="0" data-tip="Blocks ads (and optionally trackers) across all websites using filter lists. Configure extra lists in settings.">ⓘ</span></span>
+              <span class="ctl-sub">Filter-list blocking, every site</span>
+            </span>
+            <span class="switch"><input type="checkbox" id="block-ads-toggle" /><span class="slider"></span></span>
+          </label>
+          <label class="ctl-row" data-row="ai-enhancements-toggle">
+            <span class="ctl-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"> <path d="M12 3l1.9 4.6L18.5 9.5 13.9 11.4 12 16l-1.9-4.6L5.5 9.5l4.6-1.9z" /> <path d="M18 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z" /> </svg></span>
+            <span class="ctl-text">
+              <span class="ctl-title">AI enhancements<span class="info" tabindex="0" data-tip="Adds AI on top of the filter lists: detects ads the lists miss, auto-clicks “Reject” on cookie banners, and keeps useful popups (logins) while hiding annoyances. Takes effect on the next page load.">ⓘ</span></span>
+              <span class="ctl-sub">Smarter ad, consent &amp; popup detection</span>
+            </span>
+            <span class="switch"><input type="checkbox" id="ai-enhancements-toggle" /><span class="slider"></span></span>
+          </label>
+          <div class="ctl-subhead">Also blocked everywhere</div>
+          <label class="ctl-row" data-row="opt-blockTrackers">
+            <span class="ctl-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/><line x1="12" y1="3" x2="12" y2="7"/><line x1="12" y1="17" x2="12" y2="21"/></svg></span>
+            <span class="ctl-text">
+              <span class="ctl-title">Trackers</span>
+              <span class="ctl-sub">Analytics &amp; ad-tech beacons</span>
+            </span>
+            <span class="switch"><input type="checkbox" id="opt-blockTrackers" /><span class="slider"></span></span>
+          </label>
+          <label class="ctl-row" data-row="opt-blockCookieNotices">
+            <span class="ctl-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a9 9 0 1 0 9 9 4 4 0 0 1-4-4 4 4 0 0 1-5-5z"/><circle cx="9" cy="10" r="1"/><circle cx="14" cy="15" r="1"/><circle cx="9" cy="15" r="1"/></svg></span>
+            <span class="ctl-text">
+              <span class="ctl-title">Cookie banners</span>
+              <span class="ctl-sub">Hide notices, auto-reject when AI is on</span>
+            </span>
+            <span class="switch"><input type="checkbox" id="opt-blockCookieNotices" /><span class="slider"></span></span>
+          </label>
+          <label class="ctl-row" data-row="opt-blockPopups">
+            <span class="ctl-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><line x1="15" y1="9" x2="19" y2="13"/><line x1="19" y1="9" x2="15" y2="13"/></svg></span>
+            <span class="ctl-text">
+              <span class="ctl-title">Popups</span>
+              <span class="ctl-sub">Overlays &amp; interstitials</span>
+            </span>
+            <span class="switch"><input type="checkbox" id="opt-blockPopups" /><span class="slider"></span></span>
+          </label>
+          <label class="ctl-row" data-row="opt-blockSocial">
+            <span class="ctl-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 11v9"/><path d="M11 20h6a2 2 0 0 0 2-2l1-6a2 2 0 0 0-2-2h-4V6a2 2 0 0 0-2-2l-3 7v9z"/><rect x="3" y="11" width="4" height="9"/></svg></span>
+            <span class="ctl-text">
+              <span class="ctl-title">Social widgets</span>
+              <span class="ctl-sub">Like/share buttons that track you</span>
+            </span>
+            <span class="switch"><input type="checkbox" id="opt-blockSocial" /><span class="slider"></span></span>
+          </label>
+          <label class="ctl-row" data-row="opt-blockUrlTracking">
+            <span class="ctl-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg></span>
+            <span class="ctl-text">
+              <span class="ctl-title">URL tracking</span>
+              <span class="ctl-sub">Strip tracking parameters from links</span>
+            </span>
+            <span class="switch"><input type="checkbox" id="opt-blockUrlTracking" /><span class="slider"></span></span>
+          </label>
+          <label class="ctl-row" data-row="opt-blockMalware">
+            <span class="ctl-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 7.6-7 9-4-1.4-7-4.5-7-9V6z"/><line x1="12" y1="9" x2="12" y2="13"/><circle cx="12" cy="16" r=".6"/></svg></span>
+            <span class="ctl-text">
+              <span class="ctl-title">Malware domains</span>
+              <span class="ctl-sub">Known phishing &amp; malware hosts</span>
+            </span>
+            <span class="switch"><input type="checkbox" id="opt-blockMalware" /><span class="slider"></span></span>
+          </label>
+          <label class="ctl-row" data-row="opt-defuseAntiAdblock">
+            <span class="ctl-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="4" x2="8" y2="10"/><line x1="14" y1="10" x2="14" y2="20"/></svg></span>
+            <span class="ctl-text">
+              <span class="ctl-title">Anti-adblock defuser</span>
+              <span class="ctl-sub">Neutralize “disable your ad blocker” scripts</span>
+            </span>
+            <span class="switch"><input type="checkbox" id="opt-defuseAntiAdblock" /><span class="slider"></span></span>
+          </label>
           </div>
-          <div class="stat-card">
-            <span class="stat-num" id="alltime-web-blocks">0</span>
-            <span class="stat-label">Web ads</span>
-            <span class="stat-sub"
-              ><span id="today-web-blocks">0</span> today</span
-            >
+        </section>
+        <section class="ctl-section" data-section="youtube">
+          <button type="button" class="ctl-section-head" aria-expanded="false" aria-controls="sec-youtube">
+            <span class="ctl-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="4"/><path d="M10 9.8l4.5 2.7-4.5 2.7z"/></svg></span>
+            <span class="ctl-section-title">YouTube</span>
+            <span class="ctl-section-state" data-state-for="youtube"></span>
+            <span class="ctl-section-chev" aria-hidden="true">▸</span>
+          </button>
+          <div class="controls" id="sec-youtube" hidden>
+          <label class="ctl-row" data-row="ad-engine-toggle">
+            <span class="ctl-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"> <path d="M5 4l11 8-11 8z" /> <line x1="19" y1="5" x2="19" y2="19" /> </svg></span>
+            <span class="ctl-text">
+              <span class="ctl-title">Skip YouTube ads<span class="info" tabindex="0" data-tip="Automatically skips YouTube’s own ads — clicks “Skip” the moment it appears and fast-forwards the rest.">ⓘ</span></span>
+              <span class="ctl-sub">Auto-skip YouTube’s own ads</span>
+            </span>
+            <span class="switch"><input type="checkbox" id="ad-engine-toggle" /><span class="slider"></span></span>
+          </label>
+          <label class="ctl-row" data-row="sponsor-engine-toggle">
+            <span class="ctl-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"> <path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0l-7-7A2 2 0 0 1 3 12.2V5a2 2 0 0 1 2-2h7.2a2 2 0 0 1 1.4.6l7 7a2 2 0 0 1 0 2.8Z" /> <circle cx="7.5" cy="7.5" r="1.3" /> </svg></span>
+            <span class="ctl-text">
+              <span class="ctl-title">Skip sponsor segments<span class="info" tabindex="0" data-tip="Detects creator-read sponsor segments by AI-analyzing the video transcript, then skips playback past them — even on brand-new uploads.">ⓘ</span></span>
+              <span class="ctl-sub">AI-skip creator ad reads</span>
+            </span>
+            <span class="switch"><input type="checkbox" id="sponsor-engine-toggle" /><span class="slider"></span></span>
+          </label>
+          <label class="ctl-row" data-row="aggressive-toggle">
+            <span class="ctl-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"> <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /> </svg></span>
+            <span class="ctl-text">
+              <span class="ctl-title">Block first-party ads<em class="beta-tag">beta</em><span class="info" tabindex="0" data-tip="Removes ad slots from the video data YouTube sends, so most ads never start. If YouTube shows an ad-blocker notice repeatedly, this turns itself off automatically. Takes effect on the next page load.">ⓘ</span></span>
+              <span class="ctl-sub">Remove YouTube ads before they load</span>
+            </span>
+            <span class="switch"><input type="checkbox" id="aggressive-toggle" /><span class="slider"></span></span>
+          </label>
+          <div class="ctl-subhead">Tidy up YouTube</div>
+          <label class="ctl-row" data-row="opt-ytHideShorts">
+            <span class="ctl-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="3" width="10" height="18" rx="3"/><path d="M11 9l4 3-4 3z"/></svg></span>
+            <span class="ctl-text">
+              <span class="ctl-title">Hide Shorts</span>
+              <span class="ctl-sub">Remove the Shorts shelf and tab</span>
+            </span>
+            <span class="switch"><input type="checkbox" id="opt-ytHideShorts" /><span class="slider"></span></span>
+          </label>
+          <label class="ctl-row" data-row="opt-ytDismissStillWatching">
+            <span class="ctl-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l2.5 2"/></svg></span>
+            <span class="ctl-text">
+              <span class="ctl-title">Auto-dismiss “Still watching?”</span>
+              <span class="ctl-sub">Keep long sessions playing</span>
+            </span>
+            <span class="switch"><input type="checkbox" id="opt-ytDismissStillWatching" /><span class="slider"></span></span>
+          </label>
+          <label class="ctl-row" data-row="opt-ytDisableEndCards">
+            <span class="ctl-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><rect x="13" y="8" width="5" height="4" rx="1"/></svg></span>
+            <span class="ctl-text">
+              <span class="ctl-title">Hide end cards</span>
+              <span class="ctl-sub">No overlay suggestions at the end</span>
+            </span>
+            <span class="switch"><input type="checkbox" id="opt-ytDisableEndCards" /><span class="slider"></span></span>
+          </label>
+          <label class="ctl-row" data-row="opt-resumePlayback">
+            <span class="ctl-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 2.6-6.4"/><polyline points="3 3 3 8 8 8"/><path d="M10 9l5 3-5 3z"/></svg></span>
+            <span class="ctl-text">
+              <span class="ctl-title">Resume after skip</span>
+              <span class="ctl-sub">Pick up where the ad interrupted</span>
+            </span>
+            <span class="switch"><input type="checkbox" id="opt-resumePlayback" /><span class="slider"></span></span>
+          </label>
+          <label class="ctl-row" data-row="opt-showSkipToast">
+            <span class="ctl-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="14" width="16" height="6" rx="2"/><path d="M8 10V6a4 4 0 0 1 8 0v4"/></svg></span>
+            <span class="ctl-text">
+              <span class="ctl-title">Skip toast</span>
+              <span class="ctl-sub">Small “skipped” note in the player</span>
+            </span>
+            <span class="switch"><input type="checkbox" id="opt-showSkipToast" /><span class="slider"></span></span>
+          </label>
+        <button type="button" id="open-yt-options" class="ctl-row link-row">
+          <span class="ctl-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="8" x2="20" y2="8"/><line x1="4" y1="16" x2="20" y2="16"/><circle cx="10" cy="8" r="2.4"/><circle cx="15" cy="16" r="2.4"/></svg></span>
+          <span class="ctl-text"><span class="ctl-title">More YouTube settings</span><span class="ctl-sub">SponsorBlock categories, confidence</span></span>
+          <span class="chevron" aria-hidden="true">›</span>
+        </button>
           </div>
-          <div class="stat-card">
-            <span class="stat-num" id="alltime-trackers">0</span>
-            <span class="stat-label">Trackers</span>
-            <span class="stat-sub"><span id="today-trackers">0</span> today</span>
+        </section>
+        <section class="ctl-section" data-section="spotify">
+          <button type="button" class="ctl-section-head" aria-expanded="false" aria-controls="sec-spotify">
+            <span class="ctl-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 10c3-1 6-.7 8.5.8"/><path d="M8.5 13c2.4-.7 4.8-.4 7 .8"/><path d="M9 15.7c1.8-.5 3.6-.3 5.3.6"/></svg></span>
+            <span class="ctl-section-title">Spotify</span>
+            <span class="ctl-section-state" data-state-for="spotify"></span>
+            <span class="ctl-section-chev" aria-hidden="true">▸</span>
+          </button>
+          <div class="controls" id="sec-spotify" hidden>
+          <label class="ctl-row" data-row="opt-muteAudioAds">
+            <span class="ctl-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10v4h4l5 4V6L8 10z"/><line x1="16" y1="9" x2="21" y2="14"/><line x1="21" y1="9" x2="16" y2="14"/></svg></span>
+            <span class="ctl-text">
+              <span class="ctl-title">Mute audio ads<span class="info" tabindex="0" data-tip="Spotify’s web player delivers ads in-stream with skip locked — there is no ad request to block and nothing to skip to, so Ad Sensei mutes the tab the moment an ad starts and unmutes when the music returns.">ⓘ</span></span>
+              <span class="ctl-sub">Tab is muted for exactly the ad</span>
+            </span>
+            <span class="switch"><input type="checkbox" id="opt-muteAudioAds" /><span class="slider"></span></span>
+          </label>
+          <p class="ctl-note">Muted, not blocked — Spotify plays ads in-stream. You’ll see them go by; you won’t hear them.</p>
           </div>
-          <div class="stat-card">
-            <span class="stat-num" id="alltime-cookies">0</span>
-            <span class="stat-label">Cookies</span>
-            <span class="stat-sub"><span id="today-cookies">0</span> today</span>
-          </div>
-        </div>
+        </section>
+    </main>
+
+    <!-- ═══════════════ STATS ═══════════════ -->
+    <main id="view-stats" role="tabpanel" aria-labelledby="tab-stats" hidden>
+      <nav class="seg" role="tablist" aria-label="Stats range">
+        <button type="button" class="seg-btn on" data-range="today" role="tab" aria-selected="true">Today</button>
+        <button type="button" class="seg-btn" data-range="7" role="tab" aria-selected="false">7 days</button>
+        <button type="button" class="seg-btn" data-range="30" role="tab" aria-selected="false">30 days</button>
+        <button type="button" class="seg-btn" data-range="all" role="tab" aria-selected="false">All time</button>
+      </nav>
+      <section class="stat-hero">
+        <span class="stat-hero-num" id="stat-total">0</span>
+        <span class="stat-hero-label" id="stat-total-label">interruptions stopped today</span>
+      </section>
+      <section class="stat-row">
+        <div class="stat-card"><span class="stat-num" id="stat-youtube">0</span><span class="stat-label">YouTube</span></div>
+        <div class="stat-card"><span class="stat-num" id="stat-web">0</span><span class="stat-label">Web ads</span></div>
+        <div class="stat-card"><span class="stat-num" id="stat-trackers">0</span><span class="stat-label">Trackers</span></div>
+        <div class="stat-card"><span class="stat-num" id="stat-cookies">0</span><span class="stat-label">Cookies</span></div>
+      </section>
+      <p class="stat-note" id="stat-note"></p>
+      <section class="controls">
+        <button type="button" id="reset-stats-btn" class="ctl-row link-row">
+          <span class="ctl-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M6 7l1 13h10l1-13"/></svg></span>
+          <span class="ctl-text"><span class="ctl-title">Clear statistics</span><span class="ctl-sub">Reset every counter to zero</span></span>
+          <span class="chevron" aria-hidden="true">›</span>
+        </button>
       </section>
     </main>
 
-    <main id="view-controls" role="tabpanel" aria-labelledby="tab-controls" hidden>
-      <!-- Controls -->
+    <!-- ═══════════════ SETTINGS ═══════════════ -->
+    <main id="view-settings" role="tabpanel" aria-labelledby="tab-settings" hidden>
       <section class="controls">
-        <label class="ctl-row">
-          <span class="ctl-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M5 4l11 8-11 8z" />
-              <line x1="19" y1="5" x2="19" y2="19" />
-            </svg>
-          </span>
-          <span class="ctl-text">
-            <span class="ctl-title"
-              >Skip YouTube ads<span
-                class="info"
-                tabindex="0"
-                data-tip="Automatically skips YouTube's own ads — clicks “Skip” the moment it appears and fast-forwards the rest."
-                >ⓘ</span
-              ></span
-            >
-            <span class="ctl-sub">Auto-skip YouTube's own ads</span>
-          </span>
-          <span class="switch">
-            <input type="checkbox" id="ad-engine-toggle" />
-            <span class="slider"></span>
-          </span>
-        </label>
-
-
-        <label class="ctl-row">
-          <span class="ctl-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0l-7-7A2 2 0 0 1 3 12.2V5a2 2 0 0 1 2-2h7.2a2 2 0 0 1 1.4.6l7 7a2 2 0 0 1 0 2.8Z" />
-              <circle cx="7.5" cy="7.5" r="1.3" />
-            </svg>
-          </span>
-          <span class="ctl-text">
-            <span class="ctl-title"
-              >Skip sponsor segments<span
-                class="info"
-                tabindex="0"
-                data-tip="Detects creator-read sponsor segments by AI-analyzing the video transcript, then skips playback past them — even on brand-new uploads."
-                >ⓘ</span
-              ></span
-            >
-            <span class="ctl-sub">AI-skip creator ad reads</span>
-          </span>
-          <span class="switch">
-            <input type="checkbox" id="sponsor-engine-toggle" />
-            <span class="slider"></span>
-          </span>
-        </label>
-
-        <label class="ctl-row">
-          <span class="ctl-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-            </svg>
-          </span>
-          <span class="ctl-text">
-            <span class="ctl-title"
-              >Block YouTube's first-party ads
-              <em class="beta-tag">beta</em><span
-                class="info"
-                tabindex="0"
-                data-tip="Removes ad slots from the video data YouTube sends, so most ads never start. This is the first-party layer — the in-stream ads filter lists can't block. If YouTube shows an ad-blocker notice repeatedly, this turns itself off automatically. Takes effect on the next page load."
-                >ⓘ</span
-              ></span
-            >
-            <span class="ctl-sub">Remove YouTube ads before they load</span>
-          </span>
-          <span class="switch">
-            <input type="checkbox" id="aggressive-toggle" />
-            <span class="slider"></span>
-          </span>
-        </label>
-
-        <label class="ctl-row">
-          <span class="ctl-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M12 3l7 3v5c0 4.5-3 7.6-7 9-4-1.4-7-4.5-7-9V6z" />
-              <line x1="9" y1="9" x2="15" y2="15" />
-            </svg>
-          </span>
-          <span class="ctl-text">
-            <span class="ctl-title"
-              >Block all ads<span
-                class="info"
-                tabindex="0"
-                data-tip="Blocks ads (and optionally trackers) across all websites using filter lists. Configure extra lists in settings."
-                >ⓘ</span
-              ></span
-            >
-            <span class="ctl-sub">Filter-list blocking, every site</span>
-          </span>
-          <span class="switch">
-            <input type="checkbox" id="block-ads-toggle" />
-            <span class="slider"></span>
-          </span>
-        </label>
-
-        <!-- The five granular web-blocking lists, as tappable pills — the
-             popup-level view of the onboarding "levels". Each maps 1:1 to a
-             settings key; lit = on. -->
-        <div class="pill-group">
-          <div class="pill-title">Also blocked everywhere</div>
-          <div class="pills">
-            <button type="button" class="pill" data-key="blockTrackers" aria-pressed="false">Trackers</button>
-            <button type="button" class="pill" data-key="blockCookieNotices" aria-pressed="false">Cookie banners</button>
-            <button type="button" class="pill" data-key="blockPopups" aria-pressed="false">Popups</button>
-            <button type="button" class="pill" data-key="blockSocial" aria-pressed="false">Social widgets</button>
-            <button type="button" class="pill" data-key="blockUrlTracking" aria-pressed="false">URL tracking</button>
-          </div>
-        </div>
-
-        <label class="ctl-row">
-          <span class="ctl-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M12 3l1.9 4.6L18.5 9.5 13.9 11.4 12 16l-1.9-4.6L5.5 9.5l4.6-1.9z" />
-              <path d="M18 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z" />
-            </svg>
-          </span>
-          <span class="ctl-text">
-            <span class="ctl-title"
-              >AI enhancements<span
-                class="info"
-                tabindex="0"
-                data-tip="Adds AI on top of the filter lists: detects ads the lists miss, auto-clicks “Reject” on cookie banners, and keeps useful popups (logins) while hiding annoyances. Turn off to compare against filter-lists-only blocking. Takes effect on the next page load."
-                >ⓘ</span
-              ></span
-            >
-            <span class="ctl-sub">Smarter ad, consent &amp; popup detection</span>
-          </span>
-          <span class="switch">
-            <input type="checkbox" id="ai-enhancements-toggle" />
-            <span class="slider"></span>
-          </span>
-        </label>
-
-        <a href="#" id="open-options" class="ctl-row link-row">
-          <span class="ctl-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <line x1="4" y1="8" x2="20" y2="8" />
-              <line x1="4" y1="16" x2="20" y2="16" />
-              <circle cx="10" cy="8" r="2.4" />
-              <circle cx="15" cy="16" r="2.4" />
-            </svg>
-          </span>
-          <span class="ctl-text">
-            <span class="ctl-title">AI + privacy settings</span>
-            <span class="ctl-sub">Providers, categories, privacy</span>
-          </span>
+        <button type="button" id="open-options" class="ctl-row link-row">
+          <span class="ctl-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="14" r="4"/><path d="M11 11l9-9"/><path d="M16 6l3 3"/></svg></span>
+          <span class="ctl-text"><span class="ctl-title">AI, providers &amp; privacy</span><span class="ctl-sub">Gemini key, models, local-only mode</span></span>
+          <span class="chevron" aria-hidden="true">›</span>
+        </button>
+        <button type="button" id="open-filters" class="ctl-row link-row">
+          <span class="ctl-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="20" y2="12"/><line x1="8" y1="18" x2="20" y2="18"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></svg></span>
+          <span class="ctl-text"><span class="ctl-title">Filter lists</span><span class="ctl-sub">Status &amp; updates</span></span>
+          <span class="chevron" aria-hidden="true">›</span>
+        </button>
+      </section>
+      <section class="controls">
+        <button type="button" id="rate-btn" class="ctl-row link-row">
+          <span class="ctl-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/></svg></span>
+          <span class="ctl-text"><span class="ctl-title">Rate on the Chrome Web Store</span><span class="ctl-sub">Help others find Ad Sensei</span></span>
+          <span class="chevron" aria-hidden="true">›</span>
+        </button>
+        <a href="https://www.singlefinmedia.com/ad-sensei/support" target="_blank" rel="noopener" id="report-btn" class="ctl-row link-row">
+          <span class="ctl-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="8" width="10" height="12" rx="5"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/><line x1="3" y1="13" x2="7" y2="13"/><line x1="17" y1="13" x2="21" y2="13"/><line x1="4" y1="19" x2="8" y2="17"/><line x1="20" y1="19" x2="16" y2="17"/></svg></span>
+          <span class="ctl-text"><span class="ctl-title">Report a problem</span><span class="ctl-sub">Tell us what went wrong</span></span>
           <span class="chevron" aria-hidden="true">›</span>
         </a>
-
+        <button type="button" id="share-btn" class="ctl-row link-row">
+          <span class="ctl-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/><line x1="15.4" y1="6.5" x2="8.6" y2="10.5"/></svg></span>
+          <span class="ctl-text"><span class="ctl-title">Share Ad Sensei</span><span class="ctl-sub">Send the store link to a friend</span></span>
+          <span class="chevron" aria-hidden="true">›</span>
+        </button>
+        <a href="https://buymeacoffee.com/singlefin" target="_blank" rel="noopener" id="coffee-btn" class="ctl-row link-row">
+          <span class="ctl-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h13v7a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4z"/><path d="M17 10h2a2 2 0 0 1 0 4h-2"/><path d="M8 3v2M11 3v2M14 3v2"/></svg></span>
+          <span class="ctl-text"><span class="ctl-title">Buy me a coffee</span><span class="ctl-sub">Keep the project independent</span></span>
+          <span class="chevron" aria-hidden="true">›</span>
+        </a>
       </section>
+      <section class="controls">
+        <button type="button" id="whatsnew-btn" class="ctl-row link-row">
+          <span class="ctl-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v14H4z"/><line x1="8" y1="9" x2="16" y2="9"/><line x1="8" y1="13" x2="16" y2="13"/></svg></span>
+          <span class="ctl-text"><span class="ctl-title">What’s new</span><span class="ctl-sub">Release notes for every version</span></span>
+          <span class="chevron" aria-hidden="true">›</span>
+        </button>
+        <a href="https://www.singlefinmedia.com/ad-sensei/privacy" target="_blank" rel="noopener" id="privacy-btn" class="ctl-row link-row">
+          <span class="ctl-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span>
+          <span class="ctl-text"><span class="ctl-title">Privacy</span><span class="ctl-sub">How Ad Sensei handles data</span></span>
+          <span class="chevron" aria-hidden="true">›</span>
+        </a>
+      </section>
+      <p class="version-line">Ad Sensei · v<span id="version">—</span></p>
     </main>
-    <!-- view-wrap ends here; the footer sits OUTSIDE both tab views so it
-         stays pinned below whichever one is showing. (It used to sit inside
-         view-controls with a stray </div> that force-closed the <main> —
-         the parser produced this structure anyway; now the markup says so.) -->
     </div>
 
-    <footer>
-      <button type="button" id="share-btn" class="footer-link">
-        ↗ Share
+    <!-- Bottom tab bar -->
+    <nav class="tabbar" role="tablist" aria-label="Popup views">
+      <button type="button" id="tab-home" class="tab on" role="tab" aria-selected="true" aria-controls="view-home" data-view="home">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg><span>Home</span>
       </button>
-      <span class="footer-sep">·</span>
-      <a
-        href="https://buymeacoffee.com/singlefin"
-        target="_blank"
-        rel="noopener"
-        class="footer-link coffee"
-        >☕ Buy me a coffee</a
-      >
-    </footer>
-
+      <button type="button" id="tab-controls" class="tab" role="tab" aria-selected="false" aria-controls="view-controls" data-view="controls" tabindex="-1">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="17" x2="20" y2="17"/><circle cx="9" cy="7" r="2.5"/><circle cx="15" cy="17" r="2.5"/></svg><span>Controls</span>
+      </button>
+      <button type="button" id="tab-stats" class="tab" role="tab" aria-selected="false" aria-controls="view-stats" data-view="stats" tabindex="-1">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="4 17 10 11 14 15 20 8"/><polyline points="15 8 20 8 20 13"/></svg><span>Stats</span>
+      </button>
+      <button type="button" id="tab-settings" class="tab" role="tab" aria-selected="false" aria-controls="view-settings" data-view="settings" tabindex="-1">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span>Settings</span>
+      </button>
+    </nav>
     <script type="module" src="./popup.ts"></script>
   </body>
 </html>

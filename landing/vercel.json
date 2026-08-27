@@ -1,6 +1,7 @@
 {
   "rewrites": [
     { "source": "/goodbye", "destination": "/goodbye.html" },
+    { "source": "/release-notes", "destination": "/release-notes.html" },
     { "source": "/support", "destination": "/support.html" },
     { "source": "/terms", "destination": "/terms.html" },
     { "source": "/privacy", "destination": "/privacy.html" }

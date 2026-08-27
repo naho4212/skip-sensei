@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Ad Sensei — Release Notes</title>
+    <meta name="description" content="What's new in each Ad Sensei release — the full changelog for the AI ad blocker for every site and YouTube." />
+    <meta name="robots" content="index,follow" />
+    <link rel="canonical" href="https://www.singlefinmedia.com/ad-sensei/release-notes" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Ad Sensei" />
+    <meta property="og:title" content="Ad Sensei — Release Notes" />
+    <meta property="og:description" content="What's new in each Ad Sensei release." />
+    <meta property="og:url" content="https://www.singlefinmedia.com/ad-sensei/release-notes" />
+    <meta property="og:image" content="https://www.singlefinmedia.com/ad-sensei/og.png" />
+    <link rel="icon" href="https://www.singlefinmedia.com/ad-sensei/icon.png" />
+    <style>
+      :root { color-scheme: light dark; --accent: #7c3aed; --accent-bright: #8b5cf6; }
+      body {
+        font-family: -apple-system, Roboto, Arial, sans-serif;
+        line-height: 1.6; color: #1a1a1a; background: #fff;
+        max-width: 760px; margin: 0 auto; padding: 48px 24px 96px;
+      }
+      @media (prefers-color-scheme: dark) { body { color: #e8e8e8; background: #111; } }
+      .lockup { display: flex; align-items: center; gap: 10px; margin-bottom: 36px; text-decoration: none; color: inherit; }
+      .lockup .mark { width: 34px; height: 34px; border-radius: 9px; background: var(--accent); display: grid; place-items: center; }
+      .lockup .mark svg { width: 20px; height: 14px; fill: #fff; }
+      .lockup b { font-size: 17px; }
+      .lockup b span { color: var(--accent-bright); }
+      h1 { font-size: 28px; letter-spacing: -0.02em; margin: 0 0 6px; }
+      p.lede { margin: 0 0 40px; opacity: 0.75; }
+      .release { padding: 4px 0 8px; }
+      .release + .release { border-top: 1px solid rgba(128,128,128,0.25); padding-top: 24px; }
+      .release h2 { font-size: 18px; margin: 0 0 10px; }
+      .release .date { font-size: 13px; font-weight: 400; opacity: 0.6; margin-left: 8px; }
+      .release h3.cat {
+        font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+        margin: 14px 0 4px; display: flex; align-items: center; gap: 7px;
+      }
+      .release h3.cat::before { content: ''; width: 7px; height: 7px; border-radius: 50%; }
+      .cat-protect { color: #8b5cf6; } .cat-protect::before { background: #8b5cf6; }
+      .cat-feat { color: #3ea6ff; } .cat-feat::before { background: #3ea6ff; }
+      .cat-fix { color: #4ade80; } .cat-fix::before { background: #4ade80; }
+      @media (prefers-color-scheme: light) {
+        .cat-protect { color: #6d28d9; } .cat-feat { color: #065fd4; } .cat-fix { color: #15803d; }
+      }
+      .release ul { margin: 0 0 4px; padding-left: 20px; }
+      .first-tag {
+        font-size: 11px; font-weight: 600; letter-spacing: 0.03em;
+        color: var(--accent-bright); border: 1px solid var(--accent-bright);
+        border-radius: 999px; padding: 2px 9px; margin-left: 10px; vertical-align: 2px;
+      }
+      details.pre { margin-top: 16px; }
+      details.pre summary { cursor: pointer; font-size: 13.5px; opacity: 0.75; }
+      details.pre summary:hover { opacity: 1; }
+      details.pre[open] summary { margin-bottom: 4px; }
+      .release li { margin: 6px 0; font-size: 14.5px; }
+      footer { margin-top: 64px; font-size: 13px; opacity: 0.75; }
+      footer a { color: inherit; }
+    </style>
+  </head>
+  <body>
+    <a class="lockup" href="https://www.singlefinmedia.com/ad-sensei">
+      <span class="mark"><svg viewBox="0 0 24 17"><path d="M0 1.5l6 7-6 7v-14zm7.5 0l6 7-6 7v-14zm8.5 0h2.4v14H16v-14z"/></svg></span>
+      <b>Ad<span>Sensei</span></b>
+    </a>
+    <h1>Release notes</h1>
+    <p class="lede">Every user-facing change, newest first. The extension updates automatically from the Chrome&nbsp;Web&nbsp;Store.</p>
+      <section class="release" id="v0.3.17">
+        <h2>v0.3.17 <span class="date">August 27, 2026</span></h2>
+        <h3 class="cat cat-protect">Improvements</h3>
+        <ul>
+          <li>Spotify web player: ads are muted for exactly as long as they play — they arrive in-stream, so no extension can block or skip them, but you no longer hear them (web player only; the desktop and mobile apps are out of reach)</li>
+          <li>YouTube ad pods skip faster: each ad in a multi-ad break now gets its own instant seek-to-end and skip click instead of inheriting the previous ad's state — 2- and 3-ad breaks were taking 8–15 s</li>
+          <li>YouTube Music web player: video and audio ads are skipped the same way as on YouTube (it always used the same player — now verified and listed)</li>
+          <li>Tracker blocking ships in two parts so at least one loads when Chrome's shared rule budget is taken by another extension; the popup now explains that state and the fix (restart Chrome)</li>
+          <li>The AI no longer second-guesses filter-list rules — it only audits Ad Sensei's own broad heuristics. In the field it was un-hiding real ad slots on news sites</li>
+          <li>One status card explains anything unusual — a site’s ad-blocker wall, a YouTube notice, or a filter list that couldn’t load — with the fix a single tap away</li>
+          <li>Spotify: a one-time note in the web player and popup explains that Spotify ads are muted, not skipped (in-stream delivery), and muting has its own switch</li>
+        </ul>
+        <h3 class="cat cat-feat">Features</h3>
+        <ul>
+          <li>All-new popup: Home, Controls, Stats and Settings tabs — page status and per-page tools on Home, blocking controls grouped by area (Ad blocker / YouTube / Spotify), and your stats over today, 7 days, 30 days or all time</li>
+          <li>More controls without a trip to Settings: hide Shorts, auto-dismiss “Still watching?”, hide end cards, resume after skip, malware blocking and the anti-adblock defuser now toggle right in the popup</li>
+          <li>Release notes are now published on the website — “What’s new” in the popup takes you there</li>
+          <li>The support form pre-fills your extension version when you open it from the extension</li>
+        </ul>
+        <h3 class="cat cat-fix">Bug fixes</h3>
+        <ul>
+          <li>Ad-blocker warning dialogs on YouTube are recorded separately from playback blocks, and a dialog YouTube mounts hidden no longer counts as a wall</li>
+          <li>Fixed: the daily diagnostics summary was being cut short on our side, so health counters and usage counts never arrived — nothing changes in what the extension sends</li>
+          <li>Fixed: Pandora no longer shows its “Ad Blocker is on…” wall — music plays normally, with its ads still blocked</li>
+        </ul>
+      </section>
+      <section class="release" id="v0.3.15">
+        <h2>v0.3.15 <span class="date">August 24, 2026</span></h2>
+        <h3 class="cat cat-protect">Improvements</h3>
+        <ul>
+          <li>Balanced is now the default: ads, trackers, cookie notices, and popups are blocked on every site from the first page load — no welcome-page click needed. Existing installs keep whatever level they chose</li>
+          <li>All-sites access is now part of the install (like every general ad blocker) instead of a separate prompt when you pick a level — Chrome may ask you to approve it once on this update</li>
+        </ul>
+        <h3 class="cat cat-feat">Features</h3>
+        <ul>
+          <li>After two weeks of use the popup asks once — and only once — for a Chrome Web Store rating; dismiss it and it never comes back</li>
+          <li>Settings → About now has a “Rate &amp; review” link to the Chrome Web Store listing</li>
+        </ul>
+        <h3 class="cat cat-fix">Bug fixes</h3>
+        <ul>
+          <li>Fixed: the ↗ Share button in the popup crashed the extension (“Ad Sensei has crashed”) — it now shares the Chrome Web Store link, or copies it to the clipboard where system sharing isn’t available</li>
+        </ul>
+      </section>
+      <section class="release" id="v0.3.14">
+        <h2>v0.3.14 <span class="date">July 29, 2026</span> <span class="first-tag">First Chrome Web Store release</span></h2>
+        <h3 class="cat cat-protect">Improvements</h3>
+        <ul>
+          <li>The AI now reads a popup’s actual text before hiding it, and only hides what it can positively identify as a promo, newsletter, survey, or ad — functional dialogs (like a “time zone changed” notice) stay put</li>
+        </ul>
+        <h3 class="cat cat-feat">Features</h3>
+        <ul>
+          <li>New support page: Settings → About → “Contact support” opens a short form for questions, bugs, and ideas</li>
+          <li>Anonymous daily usage counts (which of Ad Sensei’s own buttons and toggles get used — never which sites you visit) now help guide UI improvements, under the same diagnostics switch, detailed in the updated privacy policy</li>
+          <li>Uninstalling now opens a brief goodbye page with an optional exit survey (only when diagnostics are on)</li>
+        </ul>
+        <details class="pre">
+          <summary>Everything leading up to the first release (v0.1.0 – v0.3.13)</summary>
+          <h3 class="cat cat-protect">Improvements</h3>
+          <ul>
+            <li>Reliably skips back-to-back "ad pods", not just the first ad</li>
+            <li>Smoother skips: the player is briefly covered while ads are removed</li>
+            <li>Recovers automatically if the player ever gets stuck on an ad</li>
+            <li>YouTube extras: hide Shorts, hide end-screen cards, turn off autoplay, auto-dismiss "Continue watching?"</li>
+            <li>Hides more YouTube ads: in-feed, masthead, and sidebar "Sponsored" cards</li>
+            <li>Blocks malware &amp; phishing domains (URLhaus live list) — on by default, refreshed with every filter update</li>
+            <li>Blocked-ad placeholders are easier to see, and empty ad slots that appear while you scroll now collapse too</li>
+            <li>Hides ads on thousands more sites, using per-site rules from the AdGuard filter list</li>
+            <li>More reliable ad blocking after Chrome restarts and extension updates</li>
+            <li>AI enhancements now toggle right from the popup — flip it to compare AI-assisted blocking against filter lists alone</li>
+            <li>Aggressive mode now works on its own — enable it without needing “Skip YouTube ads” turned on</li>
+            <li>The “blocked here” count updates live as ads are hidden on the page</li>
+            <li>When YouTube fully blocks playback for ad blocking, the player now shows a recovery panel with a one-click "Clear YouTube cookies &amp; reload" fix (instead of a silent black screen)</li>
+            <li>Cookie clearing and cloud AI providers now request permission only when you use them, so the extension asks for less up front</li>
+            <li>The Ad Sensei skip overlay is back — a calm branded panel covers the player while an ad is being skipped, instead of the fast-forward flicker</li>
+            <li>Ad counting now counts ads, not requests: every ad slot removed from a page counts as one blocked ad — including slots left empty because the ad was stopped before it could even load (blocking one ad script can kill every ad on the page; the count now reflects that)</li>
+            <li>AI ad detection is now far stricter about what counts as an ad: an ad-like class name alone is no longer enough — the element must actually look like an ad unit, and the AI now sees the element's visible text and the page it's on before confirming anything</li>
+            <li>Gmail, Outlook, and other mail/chat/docs apps are now completely off-limits to the AI ad scanner — your emails and messages are never candidates (Gmail internally labels every email "ads", which fooled the scanner)</li>
+            <li>Anything the AI wrongly hid on those apps before this fix un-hides itself automatically on your next visit</li>
+            <li>New safety guard: pattern-based ad selectors are dropped on any page where they touch real UI (search boxes, forms, menus, threads)</li>
+            <li>The AI now audits what the filter lists hide: hidden elements that carry real text get read by the AI, and clear false positives (your content, site UI) are un-hidden automatically — reviewable in the popup, 👍 re-hides</li>
+            <li>LinkedIn "Promoted" posts are now caught: tall promoted posts (document/carousel attachments) and compact right-rail promoted units both escaped the sponsored-post detector's size limits — the limits now fit them while the feed-pattern safety check stays in place</li>
+            <li>Ad-hiding rules now refresh automatically between updates: when a site changes how it serves ads, Ad Sensei can pick up the fix without waiting for a new version. Only rule data is downloaded (never code), and it's off in Local-only mode — toggle it under Settings › AI &amp; privacy</li>
+            <li>YouTube is now exempt from network blocking under every filter rule — a handful of high-priority list rules could previously slip past the exemption, which is exactly what provokes YouTube’s “ad blocker detected” wall</li>
+            <li>Fewer wrongly-hidden page elements: ad detection now matches whole words only, re-checks the page as soon as it loads instead of waiting for images, and un-hides a slot that turns out to hold real content</li>
+            <li>Webmail, chat and docs sites are left completely alone by the filter lists, not just by the AI</li>
+            <li>Cookie-banner auto-reject is now strictly limited to the banner itself, so it can only ever click a consent choice — never something else on the page</li>
+            <li>Popups the AI hides now show up in “Hidden ads here”, so a 👎 brings one back if it judged wrong</li>
+            <li>Filter-list updates can’t be rolled back to older rules by a stale copy of the update file, and rules withdrawn upstream now properly fall away</li>
+            <li>The YouTube ad-blocker-wall workaround only acts on an element that genuinely is the wall, so a bad guess can’t remove part of the page</li>
+          </ul>
+          <h3 class="cat cat-feat">Features</h3>
+          <ul>
+            <li>Experimental Aggressive mode: block most YouTube ads before they even start (Settings)</li>
+            <li>SponsorBlock: instant, exact sponsor skipping from the community database, with the AI as fallback — pick which segment types to skip in Settings</li>
+            <li>Strip tracking parameters (utm_, fbclid, gclid, and more) from links as you browse</li>
+            <li>Local-only mode: on-device AI only, zero external calls, no diagnostics</li>
+            <li>Clearer ratings: "👍 Ad" / "👎 Not ad" buttons, plus one-tap Undo for saved choices per site</li>
+            <li>Popup: the hidden-ads review is now a collapsible section</li>
+            <li>New Settings → Filter rulesets panel: switch each blocking list on or off, and see its rule count, its source, and how many rules are actually loaded</li>
+            <li>“This video” only appears on YouTube or pages that actually embed a YouTube video</li>
+            <li>New: reset your stats anytime — Settings → History &amp;amp; logs → Reset statistics</li>
+            <li>Redesigned settings: one page with a sidebar — YouTube, Ad blocking, AI &amp; privacy, Analytics, Activity &amp; logs, and About</li>
+            <li>New Analytics dashboard shows lifetime and this-session totals at a glance</li>
+            <li>Polished the welcome page and fixed its layout.</li>
+            <li>Web-wide ad hiding now asks for all-sites access only when you turn it on — a fresh install stays scoped to YouTube</li>
+            <li>The AI page-cleanup helpers now stay on your device whenever Chrome’s built-in AI is available</li>
+            <li>Clearer first-run note about optional, anonymous crash reports, with a toggle right there</li>
+            <li>One activity entry per ad break: consecutive ads are combined into a single line showing how much ad time was skipped and how fast</li>
+            <li>The welcome page now sets you up in one decision: pick a blocking level (Essential / Balanced / Max, each listing exactly what it turns on), or jump to settings to build your own</li>
+            <li>Recommended free AI pair, right on the welcome page: add Gemini and Groq keys side by side — Gemini analyzes transcripts while quick helpers automatically run on Groq, so neither hits its free-tier limits ("Maybe later" leaves a reminder in the popup)</li>
+            <li>Redesigned popup: two views — “This site” (blocking status, stats, and per-page tools) and “Controls” (every toggle, now including aggressive mode and tappable pills for the five web-blocking lists) — with nothing cut off and the footer always in reach</li>
+            <li>Stat cards now show "today" instead of "this session" — a number you can actually reason about</li>
+            <li>The "blocked here" breakdown and the hidden-ads list finally agree — empty slots are tagged "empty" in the review list with an explanation of where their ad went</li>
+            <li>Global stats moved to a "Blocked everywhere" block at the bottom of the This-site view, so per-site and lifetime numbers stop reading as the same thing</li>
+            <li>Activity log now labels first-party blocking as "Block YouTube's first-party ads" instead of "(aggressive)", matching the setting name</li>
+            <li>Added a re-analyze button (↻) to the sponsor section in the popup — retry a failed analysis or re-run the AI on a video to look for segments it missed, without reloading the page</li>
+            <li>Settings › Activity &amp; logs is now tabbed — Feature activity, Settings history and Analysis cache each get their own tab with a count, so you can jump straight to one instead of scrolling past the others</li>
+            <li>Each log starts at 20 entries with “Show 20 more” / “Show all”, and long lists scroll inside their own box with the column headers pinned</li>
+            <li>Popup and settings are keyboard- and screen-reader-friendly: real tabs, labelled switches, readable tooltips</li>
+          </ul>
+          <h3 class="cat cat-fix">Bug fixes</h3>
+          <ul>
+            <li>The per-page “blocked here” count is now accurate on sites that load ads after the page opens</li>
+            <li>Fixed: the “This video” panel no longer appears on pages that aren’t YouTube and don’t embed a YouTube video</li>
+            <li>Fixed the YouTube “ads skipped” count over-counting in aggressive mode — it now reflects real ad breaks removed</li>
+            <li>Aggressive mode’s ad count now reflects the real number of ad breaks avoided per video, no longer inflated by YouTube re-checking the page</li>
+            <li>Hidden YouTube display ads now count in the YouTube stat card, so it no longer reads 0 while the page shows ads blocked</li>
+            <li>Fixed cookie clearing missing YouTube's partitioned session cookies — the ones the ad-blocker flag actually lives on — so the fix now really lifts the block</li>
+            <li>Honest ad counting: the per-site "blocked here" number and the popup totals now measure the same thing, so your totals are simply every page's number added up</li>
+            <li>One ad now counts as one — nested fragments of the same ad slot are counted once, and a hidden slot only counts as an ad when an ad had actually loaded in it (empty leftovers of already-blocked ads no longer inflate the number)</li>
+            <li>Fixed a stray "reload to clear ads" hint appearing for ad frames that were already blocked</li>
+            <li>Fixed LinkedIn messages and search disappearing: generic ad selectors matched by substring, so "thread" and "typeahead" looked like "ad" — they now match whole name tokens only</li>
+            <li>More honest YouTube ad count: blocked-ad tallies no longer double-count a video's ad breaks (the two internal ad-schedule formats were being added together), so the number now reflects real ad breaks prevented</li>
+            <li>YouTube ad count now reflects what you actually watched: instead of crediting a video's entire ad schedule the moment it loads, each ad break is counted only when playback reaches it — watch 25 minutes of a movie and it counts the 2 breaks you'd have hit, not all 5</li>
+            <li>Fixed the reload button in Settings › Activity &amp; logs sitting slightly off-center</li>
+            <li>Fixed the YouTube “playback blocked” recovery panel not showing: when YouTube hard-blocks a flagged session, the in-player “Clear YouTube cookies &amp; reload” panel now actually appears (it was being built but hidden by YouTube’s own player styling).</li>
+            <li>YouTube “playback blocked” recovery panel, take two: v0.2.25 made the panel render, but YouTube draws its enforcement message in a layer above the player, covering it. The panel now sits on that layer itself, so “Clear YouTube cookies &amp; reload” is genuinely clickable — and dismissing it now sticks instead of the panel reappearing a second later.</li>
+            <li>Resetting feature settings no longer switches diagnostics back on or turns off Local-only mode</li>
+            <li>Paused-sites entries are checked as you add them, and international domains now match properly</li>
+          </ul>
+        </details>
+      </section>
+    <footer>
+      <a href="https://www.singlefinmedia.com/ad-sensei">Ad Sensei</a> · <a href="https://www.singlefinmedia.com/ad-sensei/privacy">Privacy Policy</a> ·
+      <a href="https://www.singlefinmedia.com/ad-sensei/terms">Terms of Service</a> · <a href="https://www.singlefinmedia.com/ad-sensei/support">Support</a>
+    </footer>
+  </body>
+</html>
