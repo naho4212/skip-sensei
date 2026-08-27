@@ -55,6 +55,22 @@ Three "what to block" capabilities, each independently useful:
   options). Store-safe variant intentionally skipped — personal use only; the
   anti-adblock wall dismissal stays. AI web-ad gap-filler still open.
 
+## Backlog (from the Aug 27 2026 SBlock teardown — potential, not committed)
+
+- **Per-channel ad allowlist.** Let users list channels where YouTube ads run
+  normally (support a creator): pause the ad engine when the watch page's
+  channel ID is listed. Small, safe, pro-creator listing line.
+- **Feed / search / Shorts ad pruning as a middle tier.** Strip
+  `adSlotRenderer` from `browse`/`search`/`next` responses (home grid,
+  sponsored search rows, masthead, related list) and Shorts ad reels
+  (`reelWatchEndpoint.adClientParams.isAd`) in the MAIN-world pruner — today
+  these are hidden cosmetically (layout holes; Shorts ads missed entirely).
+  Hypothesis: feed pruning carries far less enforcement-wall risk than
+  player-response pruning (walls key on playback-time ad anomalies). MUST be
+  tested against the `yt_wall_modal` / `yt_hard_block` telemetry before it can
+  be default-on; if it holds, "aggressive" splits into feed-prune (default
+  candidate) and player-prune (stays opt-in).
+
 ## Decisions
 
 - AI enhancement defaults **off** (free/instant blocker out of the box; AI is a
