@@ -601,6 +601,36 @@ async function handleWallSeen(walls: number, tabId?: number) {
 const senderHost = (sender: chrome.runtime.MessageSender): string | undefined =>
   sender.tab?.url ? new URL(sender.tab.url).hostname.replace(/^www\./, '') : undefined
 
+/**
+ * Tab-level mute for the Spotify audio-ad muter (src/content/audio-ads.ts).
+ * Ownership rule: we mute only a tab that isn't already muted, and unmute
+ * only a tab whose mute is OURS (mutedInfo.extensionId) — a user who muted
+ * the tab themselves keeps it muted through and after the ad. Returns true
+ * when the requested state was applied by us.
+ */
+async function setTabMuted(
+  tabId: number | undefined,
+  muted: boolean,
+  host?: string,
+): Promise<boolean> {
+  if (tabId === undefined) return false
+  try {
+    const tab = await chrome.tabs.get(tabId)
+    const info = tab.mutedInfo
+    if (muted) {
+      if (info?.muted) return info.extensionId === chrome.runtime.id
+      await chrome.tabs.update(tabId, { muted: true })
+      void recordActivity('Block all ads', 'muted an audio ad', host)
+      return true
+    }
+    if (!info?.muted || info.extensionId !== chrome.runtime.id) return false
+    await chrome.tabs.update(tabId, { muted: false })
+    return true
+  } catch {
+    return false
+  }
+}
+
 const AD_SKIP_DESCRIPTIONS: Record<string, string> = {
   'skip-button': 'clicked the Skip button on an ad',
   'fast-forward': 'fast-forwarded an unskippable ad',
@@ -691,6 +721,11 @@ chrome.runtime.onMessage.addListener(
       case 'skipSensei:logActivity':
         void recordActivity(message.feature, message.action, senderHost(sender))
         return false
+      case 'skipSensei:muteTab':
+        void setTabMuted(sender.tab?.id, message.muted, senderHost(sender)).then(
+          sendResponse,
+        )
+        return true
       case 'skipSensei:uiUsage':
         bumpUiUsage(message.counter)
         return false
@@ -983,6 +1018,13 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
   if (changeInfo.status === 'loading' && changeInfo.url) {
     tabBadges.set(tabId, freshBadge())
     renderBadge(tabId)
+    // A tab mute outlives the page that asked for it. If the audio-ad muter's
+    // tab navigates off the web player mid-ad (its pagehide unmute is
+    // best-effort — the port can close first), release the mute here so the
+    // next site doesn't load silent. Ours only: see setTabMuted.
+    if (!/^https?:\/\/open\.spotify\.com\//.test(changeInfo.url)) {
+      void setTabMuted(tabId, false)
+    }
   }
 })
 chrome.tabs.onRemoved.addListener((tabId) => tabBadges.delete(tabId))

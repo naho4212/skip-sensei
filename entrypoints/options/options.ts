@@ -844,6 +844,7 @@ interface RulesetGroup {
 const RULESET_SOURCES: Record<string, string> = {
   ads_base: 'AdGuard Base · EasyList-based',
   ads_mobile: 'AdGuard Mobile Ads',
+  streaming: 'Spotify web-player ad endpoints',
   trackers: 'AdGuard Tracking Protection',
   cookies: 'AdGuard Cookie Notices',
   social: 'AdGuard Social Media',
@@ -856,8 +857,8 @@ const RULESET_GROUPS: RulesetGroup[] = [
   {
     label: 'Web ads',
     setting: 'blockAllAds',
-    rulesets: ['ads_base', 'ads_mobile'],
-    tip: 'The core ad-blocking lists (AdGuard Base + Mobile Ads). Same switch as "Block all ads" in the popup.',
+    rulesets: ['ads_base', 'ads_mobile', 'streaming'],
+    tip: 'The core ad-blocking lists (AdGuard Base + Mobile Ads), plus the Spotify web-player ad endpoints. Same switch as "Block all ads" in the popup.',
   },
   {
     label: 'Trackers & analytics',

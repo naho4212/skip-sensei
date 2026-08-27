@@ -128,3 +128,37 @@ writeFileSync(`${OUT}/yt_exempt.json`, JSON.stringify(exemptRules))
 console.log(
   `yt_exempt: ${exemptRules.length} rule (always-on YouTube exemption, priority ${EXEMPT_PRIORITY})`,
 )
+
+/**
+ * Audio-streaming ad endpoints that AdGuard files under Tracking Protection
+ * (filter 3) rather than Base. In our split that put the ONLY rules that stop
+ * Spotify web-player audio ads behind the opt-in "trackers" toggle (26% of
+ * install-days, and the one ruleset that fails with "exceeds the rule count
+ * limit" when the static pool is contended), so a default install blocked
+ * nothing on open.spotify.com — the first uninstall-survey note was exactly
+ * "doesn't even work for Spotify". Shipped as its own tiny ruleset in the
+ * ad-blocking group (src/net-blocker.ts AD_RULESET_IDS) so it rides the same
+ * switch as every other ad list and can never be dropped by the pool limit.
+ * SoundCloud / Pandora / Deezer ad endpoints are already in Base and need no
+ * entry here. Patterns mirror the AdGuard Tracking Protection rules verbatim.
+ */
+const STREAMING_AD_FILTERS = [
+  // Ad decisioning — with this blocked the web player is never handed an ad
+  // to play (its `flashpoint` sub-path is the one piece Base already has).
+  '||spclient.wg.spotify.com/ad-logic/',
+  '||spotify.com/ads/',
+  // Ad impression / event beacons.
+  '||adeventtracker.spotify.com^',
+  '||adeventtrackermonitoring.spotify.com^',
+  '||aet.spotify.com^',
+]
+const streamingRules = STREAMING_AD_FILTERS.map((urlFilter, i) => ({
+  id: i + 1,
+  priority: 1,
+  action: { type: 'block' },
+  condition: { urlFilter },
+}))
+writeFileSync(`${OUT}/streaming.json`, JSON.stringify(streamingRules))
+console.log(
+  `streaming: ${streamingRules.length} rules (audio-streaming ad endpoints, ad-blocking group)`,
+)

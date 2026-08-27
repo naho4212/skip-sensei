@@ -96,6 +96,9 @@ export default defineConfig({
         { id: 'yt_exempt', enabled: true, path: 'rulesets/yt_exempt.json' },
         { id: 'ads_base', enabled: false, path: 'rulesets/ads_base.json' },
         { id: 'ads_mobile', enabled: false, path: 'rulesets/ads_mobile.json' },
+        // Spotify web-player ad endpoints (AdGuard files them under Tracking
+        // Protection; we ship them with the ad lists) — build-rulesets.mjs.
+        { id: 'streaming', enabled: false, path: 'rulesets/streaming.json' },
         { id: 'trackers', enabled: false, path: 'rulesets/trackers.json' },
         { id: 'cookies', enabled: false, path: 'rulesets/cookies.json' },
         { id: 'social', enabled: false, path: 'rulesets/social.json' },

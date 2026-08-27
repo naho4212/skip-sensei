@@ -21,7 +21,14 @@ const TEXT_FIELDS = {
   browser: 40,
 }
 
-const MAX_FIELDS = 12
+// 48, not the original 12: the extension's `daily_rollup` carries ~25-35
+// fields (skip percentiles, per-method medians, 7 adoption flags, ~11 health
+// counters, 6+ ui_* usage counters). At 12 the loop below silently kept the
+// first dozen in insertion order and dropped the rest — every HEALTH number
+// and every ui_* counter in scripts/telemetry-report.mjs read as a hard 0 for
+// a month while the data was being sent fine. Per-field size caps still bound
+// the record; the count cap only needs to defeat junk payloads.
+const MAX_FIELDS = 48
 const MAX_FIELD_KEY = 40
 const MAX_FIELD_VALUE = 300
 // The support form's message body is the one field that legitimately runs

@@ -12,7 +12,10 @@ import type { BlockBreakdown } from './types'
  * we surface that via getBlockerState() rather than throwing.
  */
 
-const AD_RULESET_IDS = ['ads_base', 'ads_mobile']
+// `streaming` is the 5-rule Spotify web-player set (see build-rulesets.mjs):
+// part of the ad group, not the tracker group AdGuard puts it in, so a default
+// install actually blocks audio ads on open.spotify.com.
+const AD_RULESET_IDS = ['ads_base', 'ads_mobile', 'streaming']
 const TRACKER_RULESET_IDS = ['trackers']
 
 /** The always-on 1-rule static exemption ruleset (built by
@@ -419,6 +422,7 @@ export async function getRulesetInfo(): Promise<RulesetInfo> {
 const CATEGORY_BY_RULESET: Record<string, keyof BlockBreakdown> = {
   ads_base: 'ads',
   ads_mobile: 'ads',
+  streaming: 'ads',
   trackers: 'trackers',
   cookies: 'cookies',
   social: 'social',

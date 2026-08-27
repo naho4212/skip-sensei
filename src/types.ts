@@ -441,6 +441,10 @@ export type Message =
   | { type: 'skipSensei:reviewPopup'; html: string; text?: string; desc?: string } // → boolean (hide this overlay?)
   | { type: 'skipSensei:uiUsage'; counter: string } // bump a UI-usage daily counter (fire-and-forget)
   | { type: 'skipSensei:logActivity'; feature: string; action: string } // content-script action → activity log
+  // Spotify audio-ad muter (src/content/audio-ads.ts): mute/unmute the
+  // SENDER'S tab. → boolean: true when applied; false when the user had muted
+  // the tab themselves (we never take ownership of a user's mute).
+  | { type: 'skipSensei:muteTab'; muted: boolean }
   | { type: 'skipSensei:findConsentReject'; html: string } // → string | null (reject-button selector)
   // Storage writers routed from content scripts to the SW, where one write
   // chain serializes them (each tab's own storage-module instance would race

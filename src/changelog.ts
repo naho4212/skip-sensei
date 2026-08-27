@@ -15,6 +15,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.3.16',
+    date: '2026-08-27',
+    items: [
+      'Spotify web player: audio ads are now blocked on a default install — the ad-serving endpoints had only been covered by the separate tracker list. Any ad that still plays is muted for exactly its duration (web player only; no extension can reach the desktop or mobile apps)',
+      'Fixed: the daily diagnostics summary was being cut short on our side, so health counters and usage counts never arrived — nothing changes in what the extension sends',
+    ],
+  },
+  {
     version: '0.3.15',
     date: '2026-08-24',
     items: [
