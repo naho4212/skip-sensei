@@ -32,7 +32,7 @@ as if they were separate products.
 
 | Field | Value |
 |---|---|
-| Item name | `Ad Sensei — AI Ad Blocker for Every Site, YouTube™ & Music + Sponsor Skip` (73 chars; mirrors `manifest.name`). Supersedes the earlier no-"YouTube" stance: live SERPs show Featured extensions using nominative "for YouTube™" at the END of the name (SponsorBlock for YouTube, SkipSponsor). Leading with "YouTube" would still read as implied affiliation — don't. |
+| Item name | `Ad Sensei — AI Ad Blocker, YouTube™ Ad & Sponsor Skip, Music Streaming Ads` (74 chars; mirrors `manifest.name`). Supersedes the earlier no-"YouTube" stance: live SERPs show Featured extensions using nominative "for YouTube™" at the END of the name (SponsorBlock for YouTube, SkipSponsor). Leading with "YouTube" would still read as implied affiliation — don't. |
 | Category | **Privacy & Security** |
 | Language | English (United States) |
 | Homepage URL | `https://www.singlefinmedia.com/ad-sensei` |
