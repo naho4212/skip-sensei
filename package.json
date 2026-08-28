@@ -2,7 +2,7 @@
   "name": "skip-sensei",
   "version": "0.3.17",
   "private": true,
-  "description": "Block ads and trackers across the web — plus in-video ads and AI-detected sponsor segments on YouTube.",
+  "description": "Block ads and trackers on every site, skip YouTube video ads and sponsor reads, silence music-player ads. Private, on-device AI.",
   "type": "module",
   "scripts": {
     "dev": "npm run rulesets && wxt",
