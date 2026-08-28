@@ -32,8 +32,8 @@ export const CHANGELOG: ChangelogEntry[] = [
     date: '2026-08-27',
     published: true,
     highlights: [
-      'YouTube: a one-time note on the page (and in the popup) explains how ads are handled — skipped the moment they start, sponsor reads too',
-      '“What’s new” now shows just the headline changes, with a link to the full release notes',
+      'All-new popup: Home, Controls, Stats and Settings tabs, with a status strip that explains anything unusual',
+      'Music: Spotify ads muted by default (or skipped with the beta option), SoundCloud and Pandora ads blocked outright, YouTube Music skipped like YouTube',
     ],
     items: [
       'YouTube: a one-time note on the page (and in the popup) explains how ads are handled — skipped the moment they start, sponsor reads too — and how to turn on the first-party beta',
