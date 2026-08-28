@@ -17,7 +17,7 @@
     "@adguard/dnr-rulesets": "^4.1.20260707190042",
     "@types/chrome": "^0.0.287",
     "typescript": "^5.6.0",
-    "wxt": "^0.20.27"
+    "wxt": "^0.21.4"
   },
   "overrides": {
     "shell-quote": "^1.8.4",
