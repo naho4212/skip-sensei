@@ -261,6 +261,20 @@ body.disabled main > *:not(.site-hero) {
   line-height: 1.35;
   color: var(--text-2);
 }
+.update-link {
+  margin-top: 7px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.update-link:hover {
+  text-decoration: underline;
+}
 .update-dismiss {
   position: absolute;
   top: 7px;
@@ -1346,4 +1360,23 @@ a.ctl-row {
 .controls > a.ctl-row:first-child,
 .controls > button.ctl-row:first-child {
   border-top: none;
+}
+
+/* ── YouTube note (Home) ────────────────────────────────────────────── */
+.youtube-note {
+  position: relative;
+  padding: 11px 30px 11px 13px;
+  border: 1px solid color-mix(in srgb, #ff0033 40%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, #ff0033 8%, var(--panel));
+}
+.youtube-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #ff0033;
+  box-shadow: 0 0 8px #ff0033;
+  margin-right: 7px;
+  vertical-align: 1px;
 }

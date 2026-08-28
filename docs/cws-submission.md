@@ -52,55 +52,94 @@ which the extensions page shows; keep the two in sync):
 
 **Detailed description** (paste as-is; plain text, the store renders no markup):
 
-> Ad Sensei blocks ads and trackers on every site — and skips the ones that
-> can't be blocked: YouTube video ads and the sponsor reads creators bake into
-> their videos. Free, private, no account.
+> Ad Sensei blocks ads and trackers on every site, skips the video ads and
+> creator sponsor reads on YouTube™ that filter lists can't reach, and keeps
+> music web players quiet during ad breaks. Free, open source, no account.
+> Optional AI helpers run on your device by default.
 >
-> Most ad blockers stop at filter lists. Ad Sensei uses those too, evaluated by
-> Chrome's own declarative engine, then adds the two layers filter lists can't
-> reach: the ads sites serve from their own domains — promoted tiles on
-> Pinterest, sponsored results on Amazon and Reddit, feed and in-stream ads on
-> YouTube — and the sponsor segments inside the video itself.
->
-> WHAT IT DOES
+> AD BLOCKER
 > • Blocks ads, trackers, malware domains, cookie notices, and social widgets
-> • Hides the first-party "sponsored" placements sites serve themselves
-> • Skips YouTube video ads — pre-roll, mid-roll, and post-roll
-> • Skips creator sponsor reads inside videos, via SponsorBlock's community
->   data or an optional AI transcript analysis
-> • Shows what it blocked on the page you're on, with a one-click pause per site
+>   on every site, using filter lists evaluated by Chrome's own declarative
+>   engine — fewer requests, less data, and pages that load lighter and
+>   faster
+> • Hides the "sponsored" placements sites serve from their own domains —
+>   promoted tiles, sponsored results, and in-feed promos that ordinary
+>   network blocking never sees
+> • Cleans up the empty boxes blocked ads leave behind
+> • As strict or as light as you like: pick a blocking level, fine-tune each
+>   layer, or pause everything for one site with a single click
+> • Shows what was blocked on the page you're on, and lifetime totals
+> • Keeps ad-blocked pages usable when a site tries to detect blockers
 >
-> WORKS OUT OF THE BOX
-> Balanced blocking — ads, trackers, cookie notices, popups — is on for every
-> site from the first page load. Dial it down to YouTube-only or up to Max
-> from the welcome page or the popup at any time.
+> YOUTUBE
+> • Skips video ads — pre-roll, mid-roll, and post-roll — the moment they
+>   start
+> • Hides feed, banner, overlay, and promoted-video ads
+> • Skips creator sponsor reads inside videos, using community-submitted
+>   segment data or optional AI transcript analysis
+> • Optional (beta): strips ad slots from the player's own video data so most
+>   ads never start at all
+>
+> MUSIC
+> • Blocks audio ads outright on SoundCloud™ and Pandora™ — the ad request
+>   never leaves your browser and the next track just plays, with no
+>   "ad blocker detected" wall
+> • Where a player delivers ads inside the audio stream itself, Ad Sensei
+>   mutes the tab for exactly as long as each ad plays, then unmutes — you
+>   never hear it
+> • Optional (beta) on Spotify™ web player: skip ad tracks outright instead
+>   of muting them
+> • YouTube Music™ ads are skipped just like YouTube's
+> • Web players only — desktop and mobile apps are out of reach for any
+>   extension
+>
+> AI
+> • Sponsor detection reads the video transcript and finds the sponsor read,
+>   intro, and self-promo segments the community hasn't flagged yet
+> • Popups and page elements are judged by what they actually say: AI reads
+>   the visible text and hides only what's an ad or a promotion, so the
+>   popups that matter — sign-in, checkout, a real notice — stay put
+> • AI double-checks new ad-hiding candidates before anything is hidden, so
+>   a wrong guess doesn't blank out real content
+> • Prefers Chrome's built-in on-device model, which sends nothing anywhere.
+>   You can point it at your own API key for any major cloud provider or a
+>   local self-hosted model instead. No subscription, no server of ours in
+>   the loop
 >
 > PRIVACY
-> No account, no sign-in, no advertising profile. Blocking is evaluated by
-> Chrome's own engine, so the extension never inspects your requests. Optional
-> anonymous diagnostics report the domain where an ad-detection problem
-> happened (never full addresses, titles, or page content) so wrong hides can
-> be fixed — switch them off in one click, and Local-only mode disables every
-> network call the extension makes.
+> • No account, no sign-in, no advertising profile, no third-party analytics
+> • Blocking is evaluated by Chrome's own engine — the extension never
+>   inspects your requests
+> • Optional anonymous diagnostics report only the domain where an
+>   ad-detection problem happened (never full addresses, titles, or page
+>   content) so wrong hides can be fixed. One toggle turns them off
+> • Local-only mode disables every network call the extension makes
+> • Open source (MIT): https://github.com/naho4212/skip-sensei
 >
-> AI THAT STAYS ON YOUR DEVICE
-> Sponsor detection and the other AI helpers prefer Chrome's built-in
-> on-device model, which sends nothing anywhere. You can point them at your
-> own AI provider's API key instead — any major cloud provider or a local
-> self-hosted model — if you prefer. Either way there's no subscription and
-> no server of ours in the loop.
+> BETA FEATURES & TERMS OF SERVICE
+> Features marked "beta" are experimental, off by default, and clearly
+> labeled in the settings. Skipping in-stream ads on a music web player and
+> stripping ad slots from YouTube's player data may be considered contrary to
+> those services' terms of service. You choose whether to enable them and use
+> them at your own discretion; because the services change their players
+> often, these features may stop working without notice, and the default
+> (non-beta) behavior remains as the fallback. Ad Sensei is an independent
+> project with no affiliation to, or endorsement by, any service named here.
+> All trademarks belong to their respective owners.
 >
 > HONEST ABOUT THE LIMITS
-> YouTube stitches some ads into the video stream itself. Those can't be
+> Some YouTube ads are stitched into the video stream itself and can't be
 > prevented from loading by any extension — Ad Sensei skips them as they
-> start, so you see about a second rather than thirty. Anything claiming
-> otherwise on a stream-inserted ad is overselling.
-> Music-streaming web players: ads are delivered in-stream, so they are
-> muted for their duration rather than blocked or skipped — and only in the
-> browser.
-> Desktop and mobile apps are out of reach for any extension.
->
-> Free and open source (MIT): https://github.com/naho4212/skip-sensei
+> start, so you see about a second rather than thirty. Music players that
+> deliver ads in-stream are muted (or, in beta, skipped) rather than blocked.
+> Anything claiming otherwise is overselling.
+
+**Brand-name discipline:** the description names exactly five third-party
+services, each once and nominatively with ™ (YouTube, YouTube Music, Spotify,
+SoundCloud, Pandora)
+— the same pattern Featured extensions use. The Jul-30 Keyword-Spam rejection
+was triggered by ENUMERATING six AI-provider brands; do not add more service
+names (no Pinterest/Amazon/Reddit lists) and keep AI providers generic.
 
 **Claim discipline:** every line above maps to a shipped feature, and the
 limits paragraph is deliberate — "zero ads" / "never think about an ad again"

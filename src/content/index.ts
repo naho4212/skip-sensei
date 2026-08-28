@@ -11,6 +11,7 @@ import { AdEngine } from './ad-engine'
 import { ResumePositionTracker } from './resume-position'
 import { SponsorEngine } from './sponsor-engine'
 import { initYouTubeAnnoyances } from './youtube-annoyances'
+import { showYouTubeNotice } from './youtube-notice'
 
 /**
  * Content-script entry. Runs on all youtube.com pages (YouTube is an SPA, so
@@ -57,6 +58,8 @@ function syncEngines() {
   if (adShouldRun && !adEngine) {
     adEngine = new AdEngine(reportAdSkip)
     adEngine.start()
+    // Set expectations once: ads here are skipped as they start, not blocked.
+    void showYouTubeNotice()
   } else if (!adShouldRun && adEngine) {
     adEngine.stop()
     adEngine = null

@@ -16,6 +16,10 @@ export interface ChangelogEntry {
   version: string
   date: string
   items: string[]
+  /** The one or two headline items the popup's "What's new" banner shows
+   *  (everything else is one tap away on the release-notes page). Falls
+   *  back to the first two `items`. Keep to 2 max. */
+  highlights?: string[]
   /** This version was (or is being) uploaded to the Chrome Web Store. The
    *  landing release-notes page shows ONLY published versions — items from
    *  dev-only versions in between roll into the next published release. */
@@ -27,6 +31,10 @@ export const CHANGELOG: ChangelogEntry[] = [
     version: '0.3.17',
     date: '2026-08-27',
     published: true,
+    highlights: [
+      'All-new popup: Home, Controls, Stats and Settings tabs',
+      'Spotify audio ads are muted by default — or skipped outright with the new beta option under Controls → Spotify',
+    ],
     items: [
       'All-new popup: Home, Controls, Stats and Settings tabs — page status and per-page tools on Home, blocking controls grouped by area (Ad blocker / YouTube / Spotify), and your stats over today, 7 days, 30 days or all time',
       'More controls without a trip to Settings: hide Shorts, auto-dismiss “Still watching?”, hide end cards, resume after skip, malware blocking and the anti-adblock defuser now toggle right in the popup',

@@ -957,6 +957,8 @@ function wireToggle(input: HTMLInputElement, key: keyof Settings) {
  * ZIP reloads alike. First run adopts the current version silently (no
  * changelog for the version that introduced changelogs).
  */
+const RELEASE_NOTES_URL = 'https://www.singlefinmedia.com/ad-sensei/release-notes'
+
 async function renderUpdateBanner(): Promise<boolean> {
   const current = chrome.runtime.getManifest().version
   const lastSeen = await getLastSeenVersion()
@@ -977,17 +979,28 @@ async function renderUpdateBanner(): Promise<boolean> {
     entries.length === 1
       ? `What's new in ${entries[0].version}`
       : "What's new"
+  // Only the newest release's one or two headline items — the full list
+  // (including any versions skipped over) lives on the release-notes page.
+  const newest = entries[0]
+  const highlights = (newest.highlights ?? newest.items).slice(0, 2)
   $<HTMLUListElement>('update-list').replaceChildren(
-    ...entries
-      .flatMap((entry) => entry.items)
-      .map((item) => {
-        const li = document.createElement('li')
-        li.textContent = item
-        return li
-      }),
+    ...highlights.map((item) => {
+      const li = document.createElement('li')
+      li.textContent = item
+      return li
+    }),
   )
   const banner = $('update-banner')
   banner.hidden = false
+  $('update-notes-link').addEventListener(
+    'click',
+    () => {
+      void setLastSeenVersion(current)
+      void chrome.tabs.create({ url: RELEASE_NOTES_URL })
+      window.close()
+    },
+    { once: true },
+  )
   $('update-dismiss').addEventListener(
     'click',
     () => {
@@ -1158,6 +1171,22 @@ async function renderSpotifyNote() {
   el.hidden = stored[SPOTIFY_NOTE_KEY] === true
 }
 
+// YouTube: ads are SKIPPED as they start (stream-stitched, never blocked)
+// unless the first-party beta is on. One-time workflow explainer on Home
+// while the user is on youtube.com; dismissed once = stays dismissed.
+const YOUTUBE_NOTE_KEY = 'youtubeNoteDismissed' // shared with src/content/youtube-notice.ts
+async function renderYouTubeNote() {
+  const el = $('youtube-note')
+  const active = await activeTabHost()
+  const onYouTube = !!active && /(^|\.)youtube\.com$/.test(active.host)
+  if (!onYouTube) {
+    el.hidden = true
+    return
+  }
+  const stored = await chrome.storage.local.get(YOUTUBE_NOTE_KEY)
+  el.hidden = stored[YOUTUBE_NOTE_KEY] === true
+}
+
 // Clear the active site's cookies to lift its ad-blocker wall, then reload.
 // Clearing another origin's cookies needs host permission for it — which the
 // base install doesn't hold — so request just that origin on demand (this runs
@@ -1286,6 +1315,11 @@ async function main() {
     $('spotify-note').hidden = true
     void chrome.storage.local.set({ [SPOTIFY_NOTE_KEY]: true })
   })
+  void renderYouTubeNote()
+  $('youtube-note-dismiss').addEventListener('click', () => {
+    $('youtube-note').hidden = true
+    void chrome.storage.local.set({ [YOUTUBE_NOTE_KEY]: true })
+  })
 
   // Always-available "reset this site": clear cookies + reload. Only meaningful
   // on a real web page, so reveal it only when the active tab has an http(s) host.
@@ -1380,9 +1414,7 @@ async function main() {
   // page on purpose — config, not mid-browse switches.
   $('open-yt-options').addEventListener('click', () => openOptionsPanel('youtube'))
   $('whatsnew-btn').addEventListener('click', () => {
-    void chrome.tabs.create({
-      url: 'https://www.singlefinmedia.com/ad-sensei/release-notes',
-    })
+    void chrome.tabs.create({ url: RELEASE_NOTES_URL })
     window.close()
   })
   $('rate-btn').addEventListener('click', () => {
