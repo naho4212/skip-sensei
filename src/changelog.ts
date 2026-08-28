@@ -28,6 +28,22 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.3.18',
+    date: '2026-08-27',
+    published: true,
+    highlights: [
+      'YouTube: a one-time note on the page (and in the popup) explains how ads are handled — skipped the moment they start, sponsor reads too',
+      '“What’s new” now shows just the headline changes, with a link to the full release notes',
+    ],
+    items: [
+      'YouTube: a one-time note on the page (and in the popup) explains how ads are handled — skipped the moment they start, sponsor reads too — and how to turn on the first-party beta',
+      '“What’s new” now shows just the headline changes, with a link to the full release notes',
+      'Spotify: the beta “Skip audio ads” option now says up front that it may be contrary to Spotify’s terms of service, so you can decide',
+      'Controls → Spotify notes that SoundCloud and Pandora ads are blocked outright by the ad blocker, and YouTube Music follows the YouTube settings',
+      'Store listing refreshed: the name and description now cover every site, YouTube ad and sponsor skipping, and music-streaming ads',
+    ],
+  },
+  {
     version: '0.3.17',
     date: '2026-08-27',
     published: true,

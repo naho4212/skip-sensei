@@ -27,7 +27,7 @@ export default defineConfig({
     // Leads with the web-wide single purpose; YouTube is that purpose applied
     // to one site (see docs/cws-submission.md — trademark-in-listing risk).
     description:
-      'Block ads and trackers on every site, skip YouTube video ads and sponsor reads, silence music-player ads. Private, on-device AI.',
+      'AI ad blocker for every site. Skips YouTube video ads and in-video sponsor reads, silences music-streaming ads. Private, on-device.',
     icons: {
       16: 'icons/icon-16.png',
       32: 'icons/icon-32.png',

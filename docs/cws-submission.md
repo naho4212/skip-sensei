@@ -47,7 +47,7 @@ as if they were separate products.
 **Summary / short description** (132 char max — mirrors `manifest.description`,
 which the extensions page shows; keep the two in sync):
 
-> Block ads and trackers on every site, skip YouTube video ads and sponsor reads, silence music-player ads. Private, on-device AI.
+> AI ad blocker for every site. Skips YouTube video ads and in-video sponsor reads, silences music-streaming ads. Private, on-device.
 
 **Detailed description** (paste as-is; plain text, the store renders no markup):
 
